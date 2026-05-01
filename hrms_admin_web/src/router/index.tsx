@@ -20,6 +20,9 @@ import ReimbursementsPage from "@/features/payroll/ReimbursementsPage";
 import JusticeInboxPage from "@/features/justice/JusticeInboxPage";
 import JusticeDetailPage from "@/features/justice/JusticeDetailPage";
 import IccPage from "@/features/justice/IccPage";
+import CustomersPage from "@/features/field/CustomersPage";
+import FieldJobsPage from "@/features/field/FieldJobsPage";
+import LiveMapPage from "@/features/field/LiveMapPage";
 
 export const router = createBrowserRouter([
   { path: "/", element: <Navigate to="/dashboard" replace /> },
@@ -100,6 +103,9 @@ export const router = createBrowserRouter([
       { path: "justice", element: <JusticeInboxPage /> },
       { path: "justice/:id", element: <JusticeDetailPage /> },
       { path: "icc", element: <IccPage /> },
+      { path: "field/customers", element: <CustomersPage /> },
+      { path: "field/jobs", element: <FieldJobsPage /> },
+      { path: "field/live-map", element: <LiveMapPage /> },
       {
         path: "reports",
         element: (
