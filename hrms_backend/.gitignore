@@ -27,3 +27,5 @@ celerybeat-schedule*
 mysql_data/
 redis_data/
 minio_data/
+# Local-storage uploads — never commit user files.
+uploads/

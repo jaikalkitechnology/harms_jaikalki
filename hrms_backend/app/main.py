@@ -1,3 +1,4 @@
+import os
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
@@ -42,6 +43,17 @@ app.add_middleware(
 app.add_middleware(RequestIDMiddleware)
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
+
+# Local-storage backend: expose the uploads directory at the configured URL
+# prefix so files written by `app.services.storage.upload_fileobj` are
+# downloadable. Only mounted when STORAGE_BACKEND is "local".
+if (settings.STORAGE_BACKEND or "local").lower() == "local":
+    os.makedirs(settings.LOCAL_STORAGE_PATH, exist_ok=True)
+    app.mount(
+        "/" + settings.LOCAL_STORAGE_URL_PREFIX.strip("/"),
+        StaticFiles(directory=settings.LOCAL_STORAGE_PATH),
+        name="uploads",
+    )
 
 
 @app.exception_handler(AppException)

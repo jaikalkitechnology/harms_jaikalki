@@ -53,6 +53,18 @@ class Settings(BaseSettings):
     # works — but production MUST set its own.
     JUSTICE_ENCRYPTION_KEY: Optional[str] = None
 
+    # File storage backend: "local" (filesystem) or "s3" (MinIO / AWS S3)
+    STORAGE_BACKEND: str = "local"
+
+    # Local storage — used when STORAGE_BACKEND == "local". Files are
+    # written under {LOCAL_STORAGE_PATH}/{key} and served back at
+    # {PUBLIC_BASE_URL}{LOCAL_STORAGE_URL_PREFIX}/{key}.
+    # In production, mount a host volume at LOCAL_STORAGE_PATH so files
+    # survive container restarts.
+    LOCAL_STORAGE_PATH: str = "/app/uploads"
+    LOCAL_STORAGE_URL_PREFIX: str = "/uploads"
+
+    # S3 / MinIO — used when STORAGE_BACKEND == "s3"
     S3_ENDPOINT: str = "http://localhost:9000"
     S3_ACCESS_KEY: str = "minioadmin"
     S3_SECRET_KEY: str = "minioadmin"
