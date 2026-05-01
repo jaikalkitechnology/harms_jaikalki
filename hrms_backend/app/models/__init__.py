@@ -66,6 +66,7 @@ from .launch import (
     PasswordResetOtp,
     Resignation,
 )
+from .compensation import SalaryRevision
 from .leave import CompOff, Holiday, LeaveBalance, LeaveRequest, LeaveType
 from .lms import (
     Badge,
@@ -239,4 +240,5 @@ __all__ = [
     "Resignation",
     "PasswordResetOtp",
     "MfaBackupCode",
+    "SalaryRevision",
 ]

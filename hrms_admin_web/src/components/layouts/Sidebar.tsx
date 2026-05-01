@@ -299,6 +299,12 @@ const SECTIONS: NavSection[] = [
         permission: "approval.act",
       },
       {
+        label: "Salary Revisions",
+        to: "/compensation",
+        icon: Coins,
+        permission: "payroll.run",
+      },
+      {
         label: "Audit Trail",
         to: "/audit",
         icon: ClipboardIcon,

@@ -80,6 +80,18 @@ class Settings(BaseSettings):
     CELERY_BROKER_URL: str = "redis://localhost:6379/1"
     CELERY_RESULT_BACKEND: str = "redis://localhost:6379/2"
 
+    # ── Error reporting (Sentry) ──────────────────────────────────
+    SENTRY_DSN: Optional[str] = None
+    SENTRY_TRACES_SAMPLE_RATE: float = 0.1
+    SENTRY_ENVIRONMENT: Optional[str] = None  # falls back to ENVIRONMENT
+
+    # ── Firebase Cloud Messaging ──────────────────────────────────
+    # Path to a Firebase service-account JSON file. If set, real push
+    # notifications are dispatched; otherwise FCM rows are stored as
+    # `pending` so dev/test environments don't depend on Firebase.
+    FCM_CREDENTIALS_PATH: Optional[str] = None
+    FCM_PROJECT_ID: Optional[str] = None
+
     # File storage backend: "local" (filesystem) or "s3" (MinIO / AWS S3)
     STORAGE_BACKEND: str = "local"
 

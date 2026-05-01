@@ -1,3 +1,4 @@
+import logging
 import os
 from contextlib import asynccontextmanager
 
@@ -7,6 +8,36 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from app import __version__
+
+# ─── Sentry — initialise BEFORE the FastAPI app so middleware is wrapped ──
+def _init_sentry() -> None:
+    from app.config import settings as _s
+
+    if not _s.SENTRY_DSN:
+        return
+    try:
+        import sentry_sdk
+        from sentry_sdk.integrations.fastapi import FastApiIntegration
+        from sentry_sdk.integrations.starlette import StarletteIntegration
+
+        sentry_sdk.init(
+            dsn=_s.SENTRY_DSN,
+            environment=_s.SENTRY_ENVIRONMENT or _s.ENVIRONMENT,
+            release=f"hrms@{__version__}",
+            traces_sample_rate=_s.SENTRY_TRACES_SAMPLE_RATE,
+            send_default_pii=False,
+            integrations=[
+                FastApiIntegration(),
+                StarletteIntegration(),
+            ],
+        )
+    except Exception:
+        logging.getLogger(__name__).warning(
+            "Sentry init failed; continuing without error reporting."
+        )
+
+
+_init_sentry()
 from app.api.router import admin_router, v1_router
 from app.api.v1.health import router as health_router
 from app.config import settings

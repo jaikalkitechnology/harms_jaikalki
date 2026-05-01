@@ -1,5 +1,7 @@
 """Phase 19 launch endpoints — notifications, audit, resignations, bulk import."""
-from typing import Optional
+import asyncio
+import json
+from typing import AsyncGenerator, Optional
 
 from fastapi import (
     APIRouter,
@@ -11,6 +13,7 @@ from fastapi import (
     status,
 )
 from sqlalchemy.ext.asyncio import AsyncSession
+from starlette.responses import StreamingResponse
 
 from app.core.exceptions import NotFoundError
 from app.core.permissions import require_permission
@@ -98,6 +101,51 @@ async def read_all_notifications(
 ):
     n = await notification_service.mark_all_read(db, user_id=user.id)
     return {"marked": n}
+
+
+@router.get(
+    "/notifications/me/stream",
+    tags=["notifications"],
+    summary="SSE stream of unread-count updates (long-lived connection)",
+)
+async def stream_unread_count(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Long-lived Server-Sent Events stream that emits an
+    `event: unread` message whenever the unread count changes, and a
+    keepalive comment every 5s to defeat proxy timeouts. Reconnect with
+    native EventSource semantics if the stream drops."""
+
+    async def _gen() -> AsyncGenerator[str, None]:
+        last = -1
+        yield "event: hello\ndata: {}\n\n"
+        while True:
+            if await request.is_disconnected():
+                return
+            try:
+                count = await notification_service.unread_count(
+                    db, user_id=user.id
+                )
+            except Exception:
+                count = last
+            if count != last:
+                yield f"event: unread\ndata: {json.dumps({'unread': count})}\n\n"
+                last = count
+            else:
+                yield ": keepalive\n\n"
+            await asyncio.sleep(5)
+
+    return StreamingResponse(
+        _gen(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+            "Connection": "keep-alive",
+        },
+    )
 
 
 @router.post(

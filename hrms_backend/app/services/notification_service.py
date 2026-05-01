@@ -93,7 +93,8 @@ async def notify(
             await db.commit()
 
     if send_push:
-        # Stub: enqueue a row marked sent if we have any active tokens.
+        from app.services import push_service
+
         tokens = (
             await db.execute(
                 select(DeviceToken)
@@ -102,6 +103,12 @@ async def notify(
             )
         ).scalars().all()
         if tokens:
+            ok_count, fail_count = push_service.send_push_multicast(
+                tokens=[t.token for t in tokens],
+                title=title,
+                body=body,
+                data=(data or {}) | {"type": type},
+            )
             push_row = Notification(
                 user_id=user_id,
                 channel="push",
@@ -109,16 +116,18 @@ async def notify(
                 title=title,
                 body=body,
                 data=data,
-                sent_at=_now(),
-                status="sent" if settings.FCM_SERVER_KEY else "pending",
-                error=None
-                if settings.FCM_SERVER_KEY
-                else "FCM_SERVER_KEY not configured",
+                sent_at=_now() if ok_count > 0 else None,
+                status="sent"
+                if ok_count > 0
+                else ("failed" if fail_count > 0 else "pending"),
+                error=(
+                    None
+                    if ok_count > 0
+                    else f"FCM unavailable / no tokens ok (failed={fail_count})"
+                ),
             )
             db.add(push_row)
             await db.commit()
-            # NOTE: actual FCM HTTP call elided until prod Firebase project
-            # is provisioned — see DEPLOY.md for setup.
 
     return notif
 

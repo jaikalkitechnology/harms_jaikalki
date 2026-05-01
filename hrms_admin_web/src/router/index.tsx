@@ -45,6 +45,7 @@ import JobPostingsPage from "@/features/polish/JobPostingsPage";
 import NotificationsPage from "@/features/launch/NotificationsPage";
 import AuditLogPage from "@/features/launch/AuditLogPage";
 import ResignationsPage from "@/features/launch/ResignationsPage";
+import SalaryRevisionsPage from "@/features/compensation/SalaryRevisionsPage";
 
 export const router = createBrowserRouter([
   { path: "/", element: <Navigate to="/dashboard" replace /> },
@@ -150,6 +151,7 @@ export const router = createBrowserRouter([
       { path: "notifications", element: <NotificationsPage /> },
       { path: "audit", element: <AuditLogPage /> },
       { path: "resignations", element: <ResignationsPage /> },
+      { path: "compensation", element: <SalaryRevisionsPage /> },
       {
         path: "reports",
         element: (

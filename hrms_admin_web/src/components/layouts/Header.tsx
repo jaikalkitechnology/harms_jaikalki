@@ -1,11 +1,12 @@
 import { useState } from "react";
-import { useLocation } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import { Bell, ChevronRight, Moon, Search, Sun, User } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { useAuthStore } from "@/store/auth";
 import { useThemeStore } from "@/store/theme";
 import { COMPANY_NAME, ROLE_LABEL, type Role } from "@/lib/constants";
 import { cn } from "@/lib/utils";
+import { useUnreadCount } from "@/hooks/useUnreadCount";
 
 function useBreadcrumbs() {
   const location = useLocation();
@@ -21,6 +22,7 @@ export function Header() {
   const toggle = useThemeStore((s) => s.toggle);
   const crumbs = useBreadcrumbs();
   const [menuOpen, setMenuOpen] = useState(false);
+  const unread = useUnreadCount();
 
   return (
     <header className="h-20 border-b border-brand-brown-100 bg-card/80 backdrop-blur px-8 flex items-center justify-between gap-4">
@@ -61,13 +63,18 @@ export function Header() {
           )}
         </button>
 
-        <button
+        <Link
+          to="/notifications"
           aria-label="Notifications"
           className="relative h-10 w-10 grid place-items-center rounded-lg hover:bg-brand-brown-50 text-brand-brown-light"
         >
           <Bell className="h-4 w-4" />
-          <span className="absolute top-2 right-2 h-2 w-2 rounded-full bg-brand-gold" />
-        </button>
+          {unread > 0 && (
+            <span className="absolute -top-0.5 -right-0.5 h-5 min-w-5 px-1 rounded-full bg-brand-gold-dark text-white text-[10px] font-bold grid place-items-center">
+              {unread > 99 ? "99+" : unread}
+            </span>
+          )}
+        </Link>
 
         <div className="relative">
           <button

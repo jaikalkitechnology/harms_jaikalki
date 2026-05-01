@@ -1,9 +1,9 @@
 from typing import Optional, Sequence
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, File, Query, UploadFile, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.exceptions import NotFoundError
+from app.core.exceptions import ForbiddenError, NotFoundError
 from app.core.permissions import require_permission
 from app.dependencies import get_current_user, get_db
 from app.models import Employee, User
@@ -177,3 +177,52 @@ async def get_org_chart(
     _: User = Depends(get_current_user),
 ) -> list[dict]:
     return await svc.org_chart(db)
+
+
+_ALLOWED_PHOTO_TYPES = {"image/jpeg", "image/png", "image/webp"}
+_MAX_PHOTO_BYTES = 5 * 1024 * 1024  # 5 MB
+
+
+@router.post("/{employee_id}/photo", response_model=EmployeeOut)
+async def upload_employee_photo(
+    employee_id: int,
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> Employee:
+    """Upload a profile photo. Employees can update their own; HR/admin
+    any employee."""
+    emp = await svc.get_employee(db, employee_id)
+    self_emp = await svc.get_self_employee(db, user)
+    is_self = self_emp is not None and self_emp.id == emp.id
+    if not is_self and not (
+        set(user.role_codes)
+        & {"super_admin", "director", "hr", "admin"}
+    ):
+        raise ForbiddenError("Cannot update another employee's photo")
+
+    if file.content_type not in _ALLOWED_PHOTO_TYPES:
+        from app.core.exceptions import ValidationError
+
+        raise ValidationError("Only JPEG/PNG/WEBP images are allowed")
+
+    content = await file.read()
+    if len(content) > _MAX_PHOTO_BYTES:
+        from app.core.exceptions import ValidationError
+
+        raise ValidationError("Photo must be ≤ 5 MB")
+
+    import io
+
+    from app.services.storage import upload_fileobj
+
+    _, url = upload_fileobj(
+        io.BytesIO(content),
+        key_prefix=f"profile-photos/{emp.employee_code}",
+        filename=file.filename or "photo.jpg",
+        content_type=file.content_type,
+    )
+    emp.photo_url = url
+    await db.commit()
+    await db.refresh(emp)
+    return emp
