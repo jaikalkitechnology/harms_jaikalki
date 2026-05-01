@@ -23,6 +23,8 @@ import '../../features/leaves/pages/leaves_home_page.dart';
 import '../../features/leaves/pages/manager_inbox_page.dart';
 import '../../features/onboarding/onboarding_page.dart';
 import '../../features/payroll/pages/payroll_home_page.dart';
+import '../../features/sales/pages/sales_pipeline_page.dart';
+import '../../features/sales/pages/sales_targets_page.dart';
 import '../../features/settings/cubit/settings_cubit.dart';
 import '../../features/settings/pages/settings_page.dart';
 import '../../features/shell/home_shell.dart';
@@ -58,6 +60,8 @@ class AppRoutes {
   static const justiceResources = '/justice/resources';
   static const fieldHome = '/field';
   static const fieldLiveMap = '/field/live-map';
+  static const salesPipeline = '/sales/pipeline';
+  static const salesTargets = '/sales/targets';
 
   static String dashboardFor(String? role) => home;
 }
@@ -193,6 +197,14 @@ GoRouter buildRouter(AuthBloc authBloc) {
         builder: (_, state) => FieldVisitPage(
           jobId: int.parse(state.pathParameters['jobId']!),
         ),
+      ),
+      GoRoute(
+        path: AppRoutes.salesPipeline,
+        builder: (_, __) => const SalesPipelinePage(),
+      ),
+      GoRoute(
+        path: AppRoutes.salesTargets,
+        builder: (_, __) => const SalesTargetsPage(),
       ),
     ],
   );
