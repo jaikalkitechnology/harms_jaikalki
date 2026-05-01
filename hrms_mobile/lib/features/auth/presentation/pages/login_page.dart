@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../../core/constants/app_constants.dart';
+import '../../../../core/routing/app_router.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../widgets/login_form.dart';
 
@@ -48,6 +50,15 @@ class LoginPage extends StatelessWidget {
                   ),
                   const SizedBox(height: 32),
                   const LoginForm(),
+                  const SizedBox(height: 12),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: TextButton(
+                      onPressed: () =>
+                          context.push(AppRoutes.forgotPassword),
+                      child: const Text('Forgot password?'),
+                    ),
+                  ),
                 ],
               ),
             ),

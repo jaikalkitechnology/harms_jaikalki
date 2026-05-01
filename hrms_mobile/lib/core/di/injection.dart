@@ -17,6 +17,7 @@ import '../../features/exam/data/exam_api.dart';
 import '../../features/field/data/field_api.dart';
 import '../../features/intern_expenses/data/intern_expense_api.dart';
 import '../../features/justice/data/justice_api.dart';
+import '../../features/launch/data/launch_api.dart';
 import '../../features/leaves/data/leave_api.dart';
 import '../../features/lms/data/lms_api.dart';
 import '../../features/payroll/data/payroll_api.dart';
@@ -84,4 +85,5 @@ Future<void> setupDependencies() async {
   sl.registerLazySingleton<PerformanceApi>(() => PerformanceApi(sl()));
   sl.registerLazySingleton<ReportsApi>(() => ReportsApi(sl()));
   sl.registerLazySingleton<PolishApi>(() => PolishApi(sl()));
+  sl.registerLazySingleton<LaunchApi>(() => LaunchApi(sl()));
 }

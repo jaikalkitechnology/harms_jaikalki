@@ -42,6 +42,9 @@ import SavedReportsPage from "@/features/reports/SavedReportsPage";
 import AssetsPage from "@/features/polish/AssetsPage";
 import VisitorsPage from "@/features/polish/VisitorsPage";
 import JobPostingsPage from "@/features/polish/JobPostingsPage";
+import NotificationsPage from "@/features/launch/NotificationsPage";
+import AuditLogPage from "@/features/launch/AuditLogPage";
+import ResignationsPage from "@/features/launch/ResignationsPage";
 
 export const router = createBrowserRouter([
   { path: "/", element: <Navigate to="/dashboard" replace /> },
@@ -144,6 +147,9 @@ export const router = createBrowserRouter([
       { path: "assets", element: <AssetsPage /> },
       { path: "visitors", element: <VisitorsPage /> },
       { path: "jobs", element: <JobPostingsPage /> },
+      { path: "notifications", element: <NotificationsPage /> },
+      { path: "audit", element: <AuditLogPage /> },
+      { path: "resignations", element: <ResignationsPage /> },
       {
         path: "reports",
         element: (

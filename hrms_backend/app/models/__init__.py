@@ -58,6 +58,14 @@ from .justice import (
     PoshAnnualReport,
     RetaliationFlag,
 )
+from .launch import (
+    AuditLog,
+    DeviceToken,
+    MfaBackupCode,
+    Notification,
+    PasswordResetOtp,
+    Resignation,
+)
 from .leave import CompOff, Holiday, LeaveBalance, LeaveRequest, LeaveType
 from .lms import (
     Badge,
@@ -225,4 +233,10 @@ __all__ = [
     "RoomBooking",
     "JobPosting",
     "JobApplication",
+    "Notification",
+    "DeviceToken",
+    "AuditLog",
+    "Resignation",
+    "PasswordResetOtp",
+    "MfaBackupCode",
 ]

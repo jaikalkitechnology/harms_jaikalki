@@ -65,6 +65,16 @@ services:
       mysql:
         condition: service_healthy
 
+  mailhog:
+    # Dev SMTP — captures every outgoing email and exposes a UI on :8025.
+    # In prod, swap SMTP_* settings to your real provider and remove this.
+    image: mailhog/mailhog
+    container_name: jaikalki_hrms_mailhog
+    restart: unless-stopped
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+
   api:
     build: .
     container_name: jaikalki_hrms_api
@@ -83,6 +93,12 @@ services:
       PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-http://localhost:8000}
       # Kept for fallback if STORAGE_BACKEND is switched to "s3".
       S3_ENDPOINT: http://minio:9000
+      # SMTP defaults to MailHog inside the compose network.
+      SMTP_HOST: ${SMTP_HOST:-mailhog}
+      SMTP_PORT: ${SMTP_PORT:-1025}
+      # Celery talks to Redis on its own logical DBs.
+      CELERY_BROKER_URL: redis://redis:6379/1
+      CELERY_RESULT_BACKEND: redis://redis:6379/2
     ports:
       - "8000:8000"
     volumes:
@@ -96,6 +112,50 @@ services:
       redis:
         condition: service_healthy
     profiles: ["api"]
+
+  worker:
+    # Background worker for emails, scheduled digests, retention purges.
+    build: .
+    container_name: jaikalki_hrms_worker
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DATABASE_URL: mysql+aiomysql://root:Love1718@mysql:3306/db_hrms_jaikalki?charset=utf8mb4
+      DATABASE_URL_SYNC: mysql+pymysql://root:Love1718@mysql:3306/db_hrms_jaikalki?charset=utf8mb4
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/1
+      CELERY_RESULT_BACKEND: redis://redis:6379/2
+      SMTP_HOST: ${SMTP_HOST:-mailhog}
+      SMTP_PORT: ${SMTP_PORT:-1025}
+      STORAGE_BACKEND: local
+      LOCAL_STORAGE_PATH: /app/uploads
+    volumes:
+      - ${HRMS_UPLOADS_PATH:-./uploads}:/app/uploads
+    command: celery -A app.workers.celery_app worker -l info
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    profiles: ["worker", "api"]
+
+  beat:
+    # Scheduler that fires the cron jobs in app/workers/celery_app.py
+    build: .
+    container_name: jaikalki_hrms_beat
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      CELERY_BROKER_URL: redis://redis:6379/1
+      CELERY_RESULT_BACKEND: redis://redis:6379/2
+      DATABASE_URL: mysql+aiomysql://root:Love1718@mysql:3306/db_hrms_jaikalki?charset=utf8mb4
+      DATABASE_URL_SYNC: mysql+pymysql://root:Love1718@mysql:3306/db_hrms_jaikalki?charset=utf8mb4
+      REDIS_URL: redis://redis:6379/0
+    command: celery -A app.workers.celery_app beat -l info
+    depends_on:
+      redis:
+        condition: service_healthy
+    profiles: ["worker", "api"]
 
 volumes:
   mysql_data:
