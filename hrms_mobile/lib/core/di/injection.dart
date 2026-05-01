@@ -11,6 +11,7 @@ import '../../features/auth/data/repositories/auth_repository_impl.dart';
 import '../../features/auth/domain/repositories/auth_repository.dart';
 import '../../features/auth/presentation/bloc/auth_bloc.dart';
 import '../../features/dashboard/data/dashboard_api.dart';
+import '../../features/dwp/data/dwp_api.dart';
 import '../../features/employees/data/employee_api.dart';
 import '../../features/intern_expenses/data/intern_expense_api.dart';
 import '../../features/leaves/data/leave_api.dart';
@@ -60,4 +61,5 @@ Future<void> setupDependencies() async {
   sl.registerLazySingleton<LeaveApi>(() => LeaveApi(sl()));
   sl.registerLazySingleton<ApprovalApi>(() => ApprovalApi(sl()));
   sl.registerLazySingleton<DashboardApi>(() => DashboardApi(sl()));
+  sl.registerLazySingleton<DwpApi>(() => DwpApi(sl()));
 }

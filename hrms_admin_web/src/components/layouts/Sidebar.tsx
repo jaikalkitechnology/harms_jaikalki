@@ -4,6 +4,7 @@ import {
   BadgeCheck,
   Building,
   Calendar,
+  ClipboardList,
   Clock,
   Coins,
   FileText,
@@ -105,6 +106,12 @@ const SECTIONS: NavSection[] = [
         label: "Approvals",
         to: "/approvals",
         icon: FileText,
+        permission: "approval.act",
+      },
+      {
+        label: "Daily Plans",
+        to: "/dwp",
+        icon: ClipboardList,
         permission: "approval.act",
       },
       {

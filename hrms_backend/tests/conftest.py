@@ -63,6 +63,7 @@ async def seeded(test_engine) -> None:
         seed_shifts,
     )
     from scripts.seed_approvals import seed_workflows
+    from scripts.seed_dwp import seed_templates as seed_dwp_templates
     from sqlalchemy import select as _select
 
     from app.models import Department
@@ -89,6 +90,7 @@ async def seeded(test_engine) -> None:
         await bootstrap_employee_shifts_and_balances(db, shifts, leave_types)
 
         await seed_workflows(db)
+        await seed_dwp_templates(db)
 
         await db.commit()
 

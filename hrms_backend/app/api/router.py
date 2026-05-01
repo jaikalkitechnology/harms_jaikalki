@@ -7,6 +7,7 @@ from app.api.v1.attendance import router as v1_attendance_router
 from app.api.v1.auth import router as v1_auth_router
 from app.api.v1.dashboard import router as v1_dashboard_router
 from app.api.v1.documents import router as v1_documents_router
+from app.api.v1.dwp import router as v1_dwp_router
 from app.api.v1.employees import router as v1_employees_router
 from app.api.v1.health import router as v1_health_router
 from app.api.v1.intern_expenses import router as v1_intern_expenses_router
@@ -27,6 +28,7 @@ v1_router.include_router(v1_documents_router)
 v1_router.include_router(v1_attendance_router)
 v1_router.include_router(v1_leaves_router)
 v1_router.include_router(v1_approvals_router)
+v1_router.include_router(v1_dwp_router)
 
 # Mounted at /api/admin
 admin_router = APIRouter()

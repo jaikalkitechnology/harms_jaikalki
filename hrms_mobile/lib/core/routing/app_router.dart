@@ -8,6 +8,8 @@ import '../../features/approvals/pages/approvals_inbox_page.dart';
 import '../../features/attendance/pages/attendance_home_page.dart';
 import '../../features/auth/presentation/bloc/auth_bloc.dart';
 import '../../features/auth/presentation/pages/login_page.dart';
+import '../../features/dwp/pages/dwp_form_page.dart';
+import '../../features/dwp/pages/dwp_home_page.dart';
 import '../../features/employees/pages/employee_detail_page.dart';
 import '../../features/employees/pages/employees_list_page.dart';
 import '../../features/intern_expenses/pages/intern_expenses_page.dart';
@@ -40,6 +42,9 @@ class AppRoutes {
   static const managerInbox = '/manager/inbox';
   static const approvalsInbox = '/approvals';
   static const settings = '/settings';
+  static const dwp = '/dwp';
+  static const dwpMorning = '/dwp/morning';
+  static const dwpEod = '/dwp/eod';
 
   static String dashboardFor(String? role) => home;
 }
@@ -133,6 +138,18 @@ GoRouter buildRouter(AuthBloc authBloc) {
       GoRoute(
         path: AppRoutes.approvalsInbox,
         builder: (_, __) => const ApprovalsInboxPage(),
+      ),
+      GoRoute(
+        path: AppRoutes.dwp,
+        builder: (_, __) => const DwpHomePage(),
+      ),
+      GoRoute(
+        path: AppRoutes.dwpMorning,
+        builder: (_, __) => const DwpFormPage(type: 'morning'),
+      ),
+      GoRoute(
+        path: AppRoutes.dwpEod,
+        builder: (_, __) => const DwpFormPage(type: 'eod'),
       ),
     ],
   );
