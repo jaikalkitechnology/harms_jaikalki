@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:go_router/go_router.dart';
 
+import '../../core/routing/app_router.dart';
 import '../../core/theme/app_colors.dart';
 import '../auth/presentation/bloc/auth_bloc.dart';
 
@@ -77,6 +79,29 @@ class DashboardPage extends StatelessWidget {
                 label: 'Latest Payslip',
                 value: '—',
                 hint: 'Phase 7',
+              ),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: () => context.push(AppRoutes.employees),
+                      icon: const Icon(Icons.groups_outlined, size: 18),
+                      label: const Text('Employees'),
+                    ),
+                  ),
+                  if (user != null && user.role == 'intern') ...[
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: FilledButton.icon(
+                        onPressed: () =>
+                            context.push(AppRoutes.internExpenses),
+                        icon: const Icon(Icons.flight_takeoff, size: 18),
+                        label: const Text('My Expenses'),
+                      ),
+                    ),
+                  ],
+                ],
               ),
               const SizedBox(height: 24),
               if (user != null && user.permissions.isNotEmpty)

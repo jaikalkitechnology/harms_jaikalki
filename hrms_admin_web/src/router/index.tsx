@@ -5,6 +5,11 @@ import LoginPage from "@/features/auth/LoginPage";
 import UnauthorizedPage from "@/features/auth/UnauthorizedPage";
 import DashboardPage from "@/features/dashboard/DashboardPage";
 import PlaceholderPage from "@/features/dashboard/PlaceholderPage";
+import EmployeesListPage from "@/features/employees/EmployeesListPage";
+import EmployeeDetailPage from "@/features/employees/EmployeeDetailPage";
+import EmployeeCreatePage from "@/features/employees/EmployeeCreatePage";
+import SalaryTemplatesPage from "@/features/salary-templates/SalaryTemplatesPage";
+import InternExpensesPage from "@/features/intern-expenses/InternExpensesPage";
 
 export const router = createBrowserRouter([
   { path: "/", element: <Navigate to="/dashboard" replace /> },
@@ -19,25 +24,25 @@ export const router = createBrowserRouter([
     ),
     children: [
       { path: "dashboard", element: <DashboardPage /> },
+      { path: "employees", element: <EmployeesListPage /> },
       {
-        path: "employees",
+        path: "employees/new",
         element: (
-          <ProtectedRoute requirePermission="employee.view.all">
-            <PlaceholderPage
-              phase="★ Phase 2"
-              title="Employee Master"
-              description="Employee directory, profiles, documents, and Jaikalki-specific categories (Intern / Trainee / Permanent / Contract) ship in Phase 2."
-            />
+          <ProtectedRoute requirePermission="employee.create">
+            <EmployeeCreatePage />
           </ProtectedRoute>
         ),
       },
+      { path: "employees/:id", element: <EmployeeDetailPage /> },
+      { path: "salary-templates", element: <SalaryTemplatesPage /> },
+      { path: "intern-expenses", element: <InternExpensesPage /> },
       {
         path: "departments",
         element: (
           <PlaceholderPage
             phase="★ Phase 2"
             title="Departments"
-            description="Department directory ships with the employee master in Phase 2."
+            description="Department CRUD UI lands alongside Phase 4.5; for now manage via /api/v1/departments."
           />
         ),
       },
@@ -47,7 +52,7 @@ export const router = createBrowserRouter([
           <PlaceholderPage
             phase="★ Phase 2"
             title="Designations"
-            description="Designation matrix (with Jaikalki L1-L5 levels) ships in Phase 2."
+            description="Designation CRUD UI lands alongside Phase 4.5; for now manage via /api/v1/designations."
           />
         ),
       },
