@@ -74,9 +74,22 @@ services:
       DATABASE_URL: mysql+aiomysql://root:Love1718@mysql:3306/db_hrms_jaikalki?charset=utf8mb4
       DATABASE_URL_SYNC: mysql+pymysql://root:Love1718@mysql:3306/db_hrms_jaikalki?charset=utf8mb4
       REDIS_URL: redis://redis:6379/0
+      # File storage — defaults to local filesystem mounted from the host
+      # at ./uploads. Switch to "s3" + S3_* settings to use MinIO/AWS.
+      STORAGE_BACKEND: local
+      LOCAL_STORAGE_PATH: /app/uploads
+      LOCAL_STORAGE_URL_PREFIX: /uploads
+      # Override in production to your real domain so generated URLs work.
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-http://localhost:8000}
+      # Kept for fallback if STORAGE_BACKEND is switched to "s3".
       S3_ENDPOINT: http://minio:9000
     ports:
       - "8000:8000"
+    volumes:
+      # Host-mounted uploads directory — survives container rebuilds.
+      # Override the host path with HRMS_UPLOADS_PATH in your production
+      # .env, e.g. HRMS_UPLOADS_PATH=/srv/jaikalki/uploads
+      - ${HRMS_UPLOADS_PATH:-./uploads}:/app/uploads
     depends_on:
       mysql:
         condition: service_healthy
