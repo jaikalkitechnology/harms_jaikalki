@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:get_it/get_it.dart';
 import 'package:local_auth/local_auth.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../features/approvals/data/approval_api.dart';
 import '../../features/attendance/data/attendance_api.dart';
@@ -9,15 +10,22 @@ import '../../features/auth/data/datasources/auth_remote_datasource.dart';
 import '../../features/auth/data/repositories/auth_repository_impl.dart';
 import '../../features/auth/domain/repositories/auth_repository.dart';
 import '../../features/auth/presentation/bloc/auth_bloc.dart';
+import '../../features/dashboard/data/dashboard_api.dart';
 import '../../features/employees/data/employee_api.dart';
 import '../../features/intern_expenses/data/intern_expense_api.dart';
 import '../../features/leaves/data/leave_api.dart';
+import '../../features/settings/cubit/settings_cubit.dart';
 import '../network/dio_client.dart';
 import '../storage/secure_storage.dart';
 
 final GetIt sl = GetIt.instance;
 
 Future<void> setupDependencies() async {
+  // Persistent prefs (must come first — used by SettingsCubit during boot)
+  final prefs = await SharedPreferences.getInstance();
+  sl.registerSingleton<SharedPreferences>(prefs);
+  sl.registerSingleton<SettingsCubit>(SettingsCubit(prefs)..hydrate());
+
   // Storage
   sl.registerLazySingleton<FlutterSecureStorage>(
     () => const FlutterSecureStorage(),
@@ -51,4 +59,5 @@ Future<void> setupDependencies() async {
   sl.registerLazySingleton<AttendanceApi>(() => AttendanceApi(sl()));
   sl.registerLazySingleton<LeaveApi>(() => LeaveApi(sl()));
   sl.registerLazySingleton<ApprovalApi>(() => ApprovalApi(sl()));
+  sl.registerLazySingleton<DashboardApi>(() => DashboardApi(sl()));
 }

@@ -7,6 +7,9 @@ import 'core/di/injection.dart';
 import 'core/routing/app_router.dart';
 import 'core/theme/app_theme.dart';
 import 'features/auth/presentation/bloc/auth_bloc.dart';
+import 'features/settings/cubit/settings_cubit.dart';
+import 'l10n/app_l10n.dart';
+import 'shared/widgets/offline_banner.dart';
 
 class JaikalkiApp extends StatefulWidget {
   const JaikalkiApp({super.key});
@@ -34,15 +37,27 @@ class _JaikalkiAppState extends State<JaikalkiApp> {
 
   @override
   Widget build(BuildContext context) {
-    return BlocProvider<AuthBloc>.value(
-      value: _authBloc,
-      child: MaterialApp.router(
-        title: AppConstants.appName,
-        debugShowCheckedModeBanner: false,
-        theme: AppTheme.light(),
-        darkTheme: AppTheme.dark(),
-        themeMode: ThemeMode.system,
-        routerConfig: _router,
+    return MultiBlocProvider(
+      providers: [
+        BlocProvider<AuthBloc>.value(value: _authBloc),
+        BlocProvider<SettingsCubit>.value(value: sl<SettingsCubit>()),
+      ],
+      child: BlocBuilder<SettingsCubit, SettingsState>(
+        builder: (context, settings) {
+          return MaterialApp.router(
+            title: AppConstants.appName,
+            debugShowCheckedModeBanner: false,
+            theme: AppTheme.light(),
+            darkTheme: AppTheme.dark(),
+            themeMode: settings.themeMode,
+            locale: settings.locale,
+            supportedLocales: AppL10n.supportedLocales,
+            localizationsDelegates: AppL10n.localizationsDelegates,
+            routerConfig: _router,
+            builder: (context, child) =>
+                OfflineBanner(child: child ?? const SizedBox()),
+          );
+        },
       ),
     );
   }

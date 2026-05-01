@@ -349,6 +349,41 @@ async def test_org_chart_returns_hierarchy(client):
     assert "JKT016" in child_codes  # Manager Demo reports to Director
 
 
+# ── Dashboard summary ────────────────────────────────────────────────
+@pytest.mark.asyncio
+async def test_dashboard_me_employee_view(client):
+    token = await _login(client, "employee@hrms.com", "employee123")
+    r = await client.get("/api/v1/dashboard/me", headers=_auth(token))
+    assert r.status_code == 200
+    body = r.json()
+    assert body["role"] == "employee"
+    assert body["employee_code"] == "JKT018"
+    assert isinstance(body["leave_balances"], list)
+    assert body["next_payday_in_days"] >= 0
+
+
+@pytest.mark.asyncio
+async def test_dashboard_me_manager_includes_team(client):
+    token = await _login(client, "manager@hrms.com", "manager123")
+    r = await client.get("/api/v1/dashboard/me", headers=_auth(token))
+    assert r.status_code == 200
+    body = r.json()
+    assert body["role"] == "manager"
+    assert body["team_size"] >= 1
+    codes = [m["employee_code"] for m in body["team_today"]]
+    assert "JKT017" in codes or "JKT018" in codes
+
+
+@pytest.mark.asyncio
+async def test_dashboard_me_director_includes_headcount(client):
+    token = await _login(client, "admin@hrms.com", "admin123")
+    r = await client.get("/api/v1/dashboard/me", headers=_auth(token))
+    assert r.status_code == 200
+    body = r.json()
+    assert body["role"] == "director"
+    assert body["total_headcount"] >= 5
+
+
 # ── Lookups ───────────────────────────────────────────────────────────
 @pytest.mark.asyncio
 async def test_list_departments_and_designations(client):
