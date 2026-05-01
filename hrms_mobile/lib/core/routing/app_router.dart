@@ -12,6 +12,9 @@ import '../../features/dwp/pages/dwp_form_page.dart';
 import '../../features/dwp/pages/dwp_home_page.dart';
 import '../../features/employees/pages/employee_detail_page.dart';
 import '../../features/employees/pages/employees_list_page.dart';
+import '../../features/field/pages/field_home_page.dart';
+import '../../features/field/pages/field_live_map_page.dart';
+import '../../features/field/pages/field_visit_page.dart';
 import '../../features/intern_expenses/pages/intern_expenses_page.dart';
 import '../../features/justice/pages/justice_gate_page.dart';
 import '../../features/justice/pages/justice_resources_page.dart';
@@ -53,6 +56,8 @@ class AppRoutes {
   static const justice = '/justice';
   static const justiceSubmit = '/justice/submit';
   static const justiceResources = '/justice/resources';
+  static const fieldHome = '/field';
+  static const fieldLiveMap = '/field/live-map';
 
   static String dashboardFor(String? role) => home;
 }
@@ -174,6 +179,20 @@ GoRouter buildRouter(AuthBloc authBloc) {
       GoRoute(
         path: AppRoutes.justiceResources,
         builder: (_, __) => const JusticeResourcesPage(),
+      ),
+      GoRoute(
+        path: AppRoutes.fieldHome,
+        builder: (_, __) => const FieldHomePage(),
+      ),
+      GoRoute(
+        path: AppRoutes.fieldLiveMap,
+        builder: (_, __) => const FieldLiveMapPage(),
+      ),
+      GoRoute(
+        path: '/field/visit/:jobId',
+        builder: (_, state) => FieldVisitPage(
+          jobId: int.parse(state.pathParameters['jobId']!),
+        ),
       ),
     ],
   );

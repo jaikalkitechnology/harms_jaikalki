@@ -13,6 +13,7 @@ import '../../features/auth/presentation/bloc/auth_bloc.dart';
 import '../../features/dashboard/data/dashboard_api.dart';
 import '../../features/dwp/data/dwp_api.dart';
 import '../../features/employees/data/employee_api.dart';
+import '../../features/field/data/field_api.dart';
 import '../../features/intern_expenses/data/intern_expense_api.dart';
 import '../../features/justice/data/justice_api.dart';
 import '../../features/leaves/data/leave_api.dart';
@@ -66,4 +67,5 @@ Future<void> setupDependencies() async {
   sl.registerLazySingleton<DwpApi>(() => DwpApi(sl()));
   sl.registerLazySingleton<PayrollApi>(() => PayrollApi(sl()));
   sl.registerLazySingleton<JusticeApi>(() => JusticeApi(sl()));
+  sl.registerLazySingleton<FieldApi>(() => FieldApi(sl()));
 }

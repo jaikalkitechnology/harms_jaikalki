@@ -28,6 +28,15 @@ from .employee import (
     InternTravelExpense,
     SalaryTemplate,
 )
+from .field_force import (
+    Customer,
+    FieldEmployee,
+    FieldExpense,
+    FieldJob,
+    LocationTrack,
+    Visit,
+    VisitPhoto,
+)
 from .justice import (
     IccMember,
     JusticeAccessLog,
@@ -109,4 +118,11 @@ __all__ = [
     "IccMember",
     "RetaliationFlag",
     "PoshAnnualReport",
+    "FieldEmployee",
+    "Customer",
+    "FieldJob",
+    "Visit",
+    "VisitPhoto",
+    "LocationTrack",
+    "FieldExpense",
 ]
