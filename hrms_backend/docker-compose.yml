@@ -1,0 +1,90 @@
+version: "3.8"
+
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: jaikalki_hrms_mysql
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: Love1718
+      MYSQL_DATABASE: db_hrms_jaikalki
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./mysql-init:/docker-entrypoint-initdb.d
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --default-authentication-plugin=mysql_native_password
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-pLove1718"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: jaikalki_hrms_redis
+    restart: always
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  minio:
+    image: minio/minio
+    container_name: jaikalki_hrms_minio
+    restart: always
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data:/data
+    command: server /data --console-address ":9001"
+
+  phpmyadmin:
+    image: phpmyadmin/phpmyadmin
+    container_name: jaikalki_hrms_phpmyadmin
+    restart: always
+    environment:
+      PMA_HOST: mysql
+      PMA_PORT: 3306
+      MYSQL_ROOT_PASSWORD: Love1718
+    ports:
+      - "8080:80"
+    depends_on:
+      mysql:
+        condition: service_healthy
+
+  api:
+    build: .
+    container_name: jaikalki_hrms_api
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DATABASE_URL: mysql+aiomysql://root:Love1718@mysql:3306/db_hrms_jaikalki?charset=utf8mb4
+      DATABASE_URL_SYNC: mysql+pymysql://root:Love1718@mysql:3306/db_hrms_jaikalki?charset=utf8mb4
+      REDIS_URL: redis://redis:6379/0
+      S3_ENDPOINT: http://minio:9000
+    ports:
+      - "8000:8000"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    profiles: ["api"]
+
+volumes:
+  mysql_data:
+  redis_data:
+  minio_data:
