@@ -13,6 +13,9 @@ import '../../features/dwp/pages/dwp_home_page.dart';
 import '../../features/employees/pages/employee_detail_page.dart';
 import '../../features/employees/pages/employees_list_page.dart';
 import '../../features/intern_expenses/pages/intern_expenses_page.dart';
+import '../../features/justice/pages/justice_gate_page.dart';
+import '../../features/justice/pages/justice_resources_page.dart';
+import '../../features/justice/pages/justice_submit_page.dart';
 import '../../features/leaves/pages/leaves_home_page.dart';
 import '../../features/leaves/pages/manager_inbox_page.dart';
 import '../../features/onboarding/onboarding_page.dart';
@@ -47,6 +50,9 @@ class AppRoutes {
   static const dwpMorning = '/dwp/morning';
   static const dwpEod = '/dwp/eod';
   static const payroll = '/payroll';
+  static const justice = '/justice';
+  static const justiceSubmit = '/justice/submit';
+  static const justiceResources = '/justice/resources';
 
   static String dashboardFor(String? role) => home;
 }
@@ -156,6 +162,18 @@ GoRouter buildRouter(AuthBloc authBloc) {
       GoRoute(
         path: AppRoutes.payroll,
         builder: (_, __) => const PayrollHomePage(),
+      ),
+      GoRoute(
+        path: AppRoutes.justice,
+        builder: (_, __) => const JusticeGatePage(),
+      ),
+      GoRoute(
+        path: AppRoutes.justiceSubmit,
+        builder: (_, __) => const JusticeSubmitPage(),
+      ),
+      GoRoute(
+        path: AppRoutes.justiceResources,
+        builder: (_, __) => const JusticeResourcesPage(),
       ),
     ],
   );

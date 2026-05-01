@@ -17,6 +17,9 @@ import ApprovalsInboxPage from "@/features/approvals/ApprovalsInboxPage";
 import DwpTeamPage from "@/features/dwp/DwpTeamPage";
 import PayrollRunsPage from "@/features/payroll/PayrollRunsPage";
 import ReimbursementsPage from "@/features/payroll/ReimbursementsPage";
+import JusticeInboxPage from "@/features/justice/JusticeInboxPage";
+import JusticeDetailPage from "@/features/justice/JusticeDetailPage";
+import IccPage from "@/features/justice/IccPage";
 
 export const router = createBrowserRouter([
   { path: "/", element: <Navigate to="/dashboard" replace /> },
@@ -94,6 +97,9 @@ export const router = createBrowserRouter([
           </ProtectedRoute>
         ),
       },
+      { path: "justice", element: <JusticeInboxPage /> },
+      { path: "justice/:id", element: <JusticeDetailPage /> },
+      { path: "icc", element: <IccPage /> },
       {
         path: "reports",
         element: (

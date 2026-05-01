@@ -1,5 +1,5 @@
 from functools import lru_cache
-from typing import List
+from typing import List, Optional
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -47,6 +47,11 @@ class Settings(BaseSettings):
     OFFICE_LAT: float = 19.2853
     OFFICE_LNG: float = 72.8533
     OFFICE_RADIUS_M: int = 200
+
+    # Justice Portal AES-GCM-256 encryption key (base64, 32 bytes raw).
+    # If unset, derives a deterministic key from JWT_SECRET_KEY so dev still
+    # works — but production MUST set its own.
+    JUSTICE_ENCRYPTION_KEY: Optional[str] = None
 
     S3_ENDPOINT: str = "http://localhost:9000"
     S3_ACCESS_KEY: str = "minioadmin"

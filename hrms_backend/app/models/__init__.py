@@ -28,6 +28,18 @@ from .employee import (
     InternTravelExpense,
     SalaryTemplate,
 )
+from .justice import (
+    IccMember,
+    JusticeAccessLog,
+    JusticeAccused,
+    JusticeAction,
+    JusticeComplaint,
+    JusticeEvidence,
+    JusticeTimeline,
+    JusticeWitness,
+    PoshAnnualReport,
+    RetaliationFlag,
+)
 from .leave import CompOff, Holiday, LeaveBalance, LeaveRequest, LeaveType
 from .payroll import (
     BankFileExport,
@@ -87,4 +99,14 @@ __all__ = [
     "InvestmentDeclaration",
     "BankFileExport",
     "GeneratedDocument",
+    "JusticeComplaint",
+    "JusticeEvidence",
+    "JusticeAccused",
+    "JusticeWitness",
+    "JusticeAction",
+    "JusticeTimeline",
+    "JusticeAccessLog",
+    "IccMember",
+    "RetaliationFlag",
+    "PoshAnnualReport",
 ]
