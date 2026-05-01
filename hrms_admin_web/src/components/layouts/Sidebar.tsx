@@ -255,10 +255,15 @@ const SECTIONS: NavSection[] = [
         permission: "approval.act",
       },
       {
-        label: "Reports",
-        to: "/reports",
-        icon: FileText,
+        label: "Director Dashboard",
+        to: "/reports/dashboard",
+        icon: LayoutDashboard,
         permission: "report.view.all",
+      },
+      {
+        label: "Saved Reports",
+        to: "/reports/saved",
+        icon: FileText,
       },
     ],
   },

@@ -86,6 +86,7 @@ from .performance import (
     ReviewCycle,
 )
 from .refresh_token import RefreshToken
+from .reports import SavedReport
 from .role import Permission, Role, RolePermission, UserRole
 from .sales import (
     Lead,
@@ -207,4 +208,5 @@ __all__ = [
     "FeedbackRequest",
     "FeedbackResponse",
     "OneOnOneNote",
+    "SavedReport",
 ]

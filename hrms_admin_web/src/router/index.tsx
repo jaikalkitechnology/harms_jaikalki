@@ -37,6 +37,8 @@ import CertificateVerifyPage from "@/features/exam/CertificateVerifyPage";
 import TrainersPage from "@/features/trainer/TrainersPage";
 import SessionsPage from "@/features/trainer/SessionsPage";
 import CyclesPage from "@/features/performance/CyclesPage";
+import DirectorDashboardPage from "@/features/reports/DirectorDashboardPage";
+import SavedReportsPage from "@/features/reports/SavedReportsPage";
 
 export const router = createBrowserRouter([
   { path: "/", element: <Navigate to="/dashboard" replace /> },
@@ -134,6 +136,8 @@ export const router = createBrowserRouter([
       { path: "trainers", element: <TrainersPage /> },
       { path: "trainers/sessions", element: <SessionsPage /> },
       { path: "performance/cycles", element: <CyclesPage /> },
+      { path: "reports/dashboard", element: <DirectorDashboardPage /> },
+      { path: "reports/saved", element: <SavedReportsPage /> },
       {
         path: "reports",
         element: (

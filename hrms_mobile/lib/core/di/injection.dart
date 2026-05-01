@@ -21,6 +21,7 @@ import '../../features/leaves/data/leave_api.dart';
 import '../../features/lms/data/lms_api.dart';
 import '../../features/payroll/data/payroll_api.dart';
 import '../../features/performance/data/performance_api.dart';
+import '../../features/reports/data/reports_api.dart';
 import '../../features/sales/data/sales_api.dart';
 import '../../features/settings/cubit/settings_cubit.dart';
 import '../../features/trainer/data/trainer_api.dart';
@@ -80,4 +81,5 @@ Future<void> setupDependencies() async {
   sl.registerLazySingleton<ExamApi>(() => ExamApi(sl()));
   sl.registerLazySingleton<TrainerApi>(() => TrainerApi(sl()));
   sl.registerLazySingleton<PerformanceApi>(() => PerformanceApi(sl()));
+  sl.registerLazySingleton<ReportsApi>(() => ReportsApi(sl()));
 }

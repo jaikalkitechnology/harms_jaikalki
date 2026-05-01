@@ -30,6 +30,7 @@ import '../../features/onboarding/onboarding_page.dart';
 import '../../features/payroll/pages/payroll_home_page.dart';
 import '../../features/performance/pages/feedback_inbox_page.dart';
 import '../../features/performance/pages/goals_page.dart';
+import '../../features/reports/pages/director_dashboard_page.dart';
 import '../../features/sales/pages/sales_pipeline_page.dart';
 import '../../features/sales/pages/sales_targets_page.dart';
 import '../../features/trainer/pages/sessions_page.dart';
@@ -81,6 +82,7 @@ class AppRoutes {
   static const trainerSessions = '/trainers/sessions';
   static const myGoals = '/performance/goals';
   static const feedbackInbox = '/performance/feedback';
+  static const directorDashboard = '/reports/dashboard';
 
   static String dashboardFor(String? role) => home;
 }
@@ -274,6 +276,10 @@ GoRouter buildRouter(AuthBloc authBloc) {
       GoRoute(
         path: AppRoutes.feedbackInbox,
         builder: (_, __) => const FeedbackInboxPage(),
+      ),
+      GoRoute(
+        path: AppRoutes.directorDashboard,
+        builder: (_, __) => const DirectorDashboardPage(),
       ),
     ],
   );
