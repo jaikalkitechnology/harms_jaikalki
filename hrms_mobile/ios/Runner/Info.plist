@@ -8,6 +8,8 @@
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
 	<string>Jaikalki HRMS</string>
+	<key>NSFaceIDUsageDescription</key>
+	<string>Use Face ID to quickly sign in to Jaikalki HRMS.</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
