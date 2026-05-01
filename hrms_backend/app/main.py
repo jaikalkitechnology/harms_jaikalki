@@ -6,7 +6,8 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from app import __version__
-from app.api.router import api_router
+from app.api.router import admin_router, v1_router
+from app.api.v1.health import router as health_router
 from app.config import settings
 from app.core.exceptions import AppException
 from app.core.middleware import RequestIDMiddleware
@@ -15,7 +16,6 @@ from app.services.cache import close_redis, get_redis
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Warm Redis connection on startup
     get_redis()
     yield
     await close_redis()
@@ -37,6 +37,7 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["X-Request-ID", "X-Response-Time-ms"],
 )
 app.add_middleware(RequestIDMiddleware)
 
@@ -61,8 +62,6 @@ async def root() -> dict[str, str]:
     }
 
 
-app.include_router(api_router, prefix=settings.API_V1_PREFIX)
-# Also expose /health at the root for simple uptime checks.
-from app.api.v1.health import router as health_router  # noqa: E402
-
+app.include_router(v1_router, prefix=settings.API_V1_PREFIX)
+app.include_router(admin_router, prefix=settings.API_ADMIN_PREFIX)
 app.include_router(health_router, tags=["health"])

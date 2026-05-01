@@ -7,6 +7,8 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { fetchHealth } from "@/lib/api/health";
+import { useAuthStore } from "@/store/auth";
+import { ROLE_LABEL, type Role } from "@/lib/constants";
 import { Users, CalendarCheck, Wallet, ClipboardList } from "lucide-react";
 
 const STATS = [
@@ -17,20 +19,26 @@ const STATS = [
 ];
 
 export default function DashboardPage() {
+  const user = useAuthStore((s) => s.user);
+  const role = useAuthStore((s) => s.role);
+  const permissions = useAuthStore((s) => s.permissions);
+
   const { data, isLoading, isError } = useQuery({
     queryKey: ["health"],
     queryFn: fetchHealth,
-    refetchInterval: 15_000,
+    refetchInterval: 30_000,
   });
 
   return (
     <div className="space-y-8">
       <div>
         <div className="text-[10px] font-mono uppercase tracking-[0.3em] text-brand-gold-dark">
-          ★ Overview
+          ★ {ROLE_LABEL[role as Role] ?? "Overview"}
         </div>
         <h2 className="font-display text-3xl font-bold text-brand-brown-darker">
-          Today, at a <span className="display-em">glance</span>
+          {user
+            ? `Welcome back, ${user.full_name.split(" ")[0] || user.email}`
+            : "Today, at a glance"}
         </h2>
       </div>
 
@@ -53,37 +61,65 @@ export default function DashboardPage() {
         ))}
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>
-            Backend <span className="display-em">health</span>
-          </CardTitle>
-          <CardDescription>
-            Live status from <code className="font-mono">/health</code>.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {isLoading && (
-            <div className="text-sm text-brand-brown-light">Pinging…</div>
-          )}
-          {isError && (
-            <div className="text-sm text-error">
-              Could not reach the backend. Is{" "}
-              <code className="font-mono">uvicorn</code> running on :8000?
+      <div className="grid lg:grid-cols-2 gap-4">
+        <Card>
+          <CardHeader>
+            <CardTitle>
+              Backend <span className="display-em">health</span>
+            </CardTitle>
+            <CardDescription>
+              Live status from <code className="font-mono">/health</code>.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {isLoading && (
+              <div className="text-sm text-brand-brown-light">Pinging…</div>
+            )}
+            {isError && (
+              <div className="text-sm text-error">
+                Could not reach the backend.
+              </div>
+            )}
+            {data && (
+              <dl className="grid grid-cols-2 gap-4 text-sm">
+                <Row k="App" v={data.app} />
+                <Row k="Version" v={data.version} />
+                <Row k="Env" v={data.environment} />
+                <Row k="DB" v={data.db} />
+                <Row k="Redis" v={data.redis} />
+              </dl>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>
+              Your <span className="display-em">permissions</span>
+            </CardTitle>
+            <CardDescription>
+              {permissions.length} grant{permissions.length === 1 ? "" : "s"}.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex flex-wrap gap-1.5">
+              {permissions.length === 0 && (
+                <span className="text-sm text-brand-brown-light">
+                  No granular permissions on this account.
+                </span>
+              )}
+              {permissions.map((p) => (
+                <span
+                  key={p}
+                  className="text-[10px] font-mono px-2 py-1 rounded-md bg-brand-brown-50 text-brand-brown-darker"
+                >
+                  {p}
+                </span>
+              ))}
             </div>
-          )}
-          {data && (
-            <dl className="grid grid-cols-2 sm:grid-cols-3 gap-4 text-sm">
-              <Row k="App" v={data.app} />
-              <Row k="Version" v={data.version} />
-              <Row k="Env" v={data.environment} />
-              <Row k="Company" v={data.company} />
-              <Row k="DB" v={data.db} />
-              <Row k="Redis" v={data.redis} />
-            </dl>
-          )}
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 }
