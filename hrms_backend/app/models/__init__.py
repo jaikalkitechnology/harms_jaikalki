@@ -85,6 +85,15 @@ from .performance import (
     PerformanceReview,
     ReviewCycle,
 )
+from .polish import (
+    Asset,
+    AssetAssignment,
+    JobApplication,
+    JobPosting,
+    MeetingRoom,
+    RoomBooking,
+    Visitor,
+)
 from .refresh_token import RefreshToken
 from .reports import SavedReport
 from .role import Permission, Role, RolePermission, UserRole
@@ -209,4 +218,11 @@ __all__ = [
     "FeedbackResponse",
     "OneOnOneNote",
     "SavedReport",
+    "Asset",
+    "AssetAssignment",
+    "Visitor",
+    "MeetingRoom",
+    "RoomBooking",
+    "JobPosting",
+    "JobApplication",
 ]
