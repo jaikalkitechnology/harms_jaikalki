@@ -29,6 +29,9 @@ import '../../features/lms/pages/lms_home_page.dart';
 import '../../features/onboarding/onboarding_page.dart';
 import '../../features/payroll/pages/payroll_home_page.dart';
 import '../../features/performance/pages/feedback_inbox_page.dart';
+import '../../features/launch/pages/forgot_password_page.dart';
+import '../../features/launch/pages/mfa_setup_page.dart';
+import '../../features/launch/pages/notifications_page.dart';
 import '../../features/performance/pages/goals_page.dart';
 import '../../features/polish/pages/book_room_page.dart';
 import '../../features/polish/pages/jobs_page.dart';
@@ -89,6 +92,9 @@ class AppRoutes {
   static const myAssets = '/polish/assets';
   static const bookRoom = '/polish/rooms';
   static const browseJobs = '/polish/jobs';
+  static const notifications = '/notifications';
+  static const mfaSetup = '/mfa/setup';
+  static const forgotPassword = '/forgot-password';
 
   static String dashboardFor(String? role) => home;
 }
@@ -103,6 +109,7 @@ GoRouter buildRouter(AuthBloc authBloc) {
       final loggingIn = loc == AppRoutes.login;
       final onSplash = loc == AppRoutes.splash;
       final onOnboarding = loc == AppRoutes.onboarding;
+      final onForgotPassword = loc == AppRoutes.forgotPassword;
 
       if (auth.status == AuthStatus.initial ||
           auth.status == AuthStatus.loading) {
@@ -110,8 +117,9 @@ GoRouter buildRouter(AuthBloc authBloc) {
       }
 
       if (!auth.isAuthenticated) {
-        // First-launch onboarding gate before login.
-        if (!onOnboarding && !loggingIn) {
+        // First-launch onboarding gate before login. Forgot-password is
+        // also reachable without auth.
+        if (!onOnboarding && !loggingIn && !onForgotPassword) {
           final onboarded = sl<SettingsCubit>().state.onboardingCompleted;
           if (!onboarded) return AppRoutes.onboarding;
           return AppRoutes.login;
@@ -119,7 +127,7 @@ GoRouter buildRouter(AuthBloc authBloc) {
         return null;
       }
 
-      if (loggingIn || onSplash || onOnboarding) {
+      if (loggingIn || onSplash || onOnboarding || onForgotPassword) {
         return AppRoutes.home;
       }
       return null;
@@ -298,6 +306,18 @@ GoRouter buildRouter(AuthBloc authBloc) {
       GoRoute(
         path: AppRoutes.browseJobs,
         builder: (_, __) => const JobsPage(),
+      ),
+      GoRoute(
+        path: AppRoutes.notifications,
+        builder: (_, __) => const NotificationsPage(),
+      ),
+      GoRoute(
+        path: AppRoutes.mfaSetup,
+        builder: (_, __) => const MfaSetupPage(),
+      ),
+      GoRoute(
+        path: AppRoutes.forgotPassword,
+        builder: (_, __) => const ForgotPasswordPage(),
       ),
     ],
   );

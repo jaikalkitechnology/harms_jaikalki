@@ -13,6 +13,7 @@ from app.api.v1.field_force import router as v1_field_router
 from app.api.v1.health import router as v1_health_router
 from app.api.v1.intern_expenses import router as v1_intern_expenses_router
 from app.api.v1.justice import router as v1_justice_router
+from app.api.v1.launch import router as v1_launch_router
 from app.api.v1.leaves import router as v1_leaves_router
 from app.api.v1.organization import router as v1_organization_router
 from app.api.v1.payroll import router as v1_payroll_router
@@ -51,6 +52,7 @@ v1_router.include_router(v1_trainer_router)
 v1_router.include_router(v1_performance_router)
 v1_router.include_router(v1_reports_router)
 v1_router.include_router(v1_polish_router)
+v1_router.include_router(v1_launch_router)
 
 # Mounted at /api/admin
 admin_router = APIRouter()

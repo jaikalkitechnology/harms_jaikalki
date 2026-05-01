@@ -12,6 +12,8 @@ class MoreMenuPage extends StatelessWidget {
   Widget build(BuildContext context) {
     final l = AppL10n.of(context);
     final items = <_MoreItem>[
+      _MoreItem('Notifications', Icons.notifications_outlined, AppRoutes.notifications),
+      _MoreItem('Enable 2FA', Icons.security_outlined, AppRoutes.mfaSetup),
       _MoreItem('Field plan', Icons.map_outlined, AppRoutes.fieldHome),
       _MoreItem('Live team map', Icons.location_on_outlined, AppRoutes.fieldLiveMap),
       _MoreItem('Sales pipeline', Icons.trending_up_outlined, AppRoutes.salesPipeline),

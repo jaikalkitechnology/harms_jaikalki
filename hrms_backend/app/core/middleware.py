@@ -1,6 +1,8 @@
+import logging
 import time
 import uuid
 from collections import deque
+from datetime import datetime, timezone
 from threading import Lock
 
 from fastapi.responses import JSONResponse
@@ -9,6 +11,8 @@ from starlette.requests import Request
 from starlette.responses import Response
 
 from app.config import settings
+
+logger = logging.getLogger(__name__)
 
 
 class RequestIDMiddleware(BaseHTTPMiddleware):
@@ -108,3 +112,77 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
                 )
             bucket.append(now)
         return await call_next(request)
+
+
+class AuditMiddleware(BaseHTTPMiddleware):
+    """Auto-capture authenticated mutating requests as audit_logs rows.
+
+    Captures POST / PUT / PATCH / DELETE on /api/v1 and /api/admin paths
+    that aren't read-only. Skips /health, /static, /uploads, OPTIONS, and
+    paths in ``SKIP_PREFIXES``. Designed to be cheap — does not parse
+    bodies; the explicit `app.services.audit_service.log()` helper is
+    used by code that needs richer payloads.
+    """
+
+    AUDITED_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
+    SKIP_PREFIXES = (
+        "/api/v1/health",
+        "/api/v1/auth/login",  # already audited at the auth layer
+        "/static",
+        "/uploads",
+        "/docs",
+        "/openapi.json",
+    )
+
+    async def dispatch(self, request: Request, call_next) -> Response:
+        response = await call_next(request)
+        try:
+            if request.method in self.AUDITED_METHODS and not any(
+                request.url.path.startswith(p) for p in self.SKIP_PREFIXES
+            ):
+                await self._record(request, response)
+        except Exception:
+            # Audit must never break a request; log + swallow.
+            logger.exception("audit middleware capture failed")
+        return response
+
+    async def _record(self, request: Request, response: Response) -> None:
+        # Defer DB imports — middleware is constructed before settings load
+        # in some tests.
+        from app.database import AsyncSessionLocal
+        from app.models import AuditLog
+
+        actor_user_id = None
+        actor_label = None
+        # `request.state.user` is set by `get_current_user` when the route
+        # depends on auth — not always populated.
+        user = getattr(request.state, "user", None)
+        if user is not None:
+            actor_user_id = getattr(user, "id", None)
+            actor_label = getattr(user, "full_name", None)
+
+        xff = request.headers.get("x-forwarded-for")
+        ip = (
+            xff.split(",")[0].strip()
+            if xff
+            else (request.client.host if request.client else None)
+        )
+        request_id = response.headers.get("X-Request-ID")
+
+        async with AsyncSessionLocal() as session:
+            session.add(
+                AuditLog(
+                    actor_user_id=actor_user_id,
+                    actor_label=actor_label,
+                    action=f"http.{request.method.lower()}",
+                    request_id=request_id,
+                    ip=ip,
+                    user_agent=request.headers.get("user-agent", "")[:255]
+                    or None,
+                    method=request.method,
+                    path=str(request.url.path)[:255],
+                    status_code=response.status_code,
+                    occurred_at=datetime.now(timezone.utc).replace(tzinfo=None),
+                )
+            )
+            await session.commit()

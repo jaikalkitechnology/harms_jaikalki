@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, Request, status
+from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
@@ -96,10 +97,15 @@ async def change_password(
 @router.post("/forgot-password", status_code=status.HTTP_202_ACCEPTED)
 async def forgot_password(
     body: ForgotPasswordRequest,
+    request: Request,
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, str]:
-    # Phase 1 stub: real OTP delivery (SMS/email) ships in Phase 5.
-    # We return 202 regardless to avoid email enumeration.
+    """Generate + email a 6-digit OTP. Always returns 202 to prevent
+    email enumeration."""
+    from app.services import password_reset_service
+
+    ip = request.client.host if request.client else None
+    await password_reset_service.request_otp(db, email=body.email, ip=ip)
     return {"detail": "If the account exists, an OTP has been sent."}
 
 
@@ -108,5 +114,59 @@ async def reset_password(
     body: ResetPasswordRequest,
     db: AsyncSession = Depends(get_db),
 ) -> None:
-    # Phase 1 stub — proper OTP store + verification arrives in Phase 5.
-    raise NotFoundError("OTP flow not yet enabled")
+    from app.services import password_reset_service
+
+    await password_reset_service.reset(
+        db,
+        email=body.email,
+        otp=body.otp,
+        new_password=body.new_password,
+    )
+
+
+# ─── MFA (TOTP) ──────────────────────────────────────────────────────
+class _MfaEnrollResponse(BaseModel):  # noqa: N801 — local response model
+    secret: str
+    otpauth_uri: str
+
+
+class _MfaCodeBody(BaseModel):  # noqa: N801
+    code: str
+
+
+class _MfaEnableResponse(BaseModel):  # noqa: N801
+    backup_codes: list[str]
+
+
+@router.post("/mfa/enroll", response_model=_MfaEnrollResponse)
+async def mfa_enroll(
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> _MfaEnrollResponse:
+    from app.services import mfa_service
+
+    secret, uri = await mfa_service.begin_enrollment(db, user)
+    return _MfaEnrollResponse(secret=secret, otpauth_uri=uri)
+
+
+@router.post("/mfa/verify", response_model=_MfaEnableResponse)
+async def mfa_verify(
+    body: _MfaCodeBody,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> _MfaEnableResponse:
+    from app.services import mfa_service
+
+    codes = await mfa_service.complete_enrollment(db, user, code=body.code)
+    return _MfaEnableResponse(backup_codes=codes)
+
+
+@router.post("/mfa/disable", status_code=status.HTTP_204_NO_CONTENT)
+async def mfa_disable(
+    body: _MfaCodeBody,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> None:
+    from app.services import mfa_service
+
+    await mfa_service.disable(db, user, code=body.code)

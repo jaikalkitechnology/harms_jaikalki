@@ -53,6 +53,33 @@ class Settings(BaseSettings):
     # works — but production MUST set its own.
     JUSTICE_ENCRYPTION_KEY: Optional[str] = None
 
+    # ── Email (SMTP) ──────────────────────────────────────────────
+    SMTP_HOST: str = "localhost"
+    SMTP_PORT: int = 1025  # MailHog default for dev
+    SMTP_USERNAME: Optional[str] = None
+    SMTP_PASSWORD: Optional[str] = None
+    SMTP_USE_TLS: bool = False
+    SMTP_FROM_EMAIL: str = "no-reply@jaikalki.com"
+    SMTP_FROM_NAME: str = "Jaikalki HRMS"
+    EMAIL_ENABLED: bool = True
+
+    # ── Mobile push (Firebase) ────────────────────────────────────
+    FCM_SERVER_KEY: Optional[str] = None  # legacy HTTP API key, optional
+
+    # ── MFA ───────────────────────────────────────────────────────
+    MFA_ISSUER: str = "Jaikalki HRMS"
+    MFA_REQUIRED_ROLES: List[str] = Field(
+        default_factory=lambda: ["super_admin", "hr"]
+    )
+
+    # ── Password reset OTP ────────────────────────────────────────
+    PASSWORD_RESET_OTP_TTL_MINUTES: int = 15
+    PASSWORD_RESET_MAX_ATTEMPTS: int = 5
+
+    # ── Celery ────────────────────────────────────────────────────
+    CELERY_BROKER_URL: str = "redis://localhost:6379/1"
+    CELERY_RESULT_BACKEND: str = "redis://localhost:6379/2"
+
     # File storage backend: "local" (filesystem) or "s3" (MinIO / AWS S3)
     STORAGE_BACKEND: str = "local"
 

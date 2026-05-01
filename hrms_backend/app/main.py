@@ -12,6 +12,7 @@ from app.api.v1.health import router as health_router
 from app.config import settings
 from app.core.exceptions import AppException
 from app.core.middleware import (
+    AuditMiddleware,
     RateLimitMiddleware,
     RequestIDMiddleware,
     SecurityHeadersMiddleware,
@@ -47,6 +48,7 @@ app.add_middleware(
 app.add_middleware(RequestIDMiddleware)
 app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(RateLimitMiddleware, max_requests=20, window_seconds=60)
+app.add_middleware(AuditMiddleware)
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
