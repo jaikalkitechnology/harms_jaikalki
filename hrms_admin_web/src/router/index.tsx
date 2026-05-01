@@ -34,6 +34,8 @@ import LeaderboardPage from "@/features/lms/LeaderboardPage";
 import QuestionBankPage from "@/features/exam/QuestionBankPage";
 import ExamsPage from "@/features/exam/ExamsPage";
 import CertificateVerifyPage from "@/features/exam/CertificateVerifyPage";
+import TrainersPage from "@/features/trainer/TrainersPage";
+import SessionsPage from "@/features/trainer/SessionsPage";
 
 export const router = createBrowserRouter([
   { path: "/", element: <Navigate to="/dashboard" replace /> },
@@ -128,6 +130,8 @@ export const router = createBrowserRouter([
       { path: "exams/questions", element: <QuestionBankPage /> },
       { path: "exams", element: <ExamsPage /> },
       { path: "exams/verify", element: <CertificateVerifyPage /> },
+      { path: "trainers", element: <TrainersPage /> },
+      { path: "trainers/sessions", element: <SessionsPage /> },
       {
         path: "reports",
         element: (

@@ -20,6 +20,8 @@ class MoreMenuPage extends StatelessWidget {
       _MoreItem('Learning', Icons.school_outlined, AppRoutes.lmsHome),
       _MoreItem('My badges', Icons.emoji_events_outlined, AppRoutes.lmsBadges),
       _MoreItem('Exams & certificates', Icons.workspace_premium_outlined, AppRoutes.exams),
+      _MoreItem('Trainers', Icons.mic_external_on_outlined, AppRoutes.trainers),
+      _MoreItem('Training sessions', Icons.calendar_today_outlined, AppRoutes.trainerSessions),
       _MoreItem('Justice Portal', Icons.shield_outlined, AppRoutes.justice),
       _MoreItem('Payroll', Icons.account_balance_wallet_outlined,
           AppRoutes.payroll),

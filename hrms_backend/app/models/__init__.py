@@ -88,6 +88,12 @@ from .sales import (
     SalesOrder,
     SalesTarget,
 )
+from .trainer import (
+    SessionParticipant,
+    TrainerProfile,
+    TrainerReview,
+    TrainingSession,
+)
 from .verification import (
     Verification,
     VerificationFraudFlag,
@@ -183,4 +189,8 @@ __all__ = [
     "ExamAttempt",
     "AttemptAnswer",
     "Certificate",
+    "TrainerProfile",
+    "TrainingSession",
+    "SessionParticipant",
+    "TrainerReview",
 ]

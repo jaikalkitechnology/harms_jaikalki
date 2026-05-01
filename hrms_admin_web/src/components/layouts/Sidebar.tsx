@@ -20,6 +20,8 @@ import {
   BookOpen,
   Award,
   BadgeCheck as BadgeCheckIcon,
+  Mic,
+  CalendarDays,
   Coins,
   FileText,
   Gavel,
@@ -234,6 +236,16 @@ const SECTIONS: NavSection[] = [
         label: "Verify Certificate",
         to: "/exams/verify",
         icon: BadgeCheckIcon,
+      },
+      {
+        label: "Trainers",
+        to: "/trainers",
+        icon: Mic,
+      },
+      {
+        label: "Training Sessions",
+        to: "/trainers/sessions",
+        icon: CalendarDays,
       },
       {
         label: "Reports",
