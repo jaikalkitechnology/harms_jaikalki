@@ -58,7 +58,7 @@ flutter run -d chrome           # http://localhost:8081 (or chosen port)
 | Surface | URL |
 |---|---|
 | API | `https://api-hrms.jaikalki.com` |
-| Admin web | `https://hrms.jaikalki.com` *(placeholder — update if different)* |
+| Admin web | `https://portal.jaikalki.com` |
 | Flutter mobile | reads `API_BASE_URL` dart-define; falls back to the prod URL above in release builds |
 
 Production overrides:
