@@ -30,6 +30,8 @@ import '../../features/onboarding/onboarding_page.dart';
 import '../../features/payroll/pages/payroll_home_page.dart';
 import '../../features/sales/pages/sales_pipeline_page.dart';
 import '../../features/sales/pages/sales_targets_page.dart';
+import '../../features/trainer/pages/sessions_page.dart';
+import '../../features/trainer/pages/trainer_marketplace_page.dart';
 import '../../features/verification/pages/verification_form_page.dart';
 import '../../features/verification/pages/verification_queue_page.dart';
 import '../../features/settings/cubit/settings_cubit.dart';
@@ -73,6 +75,8 @@ class AppRoutes {
   static const lmsHome = '/lms';
   static const lmsBadges = '/lms/badges';
   static const exams = '/exams';
+  static const trainers = '/trainers';
+  static const trainerSessions = '/trainers/sessions';
 
   static String dashboardFor(String? role) => home;
 }
@@ -250,6 +254,14 @@ GoRouter buildRouter(AuthBloc authBloc) {
         builder: (_, state) => ExamTakingPage(
           examId: int.parse(state.pathParameters['id']!),
         ),
+      ),
+      GoRoute(
+        path: AppRoutes.trainers,
+        builder: (_, __) => const TrainerMarketplacePage(),
+      ),
+      GoRoute(
+        path: AppRoutes.trainerSessions,
+        builder: (_, __) => const TrainerSessionsPage(),
       ),
     ],
   );
