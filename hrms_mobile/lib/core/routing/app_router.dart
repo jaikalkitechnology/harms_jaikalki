@@ -16,6 +16,7 @@ import '../../features/intern_expenses/pages/intern_expenses_page.dart';
 import '../../features/leaves/pages/leaves_home_page.dart';
 import '../../features/leaves/pages/manager_inbox_page.dart';
 import '../../features/onboarding/onboarding_page.dart';
+import '../../features/payroll/pages/payroll_home_page.dart';
 import '../../features/settings/cubit/settings_cubit.dart';
 import '../../features/settings/pages/settings_page.dart';
 import '../../features/shell/home_shell.dart';
@@ -45,6 +46,7 @@ class AppRoutes {
   static const dwp = '/dwp';
   static const dwpMorning = '/dwp/morning';
   static const dwpEod = '/dwp/eod';
+  static const payroll = '/payroll';
 
   static String dashboardFor(String? role) => home;
 }
@@ -150,6 +152,10 @@ GoRouter buildRouter(AuthBloc authBloc) {
       GoRoute(
         path: AppRoutes.dwpEod,
         builder: (_, __) => const DwpFormPage(type: 'eod'),
+      ),
+      GoRoute(
+        path: AppRoutes.payroll,
+        builder: (_, __) => const PayrollHomePage(),
       ),
     ],
   );

@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { ArrowLeft, BadgeCheck, Building, Calendar, Clock, Mail, Phone, User } from "lucide-react";
+import { ArrowLeft, BadgeCheck, Building, Calendar, Clock, FileText, Mail, Phone, ScrollText, User } from "lucide-react";
 
 import {
   Card,
@@ -21,6 +21,7 @@ import {
   salaryTemplatesApi,
   type SalaryBreakup,
 } from "@/lib/api/employees";
+import { payrollApi, type GeneratedDocument } from "@/lib/api/payroll";
 import { CategoryBadge } from "./CategoryBadge";
 
 export default function EmployeeDetailPage() {
@@ -199,6 +200,10 @@ export default function EmployeeDetailPage() {
           </Card>
         </PermissionGate>
 
+        <PermissionGate permission="employee.create">
+          <DocumentsCard employeeId={employee.id} />
+        </PermissionGate>
+
         {employee.is_on_probation && (
           <PermissionGate permission="employee.update">
             <Card className="lg:col-span-2">
@@ -367,6 +372,116 @@ function SalaryGrid({ breakup }: { breakup: SalaryBreakup }) {
           </div>
         </dl>
       </div>
+    </div>
+  );
+}
+
+function DocumentsCard({ employeeId }: { employeeId: number }) {
+  const queryClient = useQueryClient();
+  const { data: documents = [] } = useQuery({
+    queryKey: ["employee-documents", employeeId],
+    queryFn: () => payrollApi.listEmployeeDocuments(employeeId),
+  });
+
+  const generateOffer = useMutation({
+    mutationFn: () => payrollApi.generateOfferLetter(employeeId),
+    onSuccess: (doc) => {
+      toast.success(`Offer letter ${doc.letter_number} generated`);
+      queryClient.invalidateQueries({ queryKey: ["employee-documents"] });
+    },
+    onError: (err: unknown) => {
+      const detail =
+        (err as { response?: { data?: { detail?: string } } })?.response?.data
+          ?.detail ?? "Could not generate offer letter";
+      toast.error(detail);
+    },
+  });
+  const generateConfirmation = useMutation({
+    mutationFn: () => payrollApi.generateConfirmationLetter(employeeId),
+    onSuccess: (doc) => {
+      toast.success(`Confirmation letter ${doc.letter_number} generated`);
+      queryClient.invalidateQueries({ queryKey: ["employee-documents"] });
+    },
+  });
+
+  return (
+    <Card className="lg:col-span-2">
+      <CardHeader>
+        <CardTitle>
+          Letters & <span className="display-em">documents</span>
+        </CardTitle>
+        <CardDescription>
+          Offer letter follows the Jaikalki <code className="font-mono">JKT/HR/AL/&lt;seq&gt;/&lt;year&gt;</code> format.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="flex flex-wrap gap-2">
+          <Button
+            onClick={() => generateOffer.mutate()}
+            disabled={generateOffer.isPending}
+            variant="gold"
+          >
+            <ScrollText className="h-4 w-4" />
+            Generate offer letter
+          </Button>
+          <Button
+            asChild
+            variant="outline"
+          >
+            <a
+              href={payrollApi.offerLetterPreviewUrl(employeeId)}
+              target="_blank"
+              rel="noreferrer"
+            >
+              <FileText className="h-4 w-4" />
+              Preview PDF
+            </a>
+          </Button>
+          <Button
+            onClick={() => generateConfirmation.mutate()}
+            disabled={generateConfirmation.isPending}
+            variant="outline"
+          >
+            Generate confirmation
+          </Button>
+        </div>
+        {documents.length > 0 && (
+          <div className="space-y-1">
+            {documents.map((d) => (
+              <DocumentRow key={d.id} doc={d} />
+            ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function DocumentRow({ doc }: { doc: GeneratedDocument }) {
+  return (
+    <div className="flex items-center justify-between py-2 border-b border-brand-brown-100/60 last:border-0">
+      <div>
+        <div className="text-sm font-medium">
+          {doc.doc_type === "offer_letter"
+            ? "Offer letter"
+            : doc.doc_type === "confirmation_letter"
+              ? "Confirmation letter"
+              : doc.doc_type}
+        </div>
+        <div className="text-xs font-mono text-brand-brown-light">
+          {doc.letter_number ?? "—"} · {new Date(doc.created_at).toLocaleDateString()}
+        </div>
+      </div>
+      {doc.file_url && !doc.file_url.startsWith("local://") && (
+        <a
+          href={doc.file_url}
+          target="_blank"
+          rel="noreferrer"
+          className="text-xs font-mono uppercase tracking-[0.2em] text-brand-gold-dark hover:text-brand-brown-darker"
+        >
+          Open →
+        </a>
+      )}
     </div>
   );
 }

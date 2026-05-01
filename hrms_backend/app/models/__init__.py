@@ -29,6 +29,14 @@ from .employee import (
     SalaryTemplate,
 )
 from .leave import CompOff, Holiday, LeaveBalance, LeaveRequest, LeaveType
+from .payroll import (
+    BankFileExport,
+    GeneratedDocument,
+    InvestmentDeclaration,
+    PayrollRun,
+    Payslip,
+    Reimbursement,
+)
 from .refresh_token import RefreshToken
 from .role import Permission, Role, RolePermission, UserRole
 from .user import User
@@ -73,4 +81,10 @@ __all__ = [
     "DwpComment",
     "DwpReminderSetting",
     "DwpTag",
+    "PayrollRun",
+    "Payslip",
+    "Reimbursement",
+    "InvestmentDeclaration",
+    "BankFileExport",
+    "GeneratedDocument",
 ]

@@ -13,6 +13,7 @@ import {
   Package,
   Palette,
   Plane,
+  Receipt,
   Settings,
   Shield,
   ShieldCheck,
@@ -119,6 +120,12 @@ const SECTIONS: NavSection[] = [
         to: "/payroll",
         icon: Wallet,
         permission: "payroll.run",
+      },
+      {
+        label: "Reimbursements",
+        to: "/reimbursements",
+        icon: Receipt,
+        permission: "approval.act",
       },
       {
         label: "Reports",
