@@ -15,6 +15,8 @@ import LeaveApprovalsPage from "@/features/leaves/LeaveApprovalsPage";
 import HolidaysPage from "@/features/holidays/HolidaysPage";
 import ApprovalsInboxPage from "@/features/approvals/ApprovalsInboxPage";
 import DwpTeamPage from "@/features/dwp/DwpTeamPage";
+import PayrollRunsPage from "@/features/payroll/PayrollRunsPage";
+import ReimbursementsPage from "@/features/payroll/ReimbursementsPage";
 
 export const router = createBrowserRouter([
   { path: "/", element: <Navigate to="/dashboard" replace /> },
@@ -80,11 +82,15 @@ export const router = createBrowserRouter([
         path: "payroll",
         element: (
           <ProtectedRoute requirePermission="payroll.run">
-            <PlaceholderPage
-              phase="★ Phase 7"
-              title="Payroll & Offer Letters"
-              description="Salary structures, payslips, and the Pooja-template offer letter generator ship in Phase 7."
-            />
+            <PayrollRunsPage />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: "reimbursements",
+        element: (
+          <ProtectedRoute requirePermission="approval.act">
+            <ReimbursementsPage />
           </ProtectedRoute>
         ),
       },

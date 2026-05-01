@@ -13,6 +13,7 @@ from app.api.v1.health import router as v1_health_router
 from app.api.v1.intern_expenses import router as v1_intern_expenses_router
 from app.api.v1.leaves import router as v1_leaves_router
 from app.api.v1.organization import router as v1_organization_router
+from app.api.v1.payroll import router as v1_payroll_router
 from app.api.v1.salary_templates import router as v1_salary_templates_router
 
 # Mounted at /api/v1
@@ -29,6 +30,7 @@ v1_router.include_router(v1_attendance_router)
 v1_router.include_router(v1_leaves_router)
 v1_router.include_router(v1_approvals_router)
 v1_router.include_router(v1_dwp_router)
+v1_router.include_router(v1_payroll_router)
 
 # Mounted at /api/admin
 admin_router = APIRouter()
