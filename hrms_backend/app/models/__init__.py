@@ -50,6 +50,16 @@ from .justice import (
     RetaliationFlag,
 )
 from .leave import CompOff, Holiday, LeaveBalance, LeaveRequest, LeaveType
+from .lms import (
+    Badge,
+    Course,
+    CourseEnrollment,
+    CourseLesson,
+    CourseModule,
+    EmployeeBadge,
+    EmployeeLearningStat,
+    LessonProgress,
+)
 from .payroll import (
     BankFileExport,
     GeneratedDocument,
@@ -149,4 +159,12 @@ __all__ = [
     "VerificationTemplate",
     "Verification",
     "VerificationFraudFlag",
+    "Course",
+    "CourseModule",
+    "CourseLesson",
+    "CourseEnrollment",
+    "LessonProgress",
+    "Badge",
+    "EmployeeBadge",
+    "EmployeeLearningStat",
 ]
