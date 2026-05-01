@@ -96,6 +96,12 @@ const SECTIONS: NavSection[] = [
         permission: "attendance.view.all",
       },
       {
+        label: "Leaves",
+        to: "/leaves",
+        icon: Calendar,
+        permission: "leave.approve.team",
+      },
+      {
         label: "Approvals",
         to: "/approvals",
         icon: FileText,

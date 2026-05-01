@@ -43,6 +43,11 @@ class Settings(BaseSettings):
     # Public base URL of this API (used in PDFs, emails, OAuth callbacks).
     PUBLIC_BASE_URL: str = "http://localhost:8000"
 
+    # Office geo-fence (default: Jaikalki Mira Road)
+    OFFICE_LAT: float = 19.2853
+    OFFICE_LNG: float = 72.8533
+    OFFICE_RADIUS_M: int = 200
+
     S3_ENDPOINT: str = "http://localhost:9000"
     S3_ACCESS_KEY: str = "minioadmin"
     S3_SECRET_KEY: str = "minioadmin"

@@ -4,12 +4,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../features/attendance/pages/attendance_home_page.dart';
 import '../../features/auth/presentation/bloc/auth_bloc.dart';
 import '../../features/auth/presentation/pages/login_page.dart';
 import '../../features/dashboard/dashboard_page.dart';
 import '../../features/employees/pages/employee_detail_page.dart';
 import '../../features/employees/pages/employees_list_page.dart';
 import '../../features/intern_expenses/pages/intern_expenses_page.dart';
+import '../../features/leaves/pages/leaves_home_page.dart';
+import '../../features/leaves/pages/manager_inbox_page.dart';
 import '../../features/splash/splash_page.dart';
 import '../di/injection.dart';
 
@@ -24,6 +27,9 @@ class AppRoutes {
   static const employeeDashboard = '/employee/dashboard';
   static const employees = '/employees';
   static const internExpenses = '/intern/expenses';
+  static const attendance = '/attendance';
+  static const leaves = '/leaves';
+  static const managerInbox = '/manager/inbox';
 
   static String dashboardFor(String? role) {
     switch (role) {
@@ -115,6 +121,18 @@ GoRouter buildRouter(AuthBloc authBloc) {
       GoRoute(
         path: AppRoutes.internExpenses,
         builder: (_, __) => const InternExpensesPage(),
+      ),
+      GoRoute(
+        path: AppRoutes.attendance,
+        builder: (_, __) => const AttendanceHomePage(),
+      ),
+      GoRoute(
+        path: AppRoutes.leaves,
+        builder: (_, __) => const LeavesHomePage(),
+      ),
+      GoRoute(
+        path: AppRoutes.managerInbox,
+        builder: (_, __) => const ManagerInboxPage(),
       ),
     ],
   );

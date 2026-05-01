@@ -81,26 +81,41 @@ class DashboardPage extends StatelessWidget {
                 hint: 'Phase 7',
               ),
               const SizedBox(height: 16),
-              Row(
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
                 children: [
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      onPressed: () => context.push(AppRoutes.employees),
-                      icon: const Icon(Icons.groups_outlined, size: 18),
-                      label: const Text('Employees'),
-                    ),
+                  OutlinedButton.icon(
+                    onPressed: () => context.push(AppRoutes.attendance),
+                    icon: const Icon(Icons.fingerprint, size: 18),
+                    label: const Text('Attendance'),
                   ),
-                  if (user != null && user.role == 'intern') ...[
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: FilledButton.icon(
-                        onPressed: () =>
-                            context.push(AppRoutes.internExpenses),
-                        icon: const Icon(Icons.flight_takeoff, size: 18),
-                        label: const Text('My Expenses'),
-                      ),
+                  OutlinedButton.icon(
+                    onPressed: () => context.push(AppRoutes.leaves),
+                    icon: const Icon(Icons.calendar_today_outlined, size: 18),
+                    label: const Text('Leaves'),
+                  ),
+                  OutlinedButton.icon(
+                    onPressed: () => context.push(AppRoutes.employees),
+                    icon: const Icon(Icons.groups_outlined, size: 18),
+                    label: const Text('Employees'),
+                  ),
+                  if (user != null &&
+                      (user.role == 'manager' ||
+                          user.role == 'hr' ||
+                          user.role == 'director' ||
+                          user.role == 'super_admin'))
+                    FilledButton.icon(
+                      onPressed: () => context.push(AppRoutes.managerInbox),
+                      icon: const Icon(Icons.inbox_outlined, size: 18),
+                      label: const Text('Approvals'),
                     ),
-                  ],
+                  if (user != null && user.role == 'intern')
+                    FilledButton.icon(
+                      onPressed: () => context.push(AppRoutes.internExpenses),
+                      icon: const Icon(Icons.flight_takeoff, size: 18),
+                      label: const Text('Expenses'),
+                    ),
                 ],
               ),
               const SizedBox(height: 24),

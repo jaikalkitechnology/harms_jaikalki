@@ -1,0 +1,214 @@
+from datetime import date, datetime
+from typing import Optional, Sequence
+
+from fastapi import APIRouter, Depends, File, Form, Query, UploadFile, status
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.core.exceptions import ForbiddenError, NotFoundError
+from app.core.permissions import require_permission
+from app.dependencies import get_current_user, get_db
+from app.models import Attendance, AttendanceRegularization, User
+from app.schemas.attendance import (
+    AttendanceCheckIn,
+    AttendanceCheckOut,
+    AttendanceOut,
+    AttendanceSummary,
+    RegularizationCreate,
+    RegularizationDecision,
+    RegularizationOut,
+)
+from app.services import attendance_service as att_svc
+from app.services import employee_service as emp_svc
+from app.services.storage import upload_fileobj
+
+router = APIRouter(prefix="/attendance", tags=["attendance"])
+
+
+async def _self_employee(db: AsyncSession, user: User):
+    emp = await emp_svc.get_self_employee(db, user)
+    if not emp:
+        raise NotFoundError("No employee record linked to this account")
+    return emp
+
+
+@router.post("/check-in", response_model=AttendanceOut)
+async def check_in(
+    payload: AttendanceCheckIn,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    emp = await _self_employee(db, user)
+    att, _geo = await att_svc.check_in(
+        db,
+        emp,
+        lat=payload.lat,
+        lng=payload.lng,
+        work_mode=payload.work_mode,
+        selfie_url=payload.selfie_url,
+        notes=payload.notes,
+    )
+    return att
+
+
+@router.post("/check-in/with-selfie", response_model=AttendanceOut)
+async def check_in_with_selfie(
+    lat: float = Form(...),
+    lng: float = Form(...),
+    work_mode: str = Form("office"),
+    notes: Optional[str] = Form(None),
+    selfie: Optional[UploadFile] = File(None),
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Multipart variant: upload the selfie photo as part of the request."""
+    emp = await _self_employee(db, user)
+
+    selfie_url: Optional[str] = None
+    if selfie is not None:
+        contents = await selfie.read()
+        if contents:
+            import io
+            _, selfie_url = upload_fileobj(
+                io.BytesIO(contents),
+                key_prefix=f"attendance/{emp.employee_code}",
+                filename=selfie.filename or "selfie.jpg",
+                content_type=selfie.content_type,
+            )
+
+    att, _geo = await att_svc.check_in(
+        db,
+        emp,
+        lat=lat,
+        lng=lng,
+        work_mode=work_mode,
+        selfie_url=selfie_url,
+        notes=notes,
+    )
+    return att
+
+
+@router.post("/check-out", response_model=AttendanceOut)
+async def check_out(
+    payload: AttendanceCheckOut,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    emp = await _self_employee(db, user)
+    return await att_svc.check_out(db, emp, lat=payload.lat, lng=payload.lng)
+
+
+@router.get("/me", response_model=list[AttendanceOut])
+async def my_attendance(
+    from_date: Optional[date] = None,
+    to_date: Optional[date] = None,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    emp = await _self_employee(db, user)
+    return await att_svc.list_for_employee(
+        db, emp.id, from_date=from_date, to_date=to_date
+    )
+
+
+@router.get("/me/summary", response_model=AttendanceSummary)
+async def my_summary(
+    year: Optional[int] = None,
+    month: Optional[int] = None,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    today = date.today()
+    emp = await _self_employee(db, user)
+    return await att_svc.monthly_summary(
+        db, emp.id, year=year or today.year, month=month or today.month
+    )
+
+
+@router.get("/team", response_model=list[AttendanceOut])
+async def team_attendance(
+    on_date: Optional[date] = Query(default=None, alias="date"),
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    allowed = await emp_svc.visible_employee_ids(db, user)
+    if allowed is not None and not allowed:
+        return []
+    on = on_date or date.today()
+    stmt = select(Attendance).where(Attendance.date == on)
+    if allowed is not None:
+        stmt = stmt.where(Attendance.employee_id.in_(allowed))
+    return (await db.execute(stmt)).scalars().all()
+
+
+@router.get("/report", response_model=list[AttendanceOut])
+async def attendance_report(
+    from_date: date,
+    to_date: date,
+    employee_id: Optional[int] = None,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_permission("attendance.view.all")),
+):
+    stmt = (
+        select(Attendance)
+        .where(Attendance.date >= from_date)
+        .where(Attendance.date <= to_date)
+        .order_by(Attendance.date.desc())
+    )
+    if employee_id:
+        stmt = stmt.where(Attendance.employee_id == employee_id)
+    return (await db.execute(stmt)).scalars().all()
+
+
+# ── Regularization ──────────────────────────────────────────────────────
+@router.post(
+    "/regularize",
+    response_model=RegularizationOut,
+    status_code=status.HTTP_201_CREATED,
+)
+async def request_regularization(
+    payload: RegularizationCreate,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    emp = await _self_employee(db, user)
+    return await att_svc.request_regularization(
+        db,
+        emp,
+        on_date=payload.date,
+        requested_check_in=payload.requested_check_in,
+        requested_check_out=payload.requested_check_out,
+        reason=payload.reason,
+    )
+
+
+@router.get("/regularize/pending", response_model=list[RegularizationOut])
+async def pending_regularizations(
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_permission("approval.act")),
+):
+    return await att_svc.list_pending_regularizations(db)
+
+
+@router.post("/regularize/{reg_id}/approve", response_model=RegularizationOut)
+async def approve_regularization(
+    reg_id: int,
+    payload: RegularizationDecision,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_permission("approval.act")),
+):
+    return await att_svc.approve_regularization(
+        db, reg_id, approver=user, decision_comment=payload.decision_comment
+    )
+
+
+@router.post("/regularize/{reg_id}/reject", response_model=RegularizationOut)
+async def reject_regularization(
+    reg_id: int,
+    payload: RegularizationDecision,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_permission("approval.act")),
+):
+    return await att_svc.reject_regularization(
+        db, reg_id, approver=user, decision_comment=payload.decision_comment
+    )
