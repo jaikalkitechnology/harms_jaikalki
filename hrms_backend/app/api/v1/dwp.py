@@ -1,0 +1,311 @@
+from datetime import date
+from typing import Optional, Sequence
+
+from fastapi import APIRouter, Depends, Query, status
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.core.exceptions import ForbiddenError, NotFoundError
+from app.dependencies import get_current_user, get_db
+from app.models import DwpSubmission, DwpTemplate, Employee, User
+from app.schemas.dwp import (
+    DwpCommentCreate,
+    DwpCommentOut,
+    DwpStreakOut,
+    DwpSubmissionFieldOut,
+    DwpSubmissionOut,
+    DwpSubmitRequest,
+    DwpTeamSubmissionItem,
+    DwpTemplateOut,
+    DwpTemplateWithPrefill,
+)
+from app.services import dwp_service, employee_service as emp_svc
+
+router = APIRouter(prefix="/dwp", tags=["dwp"])
+
+
+async def _self_employee(db: AsyncSession, user: User) -> Employee:
+    emp = await emp_svc.get_self_employee(db, user)
+    if not emp:
+        raise NotFoundError("No employee record linked to this account")
+    return emp
+
+
+def _serialize_submission(sub: DwpSubmission) -> DwpSubmissionOut:
+    return DwpSubmissionOut(
+        id=sub.id,
+        employee_id=sub.employee_id,
+        template_id=sub.template_id,
+        type=sub.type,
+        date=sub.date,
+        submitted_at=sub.submitted_at,
+        total_hours=sub.total_hours,
+        mood_rating=sub.mood_rating,
+        linked_morning_id=sub.linked_morning_id,
+        fields=[
+            DwpSubmissionFieldOut(
+                field_key=f.field_key, value=f.value, file_url=f.file_url
+            )
+            for f in sub.fields
+        ],
+        comments=[DwpCommentOut.model_validate(c) for c in sub.comments],
+    )
+
+
+# ── Templates with prefill ─────────────────────────────────────────────
+@router.get("/template/morning", response_model=DwpTemplateWithPrefill)
+async def get_morning_template(
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    emp = await _self_employee(db, user)
+    template = await dwp_service.find_template(db, emp, type="morning")
+    prefill, _ = await dwp_service.prefill_for(db, emp.id, type="morning")
+    streak, _last = await dwp_service.streak_for(db, emp.id)
+    return DwpTemplateWithPrefill(
+        template=DwpTemplateOut.model_validate(template),
+        prefill=prefill,
+        streak_days=streak,
+    )
+
+
+@router.get("/template/eod", response_model=DwpTemplateWithPrefill)
+async def get_eod_template(
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    emp = await _self_employee(db, user)
+    template = await dwp_service.find_template(db, emp, type="eod")
+    prefill, linked = await dwp_service.prefill_for(db, emp.id, type="eod")
+    streak, _last = await dwp_service.streak_for(db, emp.id)
+    return DwpTemplateWithPrefill(
+        template=DwpTemplateOut.model_validate(template),
+        prefill=prefill,
+        linked_morning_id=linked,
+        streak_days=streak,
+    )
+
+
+# ── Submit ────────────────────────────────────────────────────────────
+@router.post(
+    "/morning/submit",
+    response_model=DwpSubmissionOut,
+    status_code=status.HTTP_201_CREATED,
+)
+async def submit_morning(
+    payload: DwpSubmitRequest,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    emp = await _self_employee(db, user)
+    tpl = (
+        await db.execute(
+            select(DwpTemplate).where(DwpTemplate.id == payload.template_id)
+        )
+    ).scalar_one_or_none()
+    if not tpl:
+        raise NotFoundError("Template not found")
+    if tpl.type != "morning":
+        from app.core.exceptions import ValidationError as VE
+        raise VE("Template is not a morning template")
+    sub = await dwp_service.submit(
+        db,
+        emp,
+        template=tpl,
+        fields=payload.fields,
+        total_hours=payload.total_hours,
+        mood_rating=payload.mood_rating,
+        on_date=payload.on_date,
+    )
+    return _serialize_submission(sub)
+
+
+@router.post(
+    "/eod/submit",
+    response_model=DwpSubmissionOut,
+    status_code=status.HTTP_201_CREATED,
+)
+async def submit_eod(
+    payload: DwpSubmitRequest,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    emp = await _self_employee(db, user)
+    tpl = (
+        await db.execute(
+            select(DwpTemplate).where(DwpTemplate.id == payload.template_id)
+        )
+    ).scalar_one_or_none()
+    if not tpl:
+        raise NotFoundError("Template not found")
+    if tpl.type != "eod":
+        from app.core.exceptions import ValidationError as VE
+        raise VE("Template is not an EOD template")
+    sub = await dwp_service.submit(
+        db,
+        emp,
+        template=tpl,
+        fields=payload.fields,
+        total_hours=payload.total_hours,
+        mood_rating=payload.mood_rating,
+        on_date=payload.on_date,
+    )
+    return _serialize_submission(sub)
+
+
+# ── My submissions ────────────────────────────────────────────────────
+@router.get("/me/today", response_model=list[DwpSubmissionOut])
+async def my_today(
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    emp = await _self_employee(db, user)
+    rows = await dwp_service.my_history(
+        db, emp.id, from_date=date.today(), to_date=date.today()
+    )
+    return [_serialize_submission(s) for s in rows]
+
+
+@router.get("/me/history", response_model=list[DwpSubmissionOut])
+async def my_history(
+    from_date: Optional[date] = None,
+    to_date: Optional[date] = None,
+    limit: int = Query(default=60, ge=1, le=200),
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    emp = await _self_employee(db, user)
+    rows = await dwp_service.my_history(
+        db, emp.id, from_date=from_date, to_date=to_date, limit=limit
+    )
+    return [_serialize_submission(s) for s in rows]
+
+
+@router.get("/me/streak", response_model=DwpStreakOut)
+async def my_streak(
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    emp = await _self_employee(db, user)
+    streak, last = await dwp_service.streak_for(db, emp.id)
+    return DwpStreakOut(
+        employee_id=emp.id, streak_days=streak, last_submission_date=last
+    )
+
+
+# ── Team views ────────────────────────────────────────────────────────
+async def _visible_team_ids(
+    db: AsyncSession, user: User
+) -> Sequence[int] | None:
+    visible = await emp_svc.visible_employee_ids(db, user)
+    if visible is None:
+        # No filter — see all (Director / HR / Admin).
+        rows = (
+            await db.execute(select(Employee.id).where(Employee.status == "active"))
+        ).scalars().all()
+        return rows
+    return list(visible)
+
+
+@router.get("/team/today", response_model=list[DwpTeamSubmissionItem])
+async def team_today(
+    on_date: Optional[date] = Query(default=None, alias="date"),
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    if not _can_act_on_team(user):
+        raise ForbiddenError("Only managers / HR / Admin can view team DWP")
+    ids = await _visible_team_ids(db, user)
+    if not ids:
+        return []
+    subs = await dwp_service.team_today(
+        db, employee_ids=ids, on_date=on_date
+    )
+    emp_rows = (
+        await db.execute(select(Employee).where(Employee.id.in_({s.employee_id for s in subs})))
+    ).scalars().all()
+    by_id = {e.id: e for e in emp_rows}
+    out = []
+    for s in subs:
+        e = by_id.get(s.employee_id)
+        if not e:
+            continue
+        out.append(
+            DwpTeamSubmissionItem(
+                submission=_serialize_submission(s),
+                employee_code=e.employee_code,
+                employee_full_name=f"{e.first_name} {e.last_name}",
+            )
+        )
+    return out
+
+
+@router.get("/team/blockers", response_model=list[DwpTeamSubmissionItem])
+async def team_blockers(
+    on_date: Optional[date] = Query(default=None, alias="date"),
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    if not _can_act_on_team(user):
+        raise ForbiddenError("Only managers / HR / Admin can view team blockers")
+    ids = await _visible_team_ids(db, user)
+    if not ids:
+        return []
+    subs = await dwp_service.team_blockers(
+        db, employee_ids=ids, on_date=on_date
+    )
+    emp_rows = (
+        await db.execute(
+            select(Employee).where(Employee.id.in_({s.employee_id for s in subs}))
+        )
+    ).scalars().all()
+    by_id = {e.id: e for e in emp_rows}
+    out = []
+    for s in subs:
+        e = by_id.get(s.employee_id)
+        if not e:
+            continue
+        out.append(
+            DwpTeamSubmissionItem(
+                submission=_serialize_submission(s),
+                employee_code=e.employee_code,
+                employee_full_name=f"{e.first_name} {e.last_name}",
+            )
+        )
+    return out
+
+
+def _can_act_on_team(user: User) -> bool:
+    from app.core.permissions import Role as RoleEnum
+
+    return bool(
+        set(user.role_codes)
+        & {
+            RoleEnum.MANAGER.value,
+            RoleEnum.HR.value,
+            RoleEnum.ADMIN.value,
+            RoleEnum.DIRECTOR.value,
+            RoleEnum.SUPER_ADMIN.value,
+        }
+    )
+
+
+# ── Comments ──────────────────────────────────────────────────────────
+@router.post(
+    "/{submission_id}/comment",
+    response_model=DwpCommentOut,
+    status_code=status.HTTP_201_CREATED,
+)
+async def add_comment(
+    submission_id: int,
+    payload: DwpCommentCreate,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    return await dwp_service.add_comment(
+        db,
+        submission_id=submission_id,
+        user=user,
+        comment=payload.comment,
+        is_kudos=payload.is_kudos,
+    )

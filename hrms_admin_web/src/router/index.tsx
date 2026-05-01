@@ -14,6 +14,7 @@ import AttendancePage from "@/features/attendance/AttendancePage";
 import LeaveApprovalsPage from "@/features/leaves/LeaveApprovalsPage";
 import HolidaysPage from "@/features/holidays/HolidaysPage";
 import ApprovalsInboxPage from "@/features/approvals/ApprovalsInboxPage";
+import DwpTeamPage from "@/features/dwp/DwpTeamPage";
 
 export const router = createBrowserRouter([
   { path: "/", element: <Navigate to="/dashboard" replace /> },
@@ -74,6 +75,7 @@ export const router = createBrowserRouter([
       { path: "attendance", element: <AttendancePage /> },
       { path: "leaves", element: <LeaveApprovalsPage /> },
       { path: "approvals", element: <ApprovalsInboxPage /> },
+      { path: "dwp", element: <DwpTeamPage /> },
       {
         path: "payroll",
         element: (

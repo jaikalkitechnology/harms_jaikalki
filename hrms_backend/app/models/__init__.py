@@ -7,6 +7,15 @@ from .attendance import (
 )
 from .base import Base, TimestampMixin
 from .designation import Department, Designation
+from .dwp import (
+    DwpComment,
+    DwpReminderSetting,
+    DwpSubmission,
+    DwpSubmissionField,
+    DwpTag,
+    DwpTemplate,
+    DwpTemplateField,
+)
 from .employee import (
     EmergencyContact,
     Employee,
@@ -57,4 +66,11 @@ __all__ = [
     "ApprovalWorkflow",
     "Approval",
     "ApprovalAction",
+    "DwpTemplate",
+    "DwpTemplateField",
+    "DwpSubmission",
+    "DwpSubmissionField",
+    "DwpComment",
+    "DwpReminderSetting",
+    "DwpTag",
 ]
