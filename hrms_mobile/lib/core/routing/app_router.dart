@@ -12,6 +12,8 @@ import '../../features/dwp/pages/dwp_form_page.dart';
 import '../../features/dwp/pages/dwp_home_page.dart';
 import '../../features/employees/pages/employee_detail_page.dart';
 import '../../features/employees/pages/employees_list_page.dart';
+import '../../features/exam/pages/exam_list_page.dart';
+import '../../features/exam/pages/exam_taking_page.dart';
 import '../../features/field/pages/field_home_page.dart';
 import '../../features/field/pages/field_live_map_page.dart';
 import '../../features/field/pages/field_visit_page.dart';
@@ -70,6 +72,7 @@ class AppRoutes {
   static const verificationQueue = '/verification';
   static const lmsHome = '/lms';
   static const lmsBadges = '/lms/badges';
+  static const exams = '/exams';
 
   static String dashboardFor(String? role) => home;
 }
@@ -236,6 +239,16 @@ GoRouter buildRouter(AuthBloc authBloc) {
         path: '/lms/course/:id',
         builder: (_, state) => CourseDetailPage(
           courseId: int.parse(state.pathParameters['id']!),
+        ),
+      ),
+      GoRoute(
+        path: AppRoutes.exams,
+        builder: (_, __) => const ExamListPage(),
+      ),
+      GoRoute(
+        path: '/exams/:id/take',
+        builder: (_, state) => ExamTakingPage(
+          examId: int.parse(state.pathParameters['id']!),
         ),
       ),
     ],

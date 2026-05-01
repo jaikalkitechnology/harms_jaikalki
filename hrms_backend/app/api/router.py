@@ -20,6 +20,7 @@ from app.api.v1.salary_templates import router as v1_salary_templates_router
 from app.api.v1.sales import router as v1_sales_router
 from app.api.v1.verification import router as v1_verification_router
 from app.api.v1.lms import router as v1_lms_router
+from app.api.v1.exam import router as v1_exam_router
 
 # Mounted at /api/v1
 v1_router = APIRouter()
@@ -41,6 +42,7 @@ v1_router.include_router(v1_field_router)
 v1_router.include_router(v1_sales_router)
 v1_router.include_router(v1_verification_router)
 v1_router.include_router(v1_lms_router)
+v1_router.include_router(v1_exam_router)
 
 # Mounted at /api/admin
 admin_router = APIRouter()

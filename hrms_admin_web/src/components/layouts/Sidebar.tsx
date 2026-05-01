@@ -17,6 +17,9 @@ import {
   FileSignature,
   GraduationCap,
   Trophy,
+  BookOpen,
+  Award,
+  BadgeCheck as BadgeCheckIcon,
   Coins,
   FileText,
   Gavel,
@@ -215,6 +218,22 @@ const SECTIONS: NavSection[] = [
         label: "Leaderboard",
         to: "/lms/leaderboard",
         icon: Trophy,
+      },
+      {
+        label: "Question Bank",
+        to: "/exams/questions",
+        icon: BookOpen,
+        permission: "admin.users.manage",
+      },
+      {
+        label: "Exams",
+        to: "/exams",
+        icon: Award,
+      },
+      {
+        label: "Verify Certificate",
+        to: "/exams/verify",
+        icon: BadgeCheckIcon,
       },
       {
         label: "Reports",
