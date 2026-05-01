@@ -1,0 +1,541 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Jaikalki Logo Pack — All Variants</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,600;0,700;1,600;1,700&family=Poppins:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --brand-brown: #3D2817;
+    --brand-brown-dark: #2D1810;
+    --brand-brown-light: #5C3D24;
+    --brand-gold: #F4B71F;
+    --brand-gold-dark: #C8941A;
+    --warm-white: #FAFAF7;
+    --cream: #FDF8EE;
+    --brown-100: #E8DACA;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Poppins', sans-serif; background: var(--cream); color: var(--brand-brown-dark); line-height: 1.6; }
+
+  .hero {
+    padding: 80px 40px 40px;
+    text-align: center;
+    background: radial-gradient(ellipse at top, rgba(244,183,31,0.12) 0%, transparent 60%);
+  }
+
+  .hero-eyebrow {
+    display: inline-flex; align-items: center; gap: 10px;
+    padding: 8px 16px;
+    background: rgba(244,183,31,0.12);
+    border: 1px solid rgba(244,183,31,0.4);
+    border-radius: 999px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; letter-spacing: 0.25em;
+    color: var(--brand-brown);
+    text-transform: uppercase;
+    margin-bottom: 24px;
+    font-weight: 600;
+  }
+
+  .hero-eyebrow .dot { width: 8px; height: 8px; background: var(--brand-gold); border-radius: 50%; box-shadow: 0 0 12px var(--brand-gold); }
+
+  .hero h1 {
+    font-family: 'Playfair Display', serif;
+    font-size: clamp(36px, 6vw, 64px);
+    font-weight: 700;
+    color: var(--brand-brown-dark);
+    letter-spacing: -0.02em;
+    line-height: 1;
+    margin-bottom: 16px;
+  }
+
+  .hero h1 em { font-style: italic; color: var(--brand-gold-dark); font-weight: 600; }
+
+  .hero p {
+    max-width: 600px; margin: 0 auto;
+    color: var(--brand-brown-light);
+    font-size: 16px;
+  }
+
+  .container { max-width: 1300px; margin: 0 auto; padding: 60px 40px; }
+
+  .section-header {
+    margin: 48px 0 24px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid var(--brown-100);
+  }
+
+  .section-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: var(--brand-gold-dark);
+    letter-spacing: 0.25em;
+    text-transform: uppercase;
+    margin-bottom: 6px;
+    font-weight: 600;
+  }
+
+  .section-title {
+    font-family: 'Playfair Display', serif;
+    font-size: 28px;
+    font-weight: 700;
+    color: var(--brand-brown-dark);
+  }
+
+  .section-title em { font-style: italic; color: var(--brand-gold-dark); font-weight: 600; }
+
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 20px;
+  }
+
+  .grid.tall { grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
+
+  .card {
+    background: var(--warm-white);
+    border: 1px solid var(--brown-100);
+    border-radius: 18px;
+    overflow: hidden;
+    transition: transform 0.2s, border-color 0.2s, box-shadow 0.2s;
+  }
+
+  .card:hover {
+    transform: translateY(-4px);
+    border-color: var(--brand-gold);
+    box-shadow: 0 16px 40px -12px rgba(61,40,23,0.15);
+  }
+
+  .card-preview {
+    width: 100%;
+    aspect-ratio: 16 / 10;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+  }
+
+  .card-preview.checker {
+    background-image:
+      linear-gradient(45deg, #f0ece4 25%, transparent 25%),
+      linear-gradient(-45deg, #f0ece4 25%, transparent 25%),
+      linear-gradient(45deg, transparent 75%, #f0ece4 75%),
+      linear-gradient(-45deg, transparent 75%, #f0ece4 75%);
+    background-size: 20px 20px;
+    background-position: 0 0, 0 10px, 10px -10px, 10px 0;
+    background-color: white;
+  }
+
+  .card-preview.tall { aspect-ratio: 9 / 16; max-height: 560px; }
+  .card-preview.square { aspect-ratio: 1 / 1; }
+  .card-preview.wide { aspect-ratio: 4 / 1; }
+
+  .card-preview img {
+    max-width: 92%;
+    max-height: 92%;
+    object-fit: contain;
+  }
+
+  .card-preview.dark { background: #1A0F08; }
+  .card-preview.cream { background: var(--cream); }
+  .card-preview.warm-white { background: var(--warm-white); }
+
+  .card-info {
+    padding: 16px 18px;
+    border-top: 1px solid var(--brown-100);
+  }
+
+  .card-name {
+    font-family: 'Playfair Display', serif;
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--brand-brown-dark);
+    margin-bottom: 4px;
+    line-height: 1.2;
+  }
+
+  .card-meta {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: var(--brand-brown-light);
+    letter-spacing: 0.05em;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .card-meta .download-link {
+    color: var(--brand-gold-dark);
+    text-decoration: none;
+    font-weight: 600;
+  }
+
+  .card-meta .download-link:hover { color: var(--brand-brown-dark); }
+
+  .stats {
+    display: flex;
+    justify-content: center;
+    gap: 40px;
+    margin-top: 32px;
+    padding-top: 32px;
+    border-top: 1px solid rgba(61,40,23,0.15);
+    flex-wrap: wrap;
+  }
+
+  .stat-item { text-align: center; }
+
+  .stat-num {
+    font-family: 'Playfair Display', serif;
+    font-size: 32px;
+    font-weight: 700;
+    color: var(--brand-gold-dark);
+    line-height: 1;
+  }
+
+  .stat-lbl {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: var(--brand-brown-light);
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    margin-top: 6px;
+  }
+
+  .footer {
+    padding: 60px 40px;
+    text-align: center;
+    background: linear-gradient(180deg, transparent, rgba(232,218,202,0.4));
+    margin-top: 60px;
+  }
+
+  .footer-title {
+    font-family: 'Playfair Display', serif;
+    font-size: 28px;
+    font-weight: 700;
+    color: var(--brand-brown-dark);
+  }
+
+  .footer-title em { font-style: italic; color: var(--brand-gold-dark); }
+
+  .footer-meta {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: var(--brand-brown-light);
+    letter-spacing: 0.3em;
+    text-transform: uppercase;
+    margin-top: 8px;
+  }
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="hero-eyebrow"><span class="dot"></span>Jaikalki Logo Pack · 19 Files</div>
+  <h1>The complete <em>logo pack</em></h1>
+  <p>Every Jaikalki Technology Pvt. Ltd. logo variant — full lockups, app icons, splash screens, favicons — ready to drop into your Flutter app, website, and marketing materials.</p>
+
+  <div class="stats">
+    <div class="stat-item"><div class="stat-num">19</div><div class="stat-lbl">PNG Files</div></div>
+    <div class="stat-item"><div class="stat-num">6</div><div class="stat-lbl">Layout Types</div></div>
+    <div class="stat-item"><div class="stat-num">4</div><div class="stat-lbl">Backgrounds</div></div>
+    <div class="stat-item"><div class="stat-num">PNG</div><div class="stat-lbl">Format</div></div>
+  </div>
+</header>
+
+<div class="container">
+
+  <!-- FULL LOGO -->
+  <div class="section-header">
+    <div class="section-label">★ 01 · Full Logo Lockup</div>
+    <h2 class="section-title">Full <em>logo</em> · 4 backgrounds</h2>
+  </div>
+
+  <div class="grid">
+    <div class="card">
+      <div class="card-preview checker">
+        <img src="jaikalki-logo-full-transparent.png" alt="Full logo transparent">
+      </div>
+      <div class="card-info">
+        <div class="card-name">Full · Transparent</div>
+        <div class="card-meta">
+          <span>1600×1000 · PNG</span>
+          <a href="jaikalki-logo-full-transparent.png" download class="download-link">DOWNLOAD ↓</a>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-preview warm-white">
+        <img src="jaikalki-logo-full-white.png" alt="Full logo warm white">
+      </div>
+      <div class="card-info">
+        <div class="card-name">Full · Warm White</div>
+        <div class="card-meta">
+          <span>#FAFAF7 · 1600×1000</span>
+          <a href="jaikalki-logo-full-white.png" download class="download-link">DOWNLOAD ↓</a>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-preview cream">
+        <img src="jaikalki-logo-full-cream.png" alt="Full logo cream">
+      </div>
+      <div class="card-info">
+        <div class="card-name">Full · Cream</div>
+        <div class="card-meta">
+          <span>#FDF8EE · 1600×1000</span>
+          <a href="jaikalki-logo-full-cream.png" download class="download-link">DOWNLOAD ↓</a>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-preview dark">
+        <img src="jaikalki-logo-full-dark.png" alt="Full logo dark">
+      </div>
+      <div class="card-info">
+        <div class="card-name">Full · Dark Brown</div>
+        <div class="card-meta">
+          <span>#1A0F08 · 1600×1000</span>
+          <a href="jaikalki-logo-full-dark.png" download class="download-link">DOWNLOAD ↓</a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- APP ICON -->
+  <div class="section-header">
+    <div class="section-label">★ 02 · App Icon</div>
+    <h2 class="section-title">Square <em>app icon</em> · for Play Store &amp; App Store</h2>
+  </div>
+
+  <div class="grid tall">
+    <div class="card">
+      <div class="card-preview square cream">
+        <img src="jaikalki-app-icon-1024.png" alt="App icon 1024">
+      </div>
+      <div class="card-info">
+        <div class="card-name">App Icon · 1024</div>
+        <div class="card-meta">
+          <span>STORE LISTING</span>
+          <a href="jaikalki-app-icon-1024.png" download class="download-link">DOWNLOAD ↓</a>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-preview square cream">
+        <img src="jaikalki-app-icon-512.png" alt="App icon 512">
+      </div>
+      <div class="card-info">
+        <div class="card-name">App Icon · 512</div>
+        <div class="card-meta">
+          <span>ANDROID HD</span>
+          <a href="jaikalki-app-icon-512.png" download class="download-link">DOWNLOAD ↓</a>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-preview square cream">
+        <img src="jaikalki-app-icon-cream-1024.png" alt="App icon cream 1024">
+      </div>
+      <div class="card-info">
+        <div class="card-name">App Icon · Cream BG</div>
+        <div class="card-meta">
+          <span>1024×1024 · PNG</span>
+          <a href="jaikalki-app-icon-cream-1024.png" download class="download-link">DOWNLOAD ↓</a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ICON ONLY (sunflower) -->
+  <div class="section-header">
+    <div class="section-label">★ 03 · Icon Only (Sunflower)</div>
+    <h2 class="section-title">Sunflower <em>mandala</em> · no wordmark</h2>
+  </div>
+
+  <div class="grid tall">
+    <div class="card">
+      <div class="card-preview square checker">
+        <img src="jaikalki-icon-only-512.png" alt="Sunflower 512">
+      </div>
+      <div class="card-info">
+        <div class="card-name">Sunflower · 512</div>
+        <div class="card-meta">
+          <span>TRANSPARENT BG</span>
+          <a href="jaikalki-icon-only-512.png" download class="download-link">DOWNLOAD ↓</a>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-preview square checker">
+        <img src="jaikalki-icon-only-256.png" alt="Sunflower 256">
+      </div>
+      <div class="card-info">
+        <div class="card-name">Sunflower · 256</div>
+        <div class="card-meta">
+          <span>TRANSPARENT BG</span>
+          <a href="jaikalki-icon-only-256.png" download class="download-link">DOWNLOAD ↓</a>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-preview square warm-white">
+        <img src="jaikalki-icon-only-light-512.png" alt="Sunflower light bg">
+      </div>
+      <div class="card-info">
+        <div class="card-name">Sunflower · Light BG</div>
+        <div class="card-meta">
+          <span>#FAFAF7 · 512×512</span>
+          <a href="jaikalki-icon-only-light-512.png" download class="download-link">DOWNLOAD ↓</a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- FAVICON -->
+  <div class="section-header">
+    <div class="section-label">★ 04 · Favicon Set</div>
+    <h2 class="section-title">Favicon · <em>rounded square</em></h2>
+  </div>
+
+  <div class="grid tall">
+    <div class="card">
+      <div class="card-preview square cream">
+        <img src="jaikalki-favicon-256.png" alt="Favicon 256">
+      </div>
+      <div class="card-info">
+        <div class="card-name">Favicon · 256</div>
+        <div class="card-meta">
+          <span>HIGH-DPI</span>
+          <a href="jaikalki-favicon-256.png" download class="download-link">DOWNLOAD ↓</a>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-preview square cream">
+        <img src="jaikalki-favicon-128.png" alt="Favicon 128">
+      </div>
+      <div class="card-info">
+        <div class="card-name">Favicon · 128</div>
+        <div class="card-meta">
+          <span>STANDARD</span>
+          <a href="jaikalki-favicon-128.png" download class="download-link">DOWNLOAD ↓</a>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-preview square cream">
+        <img src="jaikalki-favicon-64.png" alt="Favicon 64" style="image-rendering:auto;width:128px;height:128px">
+      </div>
+      <div class="card-info">
+        <div class="card-name">Favicon · 64</div>
+        <div class="card-meta">
+          <span>BROWSER TAB</span>
+          <a href="jaikalki-favicon-64.png" download class="download-link">DOWNLOAD ↓</a>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-preview square cream">
+        <img src="jaikalki-favicon-32.png" alt="Favicon 32" style="width:128px;height:128px;image-rendering:pixelated">
+      </div>
+      <div class="card-info">
+        <div class="card-name">Favicon · 32</div>
+        <div class="card-meta">
+          <span>SMALL · CLASSIC</span>
+          <a href="jaikalki-favicon-32.png" download class="download-link">DOWNLOAD ↓</a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SPLASH -->
+  <div class="section-header">
+    <div class="section-label">★ 05 · Mobile Splash Screen</div>
+    <h2 class="section-title">Splash <em>screen</em> · 1080×1920 · 9:16</h2>
+  </div>
+
+  <div class="grid tall">
+    <div class="card">
+      <div class="card-preview tall warm-white">
+        <img src="jaikalki-splash-light.png" alt="Splash light">
+      </div>
+      <div class="card-info">
+        <div class="card-name">Splash · Warm White</div>
+        <div class="card-meta">
+          <span>#FAFAF7 BG</span>
+          <a href="jaikalki-splash-light.png" download class="download-link">DOWNLOAD ↓</a>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-preview tall cream">
+        <img src="jaikalki-splash-cream.png" alt="Splash cream">
+      </div>
+      <div class="card-info">
+        <div class="card-name">Splash · Cream</div>
+        <div class="card-meta">
+          <span>#FDF8EE BG</span>
+          <a href="jaikalki-splash-cream.png" download class="download-link">DOWNLOAD ↓</a>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-preview tall dark">
+        <img src="jaikalki-splash-dark.png" alt="Splash dark">
+      </div>
+      <div class="card-info">
+        <div class="card-name">Splash · Dark Mode</div>
+        <div class="card-meta">
+          <span>#1A0F08 BG</span>
+          <a href="jaikalki-splash-dark.png" download class="download-link">DOWNLOAD ↓</a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- HORIZONTAL -->
+  <div class="section-header">
+    <div class="section-label">★ 06 · Horizontal Layout</div>
+    <h2 class="section-title">Horizontal · for <em>app bars</em> &amp; navbars</h2>
+  </div>
+
+  <div class="grid">
+    <div class="card" style="grid-column: span 2">
+      <div class="card-preview wide checker">
+        <img src="jaikalki-logo-horizontal-light.png" alt="Horizontal light">
+      </div>
+      <div class="card-info">
+        <div class="card-name">Horizontal · Transparent</div>
+        <div class="card-meta">
+          <span>1200×300 · APP BAR</span>
+          <a href="jaikalki-logo-horizontal-light.png" download class="download-link">DOWNLOAD ↓</a>
+        </div>
+      </div>
+    </div>
+    <div class="card" style="grid-column: span 2">
+      <div class="card-preview wide dark">
+        <img src="jaikalki-logo-horizontal-dark.png" alt="Horizontal dark">
+      </div>
+      <div class="card-info">
+        <div class="card-name">Horizontal · Dark BG</div>
+        <div class="card-meta">
+          <span>1200×300 · DARK BAR</span>
+          <a href="jaikalki-logo-horizontal-dark.png" download class="download-link">DOWNLOAD ↓</a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<footer class="footer">
+  <div class="footer-title"><em>Jaikalki</em> · Logo Pack</div>
+  <div class="footer-meta">19 PNG FILES · 6 LAYOUTS · READY TO USE</div>
+</footer>
+
+</body>
+</html>
