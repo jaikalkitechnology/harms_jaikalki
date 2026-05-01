@@ -21,6 +21,9 @@ import '../../features/justice/pages/justice_resources_page.dart';
 import '../../features/justice/pages/justice_submit_page.dart';
 import '../../features/leaves/pages/leaves_home_page.dart';
 import '../../features/leaves/pages/manager_inbox_page.dart';
+import '../../features/lms/pages/badges_page.dart';
+import '../../features/lms/pages/course_detail_page.dart';
+import '../../features/lms/pages/lms_home_page.dart';
 import '../../features/onboarding/onboarding_page.dart';
 import '../../features/payroll/pages/payroll_home_page.dart';
 import '../../features/sales/pages/sales_pipeline_page.dart';
@@ -65,6 +68,8 @@ class AppRoutes {
   static const salesPipeline = '/sales/pipeline';
   static const salesTargets = '/sales/targets';
   static const verificationQueue = '/verification';
+  static const lmsHome = '/lms';
+  static const lmsBadges = '/lms/badges';
 
   static String dashboardFor(String? role) => home;
 }
@@ -217,6 +222,20 @@ GoRouter buildRouter(AuthBloc authBloc) {
         path: '/verification/:id',
         builder: (_, state) => VerificationFormPage(
           verificationId: int.parse(state.pathParameters['id']!),
+        ),
+      ),
+      GoRoute(
+        path: AppRoutes.lmsHome,
+        builder: (_, __) => const LmsHomePage(),
+      ),
+      GoRoute(
+        path: AppRoutes.lmsBadges,
+        builder: (_, __) => const BadgesPage(),
+      ),
+      GoRoute(
+        path: '/lms/course/:id',
+        builder: (_, state) => CourseDetailPage(
+          courseId: int.parse(state.pathParameters['id']!),
         ),
       ),
     ],

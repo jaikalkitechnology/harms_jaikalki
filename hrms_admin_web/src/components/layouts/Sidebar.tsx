@@ -15,6 +15,8 @@ import {
   ClipboardCheck,
   ShieldQuestion,
   FileSignature,
+  GraduationCap,
+  Trophy,
   Coins,
   FileText,
   Gavel,
@@ -203,6 +205,16 @@ const SECTIONS: NavSection[] = [
         to: "/verification/templates",
         icon: FileSignature,
         permission: "approval.act",
+      },
+      {
+        label: "Courses",
+        to: "/lms/courses",
+        icon: GraduationCap,
+      },
+      {
+        label: "Leaderboard",
+        to: "/lms/leaderboard",
+        icon: Trophy,
       },
       {
         label: "Reports",

@@ -17,6 +17,8 @@ class MoreMenuPage extends StatelessWidget {
       _MoreItem('Sales pipeline', Icons.trending_up_outlined, AppRoutes.salesPipeline),
       _MoreItem('My sales target', Icons.flag_outlined, AppRoutes.salesTargets),
       _MoreItem('Verifications', Icons.fact_check_outlined, AppRoutes.verificationQueue),
+      _MoreItem('Learning', Icons.school_outlined, AppRoutes.lmsHome),
+      _MoreItem('My badges', Icons.emoji_events_outlined, AppRoutes.lmsBadges),
       _MoreItem('Justice Portal', Icons.shield_outlined, AppRoutes.justice),
       _MoreItem('Payroll', Icons.account_balance_wallet_outlined,
           AppRoutes.payroll),

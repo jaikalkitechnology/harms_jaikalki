@@ -29,6 +29,8 @@ import SalesTargetsPage from "@/features/sales/SalesTargetsPage";
 import VerificationQueuePage from "@/features/verification/VerificationQueuePage";
 import VerificationAuditPage from "@/features/verification/VerificationAuditPage";
 import VerificationTemplatesPage from "@/features/verification/VerificationTemplatesPage";
+import CoursesPage from "@/features/lms/CoursesPage";
+import LeaderboardPage from "@/features/lms/LeaderboardPage";
 
 export const router = createBrowserRouter([
   { path: "/", element: <Navigate to="/dashboard" replace /> },
@@ -118,6 +120,8 @@ export const router = createBrowserRouter([
       { path: "verification", element: <VerificationQueuePage /> },
       { path: "verification/audit", element: <VerificationAuditPage /> },
       { path: "verification/templates", element: <VerificationTemplatesPage /> },
+      { path: "lms/courses", element: <CoursesPage /> },
+      { path: "lms/leaderboard", element: <LeaderboardPage /> },
       {
         path: "reports",
         element: (
