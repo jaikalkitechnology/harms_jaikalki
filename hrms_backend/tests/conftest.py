@@ -69,6 +69,7 @@ async def seeded(test_engine) -> None:
     from scripts.seed_sales import seed as seed_sales
     from scripts.seed_verification import seed as seed_verification
     from scripts.seed_lms import seed as seed_lms
+    from scripts.seed_exam import seed as seed_exam
     from sqlalchemy import select as _select
 
     from app.models import Department
@@ -101,6 +102,7 @@ async def seeded(test_engine) -> None:
         await seed_sales(db)
         await seed_verification(db)
         await seed_lms(db)
+        await seed_exam(db)
 
         await db.commit()
 

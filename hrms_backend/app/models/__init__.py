@@ -16,6 +16,15 @@ from .dwp import (
     DwpTemplate,
     DwpTemplateField,
 )
+from .exam import (
+    AttemptAnswer,
+    Certificate,
+    Exam,
+    ExamAttempt,
+    ExamQuestion,
+    QuestionBank,
+    QuestionOption,
+)
 from .employee import (
     EmergencyContact,
     Employee,
@@ -167,4 +176,11 @@ __all__ = [
     "Badge",
     "EmployeeBadge",
     "EmployeeLearningStat",
+    "QuestionBank",
+    "QuestionOption",
+    "Exam",
+    "ExamQuestion",
+    "ExamAttempt",
+    "AttemptAnswer",
+    "Certificate",
 ]
