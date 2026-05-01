@@ -28,6 +28,8 @@ import '../../features/lms/pages/course_detail_page.dart';
 import '../../features/lms/pages/lms_home_page.dart';
 import '../../features/onboarding/onboarding_page.dart';
 import '../../features/payroll/pages/payroll_home_page.dart';
+import '../../features/performance/pages/feedback_inbox_page.dart';
+import '../../features/performance/pages/goals_page.dart';
 import '../../features/sales/pages/sales_pipeline_page.dart';
 import '../../features/sales/pages/sales_targets_page.dart';
 import '../../features/trainer/pages/sessions_page.dart';
@@ -77,6 +79,8 @@ class AppRoutes {
   static const exams = '/exams';
   static const trainers = '/trainers';
   static const trainerSessions = '/trainers/sessions';
+  static const myGoals = '/performance/goals';
+  static const feedbackInbox = '/performance/feedback';
 
   static String dashboardFor(String? role) => home;
 }
@@ -262,6 +266,14 @@ GoRouter buildRouter(AuthBloc authBloc) {
       GoRoute(
         path: AppRoutes.trainerSessions,
         builder: (_, __) => const TrainerSessionsPage(),
+      ),
+      GoRoute(
+        path: AppRoutes.myGoals,
+        builder: (_, __) => const MyGoalsPage(),
+      ),
+      GoRoute(
+        path: AppRoutes.feedbackInbox,
+        builder: (_, __) => const FeedbackInboxPage(),
       ),
     ],
   );
