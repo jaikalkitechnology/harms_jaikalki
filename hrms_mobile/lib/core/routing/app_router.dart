@@ -25,6 +25,8 @@ import '../../features/onboarding/onboarding_page.dart';
 import '../../features/payroll/pages/payroll_home_page.dart';
 import '../../features/sales/pages/sales_pipeline_page.dart';
 import '../../features/sales/pages/sales_targets_page.dart';
+import '../../features/verification/pages/verification_form_page.dart';
+import '../../features/verification/pages/verification_queue_page.dart';
 import '../../features/settings/cubit/settings_cubit.dart';
 import '../../features/settings/pages/settings_page.dart';
 import '../../features/shell/home_shell.dart';
@@ -62,6 +64,7 @@ class AppRoutes {
   static const fieldLiveMap = '/field/live-map';
   static const salesPipeline = '/sales/pipeline';
   static const salesTargets = '/sales/targets';
+  static const verificationQueue = '/verification';
 
   static String dashboardFor(String? role) => home;
 }
@@ -205,6 +208,16 @@ GoRouter buildRouter(AuthBloc authBloc) {
       GoRoute(
         path: AppRoutes.salesTargets,
         builder: (_, __) => const SalesTargetsPage(),
+      ),
+      GoRoute(
+        path: AppRoutes.verificationQueue,
+        builder: (_, __) => const VerificationQueuePage(),
+      ),
+      GoRoute(
+        path: '/verification/:id',
+        builder: (_, state) => VerificationFormPage(
+          verificationId: int.parse(state.pathParameters['id']!),
+        ),
       ),
     ],
   );

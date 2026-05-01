@@ -69,6 +69,11 @@ from .sales import (
     SalesOrder,
     SalesTarget,
 )
+from .verification import (
+    Verification,
+    VerificationFraudFlag,
+    VerificationTemplate,
+)
 from .user import User
 
 __all__ = [
@@ -141,4 +146,7 @@ __all__ = [
     "SalesOrder",
     "SalesTarget",
     "PromotionActivity",
+    "VerificationTemplate",
+    "Verification",
+    "VerificationFraudFlag",
 ]

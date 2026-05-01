@@ -26,6 +26,9 @@ import LiveMapPage from "@/features/field/LiveMapPage";
 import LeadsPage from "@/features/sales/LeadsPage";
 import PipelinePage from "@/features/sales/PipelinePage";
 import SalesTargetsPage from "@/features/sales/SalesTargetsPage";
+import VerificationQueuePage from "@/features/verification/VerificationQueuePage";
+import VerificationAuditPage from "@/features/verification/VerificationAuditPage";
+import VerificationTemplatesPage from "@/features/verification/VerificationTemplatesPage";
 
 export const router = createBrowserRouter([
   { path: "/", element: <Navigate to="/dashboard" replace /> },
@@ -112,6 +115,9 @@ export const router = createBrowserRouter([
       { path: "sales/leads", element: <LeadsPage /> },
       { path: "sales/pipeline", element: <PipelinePage /> },
       { path: "sales/targets", element: <SalesTargetsPage /> },
+      { path: "verification", element: <VerificationQueuePage /> },
+      { path: "verification/audit", element: <VerificationAuditPage /> },
+      { path: "verification/templates", element: <VerificationTemplatesPage /> },
       {
         path: "reports",
         element: (
