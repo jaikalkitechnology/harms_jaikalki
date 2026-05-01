@@ -77,6 +77,14 @@ from .payroll import (
     Payslip,
     Reimbursement,
 )
+from .performance import (
+    FeedbackRequest,
+    FeedbackResponse,
+    Goal,
+    OneOnOneNote,
+    PerformanceReview,
+    ReviewCycle,
+)
 from .refresh_token import RefreshToken
 from .role import Permission, Role, RolePermission, UserRole
 from .sales import (
@@ -193,4 +201,10 @@ __all__ = [
     "TrainingSession",
     "SessionParticipant",
     "TrainerReview",
+    "ReviewCycle",
+    "Goal",
+    "PerformanceReview",
+    "FeedbackRequest",
+    "FeedbackResponse",
+    "OneOnOneNote",
 ]

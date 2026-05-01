@@ -22,6 +22,7 @@ import {
   BadgeCheck as BadgeCheckIcon,
   Mic,
   CalendarDays,
+  Goal as GoalIcon,
   Coins,
   FileText,
   Gavel,
@@ -246,6 +247,12 @@ const SECTIONS: NavSection[] = [
         label: "Training Sessions",
         to: "/trainers/sessions",
         icon: CalendarDays,
+      },
+      {
+        label: "Performance Cycles",
+        to: "/performance/cycles",
+        icon: GoalIcon,
+        permission: "approval.act",
       },
       {
         label: "Reports",
