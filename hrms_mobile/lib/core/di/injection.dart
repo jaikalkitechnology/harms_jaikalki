@@ -3,6 +3,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:get_it/get_it.dart';
 import 'package:local_auth/local_auth.dart';
 
+import '../../features/approvals/data/approval_api.dart';
 import '../../features/attendance/data/attendance_api.dart';
 import '../../features/auth/data/datasources/auth_remote_datasource.dart';
 import '../../features/auth/data/repositories/auth_repository_impl.dart';
@@ -49,4 +50,5 @@ Future<void> setupDependencies() async {
   sl.registerLazySingleton<InternExpenseApi>(() => InternExpenseApi(sl()));
   sl.registerLazySingleton<AttendanceApi>(() => AttendanceApi(sl()));
   sl.registerLazySingleton<LeaveApi>(() => LeaveApi(sl()));
+  sl.registerLazySingleton<ApprovalApi>(() => ApprovalApi(sl()));
 }

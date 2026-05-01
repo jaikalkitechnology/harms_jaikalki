@@ -70,6 +70,28 @@ async def submit_expense(
         status="pending",
     )
     db.add(expense)
+    await db.flush()
+
+    from app.services import approval_engine
+    await approval_engine.submit_for_approval(
+        db,
+        request_type="intern_expense",
+        request_id=expense.id,
+        employee_id=intern.id,
+        initiated_by=intern.user_id,
+        title=(
+            f"₹{payload.amount} · {payload.expense_type} · "
+            f"{intern.first_name} {intern.last_name}"
+        ),
+        summary=payload.description,
+        request_data={
+            "amount": str(payload.amount),
+            "expense_date": str(payload.expense_date),
+            "expense_type": payload.expense_type,
+            "employee_code": intern.employee_code,
+        },
+    )
+
     await db.commit()
     await db.refresh(expense)
     return expense
@@ -128,6 +150,16 @@ async def approve_expense(
     exp.status = "approved"
     exp.approved_by = user.id
     exp.approved_at = datetime.now(timezone.utc)
+
+    from app.services import approval_engine
+    await approval_engine.mark_externally_decided(
+        db,
+        request_type="intern_expense",
+        request_id=exp.id,
+        approve=True,
+        decided_by=user.id,
+    )
+
     await db.commit()
     await db.refresh(exp)
     return exp
@@ -155,6 +187,17 @@ async def reject_expense(
     exp.approved_by = user.id
     exp.approved_at = datetime.now(timezone.utc)
     exp.rejection_reason = payload.rejection_reason
+
+    from app.services import approval_engine
+    await approval_engine.mark_externally_decided(
+        db,
+        request_type="intern_expense",
+        request_id=exp.id,
+        approve=False,
+        decided_by=user.id,
+        comments=payload.rejection_reason,
+    )
+
     await db.commit()
     await db.refresh(exp)
     return exp

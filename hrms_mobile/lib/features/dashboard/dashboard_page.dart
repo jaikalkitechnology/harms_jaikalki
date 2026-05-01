@@ -104,9 +104,10 @@ class DashboardPage extends StatelessWidget {
                       (user.role == 'manager' ||
                           user.role == 'hr' ||
                           user.role == 'director' ||
+                          user.role == 'admin' ||
                           user.role == 'super_admin'))
                     FilledButton.icon(
-                      onPressed: () => context.push(AppRoutes.managerInbox),
+                      onPressed: () => context.push(AppRoutes.approvalsInbox),
                       icon: const Icon(Icons.inbox_outlined, size: 18),
                       label: const Text('Approvals'),
                     ),

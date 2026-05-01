@@ -13,6 +13,7 @@ import InternExpensesPage from "@/features/intern-expenses/InternExpensesPage";
 import AttendancePage from "@/features/attendance/AttendancePage";
 import LeaveApprovalsPage from "@/features/leaves/LeaveApprovalsPage";
 import HolidaysPage from "@/features/holidays/HolidaysPage";
+import ApprovalsInboxPage from "@/features/approvals/ApprovalsInboxPage";
 
 export const router = createBrowserRouter([
   { path: "/", element: <Navigate to="/dashboard" replace /> },
@@ -72,16 +73,7 @@ export const router = createBrowserRouter([
       },
       { path: "attendance", element: <AttendancePage /> },
       { path: "leaves", element: <LeaveApprovalsPage /> },
-      {
-        path: "approvals",
-        element: (
-          <PlaceholderPage
-            phase="★ Phase 4"
-            title="Universal Approvals"
-            description="Multi-level approval engine across modules ships in Phase 4."
-          />
-        ),
-      },
+      { path: "approvals", element: <ApprovalsInboxPage /> },
       {
         path: "payroll",
         element: (
