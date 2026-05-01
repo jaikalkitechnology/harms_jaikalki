@@ -30,6 +30,9 @@ import '../../features/onboarding/onboarding_page.dart';
 import '../../features/payroll/pages/payroll_home_page.dart';
 import '../../features/performance/pages/feedback_inbox_page.dart';
 import '../../features/performance/pages/goals_page.dart';
+import '../../features/polish/pages/book_room_page.dart';
+import '../../features/polish/pages/jobs_page.dart';
+import '../../features/polish/pages/my_assets_page.dart';
 import '../../features/reports/pages/director_dashboard_page.dart';
 import '../../features/sales/pages/sales_pipeline_page.dart';
 import '../../features/sales/pages/sales_targets_page.dart';
@@ -83,6 +86,9 @@ class AppRoutes {
   static const myGoals = '/performance/goals';
   static const feedbackInbox = '/performance/feedback';
   static const directorDashboard = '/reports/dashboard';
+  static const myAssets = '/polish/assets';
+  static const bookRoom = '/polish/rooms';
+  static const browseJobs = '/polish/jobs';
 
   static String dashboardFor(String? role) => home;
 }
@@ -280,6 +286,18 @@ GoRouter buildRouter(AuthBloc authBloc) {
       GoRoute(
         path: AppRoutes.directorDashboard,
         builder: (_, __) => const DirectorDashboardPage(),
+      ),
+      GoRoute(
+        path: AppRoutes.myAssets,
+        builder: (_, __) => const MyAssetsPage(),
+      ),
+      GoRoute(
+        path: AppRoutes.bookRoom,
+        builder: (_, __) => const BookRoomPage(),
+      ),
+      GoRoute(
+        path: AppRoutes.browseJobs,
+        builder: (_, __) => const JobsPage(),
       ),
     ],
   );
