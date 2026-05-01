@@ -11,7 +11,11 @@ from app.api.router import admin_router, v1_router
 from app.api.v1.health import router as health_router
 from app.config import settings
 from app.core.exceptions import AppException
-from app.core.middleware import RequestIDMiddleware
+from app.core.middleware import (
+    RateLimitMiddleware,
+    RequestIDMiddleware,
+    SecurityHeadersMiddleware,
+)
 from app.services.cache import close_redis, get_redis
 
 
@@ -41,6 +45,8 @@ app.add_middleware(
     expose_headers=["X-Request-ID", "X-Response-Time-ms"],
 )
 app.add_middleware(RequestIDMiddleware)
+app.add_middleware(SecurityHeadersMiddleware)
+app.add_middleware(RateLimitMiddleware, max_requests=20, window_seconds=60)
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
