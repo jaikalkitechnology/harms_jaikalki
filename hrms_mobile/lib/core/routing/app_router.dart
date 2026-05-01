@@ -7,6 +7,9 @@ import 'package:go_router/go_router.dart';
 import '../../features/auth/presentation/bloc/auth_bloc.dart';
 import '../../features/auth/presentation/pages/login_page.dart';
 import '../../features/dashboard/dashboard_page.dart';
+import '../../features/employees/pages/employee_detail_page.dart';
+import '../../features/employees/pages/employees_list_page.dart';
+import '../../features/intern_expenses/pages/intern_expenses_page.dart';
 import '../../features/splash/splash_page.dart';
 import '../di/injection.dart';
 
@@ -19,8 +22,9 @@ class AppRoutes {
   static const hrDashboard = '/hr/dashboard';
   static const managerDashboard = '/manager/dashboard';
   static const employeeDashboard = '/employee/dashboard';
+  static const employees = '/employees';
+  static const internExpenses = '/intern/expenses';
 
-  /// Map a role code → role-specific dashboard route. Falls back to /dashboard.
   static String dashboardFor(String? role) {
     switch (role) {
       case 'director':
@@ -30,8 +34,9 @@ class AppRoutes {
         return hrDashboard;
       case 'manager':
         return managerDashboard;
-      case 'employee':
       case 'intern':
+        return internExpenses;
+      case 'employee':
       case 'trainer':
       case 'field':
         return employeeDashboard;
@@ -51,7 +56,6 @@ GoRouter buildRouter(AuthBloc authBloc) {
       final loggingIn = loc == AppRoutes.login;
       final onSplash = loc == AppRoutes.splash;
 
-      // Wait for the initial check to finish.
       if (auth.status == AuthStatus.initial ||
           auth.status == AuthStatus.loading) {
         return onSplash ? null : AppRoutes.splash;
@@ -61,7 +65,6 @@ GoRouter buildRouter(AuthBloc authBloc) {
         return loggingIn ? null : AppRoutes.login;
       }
 
-      // Authenticated — bounce away from login/splash to role dashboard.
       if (loggingIn || onSplash) {
         return AppRoutes.dashboardFor(auth.user?.role);
       }
@@ -98,6 +101,20 @@ GoRouter buildRouter(AuthBloc authBloc) {
       GoRoute(
         path: AppRoutes.employeeDashboard,
         builder: (_, __) => const DashboardPage(roleLabel: 'Employee'),
+      ),
+      GoRoute(
+        path: AppRoutes.employees,
+        builder: (_, __) => const EmployeesListPage(),
+      ),
+      GoRoute(
+        path: '/employees/:id',
+        builder: (_, state) => EmployeeDetailPage(
+          employeeId: int.parse(state.pathParameters['id']!),
+        ),
+      ),
+      GoRoute(
+        path: AppRoutes.internExpenses,
+        builder: (_, __) => const InternExpensesPage(),
       ),
     ],
   );

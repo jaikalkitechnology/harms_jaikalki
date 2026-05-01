@@ -7,6 +7,8 @@ import '../../features/auth/data/datasources/auth_remote_datasource.dart';
 import '../../features/auth/data/repositories/auth_repository_impl.dart';
 import '../../features/auth/domain/repositories/auth_repository.dart';
 import '../../features/auth/presentation/bloc/auth_bloc.dart';
+import '../../features/employees/data/employee_api.dart';
+import '../../features/intern_expenses/data/intern_expense_api.dart';
 import '../network/dio_client.dart';
 import '../storage/secure_storage.dart';
 
@@ -39,4 +41,8 @@ Future<void> setupDependencies() async {
       localAuth: sl(),
     ),
   );
+
+  // Employees / intern expenses
+  sl.registerLazySingleton<EmployeeApi>(() => EmployeeApi(sl()));
+  sl.registerLazySingleton<InternExpenseApi>(() => InternExpenseApi(sl()));
 }

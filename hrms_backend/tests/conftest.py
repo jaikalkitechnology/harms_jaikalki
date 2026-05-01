@@ -41,7 +41,7 @@ async def db_session(test_engine) -> AsyncGenerator[AsyncSession, None]:
 
 @pytest_asyncio.fixture
 async def seeded(test_engine) -> None:
-    """Run the auth seeder against the test DB once per test."""
+    """Run the auth + employee seeders against the test DB."""
     SessionLocal = async_sessionmaker(test_engine, expire_on_commit=False)
     from scripts.seed_auth import (
         seed_departments,
@@ -49,12 +49,33 @@ async def seeded(test_engine) -> None:
         seed_roles,
         seed_users,
     )
+    from scripts.seed_employees import (
+        seed_categories,
+        seed_designations,
+        seed_employees as seed_emps,
+        seed_extra_departments,
+        seed_templates,
+    )
+    from sqlalchemy import select as _select
+
+    from app.models import Department
 
     async with SessionLocal() as db:
         perms = await seed_permissions(db)
         roles = await seed_roles(db, perms)
         await seed_departments(db)
         await seed_users(db, roles)
+
+        categories = await seed_categories(db)
+        templates = await seed_templates(db)
+        await seed_extra_departments(db)
+        departments = {
+            d.code: d
+            for d in (await db.execute(_select(Department))).scalars().all()
+        }
+        designations = await seed_designations(db, departments)
+        await seed_emps(db, categories, templates, departments, designations)
+
         await db.commit()
 
 
