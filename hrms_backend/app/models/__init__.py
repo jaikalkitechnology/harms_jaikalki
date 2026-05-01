@@ -60,6 +60,15 @@ from .payroll import (
 )
 from .refresh_token import RefreshToken
 from .role import Permission, Role, RolePermission, UserRole
+from .sales import (
+    Lead,
+    Opportunity,
+    Product,
+    PromotionActivity,
+    Quote,
+    SalesOrder,
+    SalesTarget,
+)
 from .user import User
 
 __all__ = [
@@ -125,4 +134,11 @@ __all__ = [
     "VisitPhoto",
     "LocationTrack",
     "FieldExpense",
+    "Lead",
+    "Opportunity",
+    "Product",
+    "Quote",
+    "SalesOrder",
+    "SalesTarget",
+    "PromotionActivity",
 ]

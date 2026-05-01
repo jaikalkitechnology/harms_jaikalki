@@ -14,6 +14,8 @@ class MoreMenuPage extends StatelessWidget {
     final items = <_MoreItem>[
       _MoreItem('Field plan', Icons.map_outlined, AppRoutes.fieldHome),
       _MoreItem('Live team map', Icons.location_on_outlined, AppRoutes.fieldLiveMap),
+      _MoreItem('Sales pipeline', Icons.trending_up_outlined, AppRoutes.salesPipeline),
+      _MoreItem('My sales target', Icons.flag_outlined, AppRoutes.salesTargets),
       _MoreItem('Justice Portal', Icons.shield_outlined, AppRoutes.justice),
       _MoreItem('Payroll', Icons.account_balance_wallet_outlined,
           AppRoutes.payroll),

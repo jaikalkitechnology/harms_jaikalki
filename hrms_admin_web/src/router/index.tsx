@@ -23,6 +23,9 @@ import IccPage from "@/features/justice/IccPage";
 import CustomersPage from "@/features/field/CustomersPage";
 import FieldJobsPage from "@/features/field/FieldJobsPage";
 import LiveMapPage from "@/features/field/LiveMapPage";
+import LeadsPage from "@/features/sales/LeadsPage";
+import PipelinePage from "@/features/sales/PipelinePage";
+import SalesTargetsPage from "@/features/sales/SalesTargetsPage";
 
 export const router = createBrowserRouter([
   { path: "/", element: <Navigate to="/dashboard" replace /> },
@@ -106,6 +109,9 @@ export const router = createBrowserRouter([
       { path: "field/customers", element: <CustomersPage /> },
       { path: "field/jobs", element: <FieldJobsPage /> },
       { path: "field/live-map", element: <LiveMapPage /> },
+      { path: "sales/leads", element: <LeadsPage /> },
+      { path: "sales/pipeline", element: <PipelinePage /> },
+      { path: "sales/targets", element: <SalesTargetsPage /> },
       {
         path: "reports",
         element: (
