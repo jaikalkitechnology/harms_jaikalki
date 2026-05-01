@@ -56,6 +56,12 @@ async def seeded(test_engine) -> None:
         seed_extra_departments,
         seed_templates,
     )
+    from scripts.seed_attendance_leave import (
+        bootstrap_employee_shifts_and_balances,
+        seed_holidays,
+        seed_leave_types,
+        seed_shifts,
+    )
     from sqlalchemy import select as _select
 
     from app.models import Department
@@ -75,6 +81,11 @@ async def seeded(test_engine) -> None:
         }
         designations = await seed_designations(db, departments)
         await seed_emps(db, categories, templates, departments, designations)
+
+        shifts = await seed_shifts(db)
+        leave_types = await seed_leave_types(db)
+        await seed_holidays(db)
+        await bootstrap_employee_shifts_and_balances(db, shifts, leave_types)
 
         await db.commit()
 

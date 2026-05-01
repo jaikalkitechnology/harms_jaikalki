@@ -10,6 +10,12 @@
 	<string>Jaikalki HRMS</string>
 	<key>NSFaceIDUsageDescription</key>
 	<string>Use Face ID to quickly sign in to Jaikalki HRMS.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Jaikalki HRMS needs your location to verify office check-in.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Jaikalki HRMS uses the camera to capture your work-from-home check-in selfie and expense receipts.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Jaikalki HRMS uses photos to attach receipts and documents.</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>

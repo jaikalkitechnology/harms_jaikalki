@@ -3,12 +3,14 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:get_it/get_it.dart';
 import 'package:local_auth/local_auth.dart';
 
+import '../../features/attendance/data/attendance_api.dart';
 import '../../features/auth/data/datasources/auth_remote_datasource.dart';
 import '../../features/auth/data/repositories/auth_repository_impl.dart';
 import '../../features/auth/domain/repositories/auth_repository.dart';
 import '../../features/auth/presentation/bloc/auth_bloc.dart';
 import '../../features/employees/data/employee_api.dart';
 import '../../features/intern_expenses/data/intern_expense_api.dart';
+import '../../features/leaves/data/leave_api.dart';
 import '../network/dio_client.dart';
 import '../storage/secure_storage.dart';
 
@@ -42,7 +44,9 @@ Future<void> setupDependencies() async {
     ),
   );
 
-  // Employees / intern expenses
+  // Feature APIs
   sl.registerLazySingleton<EmployeeApi>(() => EmployeeApi(sl()));
   sl.registerLazySingleton<InternExpenseApi>(() => InternExpenseApi(sl()));
+  sl.registerLazySingleton<AttendanceApi>(() => AttendanceApi(sl()));
+  sl.registerLazySingleton<LeaveApi>(() => LeaveApi(sl()));
 }

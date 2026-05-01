@@ -10,6 +10,9 @@ import EmployeeDetailPage from "@/features/employees/EmployeeDetailPage";
 import EmployeeCreatePage from "@/features/employees/EmployeeCreatePage";
 import SalaryTemplatesPage from "@/features/salary-templates/SalaryTemplatesPage";
 import InternExpensesPage from "@/features/intern-expenses/InternExpensesPage";
+import AttendancePage from "@/features/attendance/AttendancePage";
+import LeaveApprovalsPage from "@/features/leaves/LeaveApprovalsPage";
+import HolidaysPage from "@/features/holidays/HolidaysPage";
 
 export const router = createBrowserRouter([
   { path: "/", element: <Navigate to="/dashboard" replace /> },
@@ -56,36 +59,19 @@ export const router = createBrowserRouter([
           />
         ),
       },
-      {
-        path: "holidays",
-        element: (
-          <PlaceholderPage
-            phase="★ Phase 3"
-            title="Holidays"
-            description="Holiday calendar configuration ships with attendance in Phase 3."
-          />
-        ),
-      },
+      { path: "holidays", element: <HolidaysPage /> },
       {
         path: "shifts",
         element: (
           <PlaceholderPage
             phase="★ Phase 3"
             title="Shifts"
-            description="Shift policies and rotations ship with attendance in Phase 3."
+            description="Shift CRUD UI lands in Phase 5; backend supports it via /api/v1 already."
           />
         ),
       },
-      {
-        path: "attendance",
-        element: (
-          <PlaceholderPage
-            phase="★ Phase 3"
-            title="Attendance"
-            description="Geo-fenced check-in, shift policies, and leave workflows ship in Phase 3."
-          />
-        ),
-      },
+      { path: "attendance", element: <AttendancePage /> },
+      { path: "leaves", element: <LeaveApprovalsPage /> },
       {
         path: "approvals",
         element: (
