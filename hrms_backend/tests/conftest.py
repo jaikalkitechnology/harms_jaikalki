@@ -62,6 +62,7 @@ async def seeded(test_engine) -> None:
         seed_leave_types,
         seed_shifts,
     )
+    from scripts.seed_approvals import seed_workflows
     from sqlalchemy import select as _select
 
     from app.models import Department
@@ -86,6 +87,8 @@ async def seeded(test_engine) -> None:
         leave_types = await seed_leave_types(db)
         await seed_holidays(db)
         await bootstrap_employee_shifts_and_balances(db, shifts, leave_types)
+
+        await seed_workflows(db)
 
         await db.commit()
 

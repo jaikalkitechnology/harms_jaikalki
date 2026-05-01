@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../features/approvals/pages/approvals_inbox_page.dart';
 import '../../features/attendance/pages/attendance_home_page.dart';
 import '../../features/auth/presentation/bloc/auth_bloc.dart';
 import '../../features/auth/presentation/pages/login_page.dart';
@@ -30,6 +31,7 @@ class AppRoutes {
   static const attendance = '/attendance';
   static const leaves = '/leaves';
   static const managerInbox = '/manager/inbox';
+  static const approvalsInbox = '/approvals';
 
   static String dashboardFor(String? role) {
     switch (role) {
@@ -133,6 +135,10 @@ GoRouter buildRouter(AuthBloc authBloc) {
       GoRoute(
         path: AppRoutes.managerInbox,
         builder: (_, __) => const ManagerInboxPage(),
+      ),
+      GoRoute(
+        path: AppRoutes.approvalsInbox,
+        builder: (_, __) => const ApprovalsInboxPage(),
       ),
     ],
   );

@@ -252,6 +252,29 @@ async def request_regularization(
         status="pending",
     )
     db.add(reg)
+    await db.flush()
+
+    from app.services import approval_engine
+    await approval_engine.submit_for_approval(
+        db,
+        request_type="attendance_regularization",
+        request_id=reg.id,
+        employee_id=employee.id,
+        initiated_by=employee.user_id,
+        title=f"Regularize {on_date} · {employee.first_name} {employee.last_name}",
+        summary=reason,
+        request_data={
+            "date": str(on_date),
+            "requested_check_in": str(requested_check_in)
+            if requested_check_in
+            else None,
+            "requested_check_out": str(requested_check_out)
+            if requested_check_out
+            else None,
+            "employee_code": employee.employee_code,
+        },
+    )
+
     await db.commit()
     await db.refresh(reg)
     return reg
@@ -311,6 +334,16 @@ async def approve_regularization(
     reg.approved_at = _now()
     reg.decision_comment = decision_comment
 
+    from app.services import approval_engine
+    await approval_engine.mark_externally_decided(
+        db,
+        request_type="attendance_regularization",
+        request_id=reg.id,
+        approve=True,
+        decided_by=approver.id,
+        comments=decision_comment,
+    )
+
     await db.commit()
     await db.refresh(reg)
     return reg
@@ -338,6 +371,17 @@ async def reject_regularization(
     reg.approver_id = approver.id
     reg.approved_at = _now()
     reg.decision_comment = decision_comment
+
+    from app.services import approval_engine
+    await approval_engine.mark_externally_decided(
+        db,
+        request_type="attendance_regularization",
+        request_id=reg.id,
+        approve=False,
+        decided_by=approver.id,
+        comments=decision_comment,
+    )
+
     await db.commit()
     await db.refresh(reg)
     return reg

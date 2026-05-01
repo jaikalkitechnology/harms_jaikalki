@@ -185,6 +185,32 @@ async def apply_leave(
         applied_at=_now(),
     )
     db.add(req)
+    await db.flush()
+
+    # Mirror into the universal approval engine so this request appears in
+    # the cross-module inbox.
+    from app.services import approval_engine
+    await approval_engine.submit_for_approval(
+        db,
+        request_type="leave_request",
+        request_id=req.id,
+        employee_id=employee.id,
+        initiated_by=employee.user_id,
+        title=(
+            f"{lt.code} · {days} day(s) · "
+            f"{employee.first_name} {employee.last_name}"
+        ),
+        summary=reason,
+        request_data={
+            "leave_type_code": lt.code,
+            "from_date": str(from_date),
+            "to_date": str(to_date),
+            "days": float(days),
+            "half_day": half_day,
+            "employee_code": employee.employee_code,
+        },
+    )
+
     await db.commit()
     await db.refresh(req)
     return req
@@ -290,6 +316,18 @@ async def decide_leave(
     req.approver_id = approver.id
     req.approved_at = _now()
     req.decision_comment = decision_comment
+
+    # Sync the universal approval row, if it exists.
+    from app.services import approval_engine
+    await approval_engine.mark_externally_decided(
+        db,
+        request_type="leave_request",
+        request_id=req.id,
+        approve=approve,
+        decided_by=approver.id,
+        comments=decision_comment,
+    )
+
     await db.commit()
     await db.refresh(req)
     return req

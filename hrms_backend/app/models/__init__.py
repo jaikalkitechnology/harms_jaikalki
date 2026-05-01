@@ -1,3 +1,4 @@
+from .approval import Approval, ApprovalAction, ApprovalWorkflow
 from .attendance import (
     Attendance,
     AttendanceRegularization,
@@ -53,4 +54,7 @@ __all__ = [
     "LeaveRequest",
     "Holiday",
     "CompOff",
+    "ApprovalWorkflow",
+    "Approval",
+    "ApprovalAction",
 ]
