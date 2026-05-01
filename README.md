@@ -53,6 +53,24 @@ flutter pub get
 flutter run -d chrome           # http://localhost:8081 (or chosen port)
 ```
 
+## Production environment
+
+| Surface | URL |
+|---|---|
+| API | `https://api-hrms.jaikalki.com` |
+| Admin web | `https://hrms.jaikalki.com` *(placeholder — update if different)* |
+| Flutter mobile | reads `API_BASE_URL` dart-define; falls back to the prod URL above in release builds |
+
+Production overrides:
+
+- **Backend** — copy `hrms_backend/.env.production.example` → `.env`,
+  fill in DB / Redis / S3 / `JWT_SECRET_KEY`.
+- **Admin web** — `hrms_admin_web/.env.production` is loaded automatically
+  by `npm run build`.
+- **Mobile** — `flutter build apk --release` or
+  `flutter build web --release` automatically targets the prod API.
+  Override per-build with `--dart-define=API_BASE_URL=https://...`.
+
 ## Brand tokens (single source of truth)
 
 Defined in three places that must stay in sync:

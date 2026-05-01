@@ -40,6 +40,9 @@ class Settings(BaseSettings):
 
     CORS_ORIGINS: List[str] = Field(default_factory=list)
 
+    # Public base URL of this API (used in PDFs, emails, OAuth callbacks).
+    PUBLIC_BASE_URL: str = "http://localhost:8000"
+
     S3_ENDPOINT: str = "http://localhost:9000"
     S3_ACCESS_KEY: str = "minioadmin"
     S3_SECRET_KEY: str = "minioadmin"
