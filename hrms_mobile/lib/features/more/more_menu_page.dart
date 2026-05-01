@@ -12,6 +12,7 @@ class MoreMenuPage extends StatelessWidget {
   Widget build(BuildContext context) {
     final l = AppL10n.of(context);
     final items = <_MoreItem>[
+      _MoreItem('Justice Portal', Icons.shield_outlined, AppRoutes.justice),
       _MoreItem('Payroll', Icons.account_balance_wallet_outlined,
           AppRoutes.payroll),
       _MoreItem('Daily plan', Icons.checklist_outlined, AppRoutes.dwp),

@@ -8,6 +8,8 @@ import {
   Clock,
   Coins,
   FileText,
+  Gavel,
+  Scale,
   LayoutDashboard,
   LogOut,
   Package,
@@ -125,6 +127,18 @@ const SECTIONS: NavSection[] = [
         label: "Reimbursements",
         to: "/reimbursements",
         icon: Receipt,
+        permission: "approval.act",
+      },
+      {
+        label: "Justice Portal",
+        to: "/justice",
+        icon: Gavel,
+        permission: "approval.act",
+      },
+      {
+        label: "ICC (POSH)",
+        to: "/icc",
+        icon: Scale,
         permission: "approval.act",
       },
       {
