@@ -1,5 +1,3 @@
-import 'package:flutter/foundation.dart';
-
 class AppConstants {
   AppConstants._();
 
@@ -13,19 +11,16 @@ class AppConstants {
   // Production API endpoint.
   static const String prodApiBaseUrl = 'https://api-hrms.jaikalki.com';
 
-  // Local dev fallback.
-  static const String devApiBaseUrl = 'http://localhost:8000';
-
   /// API base URL.
   ///
-  /// Resolution order:
-  ///   1. Compile-time `--dart-define=API_BASE_URL=...` (any build)
-  ///   2. Production URL when running a release build
-  ///   3. Local dev URL otherwise
+  /// Defaults to the live production backend in every build flavour
+  /// (debug + release) so devices can reach the server out of the box.
+  /// To point at a local backend, pass at run/build time:
+  ///   --dart-define=API_BASE_URL=http://10.0.2.2:8000   (Android emu)
+  ///   --dart-define=API_BASE_URL=http://localhost:8000  (iOS sim)
   static String get apiBaseUrl {
     const override = String.fromEnvironment('API_BASE_URL');
-    if (override.isNotEmpty) return override;
-    return kReleaseMode ? prodApiBaseUrl : devApiBaseUrl;
+    return override.isNotEmpty ? override : prodApiBaseUrl;
   }
 
   static const Duration networkTimeout = Duration(seconds: 30);
