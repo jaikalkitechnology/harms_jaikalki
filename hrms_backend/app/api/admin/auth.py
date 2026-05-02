@@ -24,7 +24,7 @@ from app.services.auth_service import (
     rotate_refresh_token,
 )
 
-router = APIRouter(prefix="/auth/admin", tags=["admin-auth"])
+router = APIRouter(prefix="/auth", tags=["admin-auth"])
 
 ADMIN_ACCESS_MIN = 60 * 8  # 8 hours
 ADMIN_REFRESH_DAYS = 1

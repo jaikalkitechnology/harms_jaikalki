@@ -8,7 +8,7 @@ from app.dependencies import get_current_admin_user, get_db
 from app.models import Permission, Role, User
 from app.schemas.auth import PermissionOut, RoleOut
 
-router = APIRouter(prefix="/admin", tags=["admin-permissions"])
+router = APIRouter(tags=["admin-permissions"])
 
 
 @router.get("/permissions", response_model=list[PermissionOut])
