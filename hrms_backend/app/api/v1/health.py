@@ -9,6 +9,7 @@ from app.config import settings
 from app.dependencies import get_db
 from app.schemas.health import HealthCheck, ReadinessCheck
 from app.services.cache import ping_redis
+from app.services.push_service import status as push_status
 from app.services.storage import delete, storage_info, upload_fileobj
 
 router = APIRouter()
@@ -84,6 +85,14 @@ async def health_ready(
         storage_check["status"] = "down"
         storage_check["error"] = exc.__class__.__name__
     checks["storage"] = storage_check
+
+    # FCM — informational only. Push is optional; the API stays "ok" even
+    # when FCM isn't configured (notifications fall back to in-app + email).
+    fcm = push_status()
+    checks["fcm"] = {
+        **fcm,
+        "status": "ok" if fcm["configured"] else "disabled",
+    }
 
     # Aggregate status: db + storage are required; redis is degraded-only.
     critical = (checks["db"]["status"], checks["storage"]["status"])
