@@ -12,7 +12,6 @@ import asyncio
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
 
 from app.core.permissions import (
     PERMISSIONS,
@@ -214,21 +213,17 @@ async def seed_departments(db: AsyncSession) -> dict[str, Department]:
 
 
 async def seed_users(db: AsyncSession, roles: dict[str, Role]) -> None:
-    # Eager-load roles so the loop below can read user.roles without
-    # triggering an async lazy-load (MissingGreenlet).
     existing = {
-        u.email: u
-        for u in (
-            await db.execute(
-                select(User).options(selectinload(User.roles))
-            )
-        )
-        .scalars()
-        .all()
+        u.email: u for u in (await db.execute(select(User))).scalars().all()
+    }
+    # Pre-fetch every UserRole pair so we never trigger a lazy-load on
+    # User.roles (which would crash under aiomysql with MissingGreenlet).
+    existing_pairs = {
+        (ur.user_id, ur.role_id)
+        for ur in (await db.execute(select(UserRole))).scalars().all()
     }
     for email, full_name, pw, role_codes, is_admin, _designation in DEFAULT_USERS:
         user = existing.get(email)
-        is_new = False
         if not user:
             user = User(
                 email=email,
@@ -240,18 +235,17 @@ async def seed_users(db: AsyncSession, roles: dict[str, Role]) -> None:
             db.add(user)
             await db.flush()
             existing[email] = user
-            is_new = True
         else:
             user.is_admin_portal = is_admin
 
-        # Newly-created users have no UserRole rows yet; existing users
-        # were loaded with selectinload so user.roles is safe.
-        current = set() if is_new else {ur.role_id for ur in user.roles}
         for code in role_codes:
             role = roles.get(code)
-            if role and role.id not in current:
-                db.add(UserRole(user_id=user.id, role_id=role.id))
-                current.add(role.id)
+            if not role:
+                continue
+            if (user.id, role.id) in existing_pairs:
+                continue
+            db.add(UserRole(user_id=user.id, role_id=role.id))
+            existing_pairs.add((user.id, role.id))
     await db.flush()
 
 
