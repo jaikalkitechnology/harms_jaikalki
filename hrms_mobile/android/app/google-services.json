@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "3683976365",
+    "project_id": "hrms-jailakali",
+    "storage_bucket": "hrms-jailakali.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:3683976365:android:d9d9effb18ce927c13b224",
+        "android_client_info": {
+          "package_name": "com.hrms.jaikalki"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBVtk50PInB7R-z1KgIu34VDjXCkZU_msU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

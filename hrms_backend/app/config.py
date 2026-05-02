@@ -36,7 +36,7 @@ class Settings(BaseSettings):
     # without a manual `alembic upgrade head`. Convenient for dev /
     # first boot. Leave False in production — Alembic migrations are
     # the source of truth there.
-    AUTO_CREATE_TABLES: bool = False
+    AUTO_CREATE_TABLES: bool = True
 
     REDIS_URL: str = "redis://localhost:6379/0"
 
