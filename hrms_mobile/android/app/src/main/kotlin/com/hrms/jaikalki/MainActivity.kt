@@ -1,4 +1,4 @@
-package com.hrms.jaikalki.flutter_app
+package com.hrms.jaikalki
 
 import io.flutter.embedding.android.FlutterFragmentActivity
 

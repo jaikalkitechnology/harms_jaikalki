@@ -3,10 +3,15 @@ plugins {
     id("kotlin-android")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
+    // Firebase / FCM. Must come AFTER the android + kotlin plugins so it
+    // can read the merged manifest. The classpath comes from settings.gradle.kts.
+    id("com.google.gms.google-services")
 }
 
 android {
-    namespace = "com.hrms.jaikalki.flutter_app"
+    // namespace + applicationId must match `package_name` in
+    // android/app/google-services.json (currently `com.hrms.jaikalki`).
+    namespace = "com.hrms.jaikalki"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
@@ -20,14 +25,14 @@ android {
     }
 
     defaultConfig {
-        // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
-        applicationId = "com.hrms.jaikalki.flutter_app"
-        // You can update the following values to match your application needs.
-        // For more information, see: https://flutter.dev/to/review-gradle-config.
-        minSdk = flutter.minSdkVersion
+        applicationId = "com.hrms.jaikalki"
+        // firebase_messaging requires minSdk ≥ 19; flutter_local_notifications
+        // requires multidex on minSdk < 21, so we anchor at 21.
+        minSdk = maxOf(flutter.minSdkVersion, 21)
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+        multiDexEnabled = true
     }
 
     buildTypes {

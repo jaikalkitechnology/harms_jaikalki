@@ -2,7 +2,10 @@ import 'package:bloc/bloc.dart';
 import 'package:equatable/equatable.dart';
 import 'package:local_auth/local_auth.dart';
 
+import '../../../../core/di/injection.dart';
+import '../../../../core/push/push_notifications_service.dart';
 import '../../../../core/storage/secure_storage.dart';
+import '../../../launch/data/launch_api.dart';
 import '../../domain/entities/auth_user.dart';
 import '../../domain/repositories/auth_repository.dart';
 
@@ -48,6 +51,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         status: AuthStatus.authenticated,
         user: user,
       ));
+      _registerPushToken();
     } catch (_) {
       await _storage.clear();
       emit(state.copyWith(
@@ -73,6 +77,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         status: AuthStatus.authenticated,
         user: user,
       ));
+      _registerPushToken();
     } catch (e) {
       emit(state.copyWith(
         status: AuthStatus.error,
@@ -131,6 +136,11 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     AuthLogoutRequested event,
     Emitter<AuthState> emit,
   ) async {
+    // Best-effort: drop the FCM token before we tear down the session,
+    // otherwise the server keeps sending pushes to a dead session.
+    if (sl.isRegistered<LaunchApi>()) {
+      await PushNotificationsService.instance.unregisterToken(sl<LaunchApi>());
+    }
     await _repository.logout();
     emit(const AuthState(status: AuthStatus.unauthenticated));
   }
@@ -151,10 +161,17 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         status: AuthStatus.authenticated,
         user: user,
       ));
+      _registerPushToken();
     } catch (_) {
       await _storage.clear();
       emit(const AuthState(status: AuthStatus.unauthenticated));
     }
+  }
+
+  /// Fire-and-forget — never blocks the UI on a token registration.
+  void _registerPushToken() {
+    if (!sl.isRegistered<LaunchApi>()) return;
+    PushNotificationsService.instance.registerToken(sl<LaunchApi>());
   }
 
   String _humanize(Object error) {

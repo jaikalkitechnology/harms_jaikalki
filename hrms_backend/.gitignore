@@ -29,3 +29,9 @@ redis_data/
 minio_data/
 # Local-storage uploads — never commit user files.
 uploads/
+
+# Firebase service-account JSONs — secrets, never commit. Keep the
+# directory in tree (so deploy scripts can target it) but ignore its
+# contents except a placeholder.
+app/credential/*.json
+!app/credential/.gitkeep

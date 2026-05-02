@@ -1,21 +1,25 @@
 """Firebase Cloud Messaging (FCM) push sender.
 
 Initialised lazily on first call so the FastAPI process boots cleanly even
-without a Firebase service account configured (dev/test). When
-`FCM_CREDENTIALS_PATH` is unset, `send_push()` returns `(False, "fcm
-disabled")` and the caller falls back to in-app + email.
+without a Firebase service account configured (dev/test). Two ways to
+configure:
 
-In production set:
+1. Explicit path:  FCM_CREDENTIALS_PATH=/path/to/service-account.json
+2. Auto-discovery: drop the JSON in `app/credential/` — the first file
+   matching `*firebase*adminsdk*.json` is picked up automatically.
 
-    FCM_CREDENTIALS_PATH=/run/secrets/firebase-service-account.json
-    FCM_PROJECT_ID=jaikalki-hrms
+In production we also recommend setting FCM_PROJECT_ID so messages
+are unambiguously routed.
 
 The service-account JSON is the file Firebase Console gives you under
 Project Settings → Service accounts → "Generate new private key".
 """
 from __future__ import annotations
 
+import glob
 import logging
+import os
+from pathlib import Path
 from threading import Lock
 from typing import Optional
 
@@ -28,11 +32,33 @@ _app = None
 _messaging = None
 
 
+def _resolve_credentials_path() -> Optional[str]:
+    """Return the configured path, or auto-discover one in app/credential/."""
+    if settings.FCM_CREDENTIALS_PATH:
+        if os.path.isfile(settings.FCM_CREDENTIALS_PATH):
+            return settings.FCM_CREDENTIALS_PATH
+        logger.warning(
+            "FCM_CREDENTIALS_PATH=%s does not exist; falling back to auto-discovery",
+            settings.FCM_CREDENTIALS_PATH,
+        )
+
+    # Auto-discover: app/credential/*firebase*adminsdk*.json
+    cred_dir = Path(__file__).resolve().parents[1] / "credential"
+    if cred_dir.is_dir():
+        candidates = sorted(glob.glob(str(cred_dir / "*firebase*adminsdk*.json")))
+        if not candidates:
+            candidates = sorted(glob.glob(str(cred_dir / "*.json")))
+        if candidates:
+            return candidates[0]
+    return None
+
+
 def _ensure_initialised() -> bool:
     global _app, _messaging
     if _messaging is not None:
         return True
-    if not settings.FCM_CREDENTIALS_PATH:
+    cred_path = _resolve_credentials_path()
+    if not cred_path:
         return False
     with _lock:
         if _messaging is not None:
@@ -42,7 +68,7 @@ def _ensure_initialised() -> bool:
             from firebase_admin import credentials, messaging
 
             if not firebase_admin._apps:  # type: ignore[attr-defined]
-                cred = credentials.Certificate(settings.FCM_CREDENTIALS_PATH)
+                cred = credentials.Certificate(cred_path)
                 _app = firebase_admin.initialize_app(
                     cred,
                     options=(
@@ -52,6 +78,11 @@ def _ensure_initialised() -> bool:
                     ),
                 )
             _messaging = messaging
+            logger.info(
+                "FCM initialised: project=%s credentials=%s",
+                settings.FCM_PROJECT_ID or "(default)",
+                cred_path,
+            )
             return True
         except Exception:
             logger.exception("Firebase Admin init failed")
@@ -109,3 +140,15 @@ def send_push_multicast(
     except Exception:
         logger.exception("FCM multicast failed")
         return 0, len(tokens)
+
+
+def status() -> dict:
+    """Diagnostic helper for /health/ready and ops dashboards."""
+    cred_path = _resolve_credentials_path()
+    return {
+        "configured": cred_path is not None,
+        "credentials_path": cred_path,
+        "project_id": settings.FCM_PROJECT_ID,
+        "initialised": _messaging is not None,
+    }
+
