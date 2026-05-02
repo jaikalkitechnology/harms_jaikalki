@@ -35,7 +35,7 @@ class AppTheme {
           color: AppColors.brandBrownDarker,
         ),
       ),
-      cardTheme: CardTheme(
+      cardTheme: CardThemeData(
         color: AppColors.warmWhite,
         elevation: 0,
         shape: RoundedRectangleBorder(
@@ -101,7 +101,7 @@ class AppTheme {
           color: AppColors.warmWhite,
         ),
       ),
-      cardTheme: CardTheme(
+      cardTheme: CardThemeData(
         color: AppColors.brandBrownDark,
         elevation: 0,
         shape: RoundedRectangleBorder(
