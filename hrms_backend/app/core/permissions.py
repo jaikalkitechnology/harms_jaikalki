@@ -203,3 +203,20 @@ def require_level(min_level: int) -> Callable:
 
 def require_super_admin() -> Callable:
     return require_role(Role.SUPER_ADMIN.value)
+
+
+# Roles allowed to sign into the admin web portal. The per-user
+# `users.is_admin_portal` flag remains a manual override for accounts
+# whose role isn't on this list but should still get in.
+ADMIN_PORTAL_ROLES: set[str] = {
+    Role.SUPER_ADMIN.value,
+    Role.DIRECTOR.value,
+    Role.HR.value,
+    Role.ADMIN.value,
+}
+
+
+def can_access_admin_portal(role_codes: Iterable[str], is_admin_portal: bool) -> bool:
+    if is_admin_portal:
+        return True
+    return bool(set(role_codes) & ADMIN_PORTAL_ROLES)

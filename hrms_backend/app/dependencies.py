@@ -60,7 +60,9 @@ async def get_current_admin_user(
     csrf_cookie: Optional[str] = Cookie(default=None, alias=CSRF_COOKIE),
     csrf_header: Optional[str] = Header(default=None, alias=CSRF_HEADER),
 ) -> User:
-    if not user.is_admin_portal:
+    from app.core.permissions import can_access_admin_portal
+
+    if not can_access_admin_portal(user.role_codes, user.is_admin_portal):
         raise UnauthorizedError("Admin portal access required")
     # CSRF check is enforced for non-GET requests.
     if request.method not in {"GET", "HEAD", "OPTIONS"}:

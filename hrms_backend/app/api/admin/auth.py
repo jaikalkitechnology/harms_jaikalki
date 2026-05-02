@@ -76,8 +76,10 @@ async def admin_login(
     response: Response,
     db: AsyncSession = Depends(get_db),
 ) -> MeResponse:
+    from app.core.permissions import can_access_admin_portal
+
     user = await authenticate_user(db, body.email, body.password)
-    if not user.is_admin_portal:
+    if not can_access_admin_portal(user.role_codes, user.is_admin_portal):
         raise UnauthorizedError("This account cannot access the admin portal")
 
     # Force MFA for super-admin (Phase 1.5 task).
