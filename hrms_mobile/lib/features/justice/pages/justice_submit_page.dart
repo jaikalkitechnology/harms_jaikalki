@@ -26,7 +26,7 @@ const _privacy = [
       'You agree to be identified to authorised members for follow-up.'),
 ];
 
-const _severity = [
+const _severities = [
   ('low', 'Low'),
   ('medium', 'Medium'),
   ('high', 'High'),
@@ -382,7 +382,7 @@ class _JusticeSubmitPageState extends State<JusticeSubmitPage> {
     );
   }
 
-  List<DropdownMenuItem<String>> _severity_items() => _severity
+  List<DropdownMenuItem<String>> _severity_items() => _severities
       .map((s) => DropdownMenuItem(value: s.$1, child: Text(s.$2)))
       .toList();
 
@@ -432,7 +432,7 @@ class _JusticeSubmitPageState extends State<JusticeSubmitPage> {
             .firstWhere((p) => p.$1 == _privacyLevel,
                 orElse: () => ('—', '—', ''))
             .$2),
-        _reviewRow('Severity', _severity
+        _reviewRow('Severity', _severities
             .firstWhere((s) => s.$1 == _severity,
                 orElse: () => ('—', '—'))
             .$2),
