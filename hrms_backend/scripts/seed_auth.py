@@ -236,7 +236,14 @@ async def seed_users(db: AsyncSession, roles: dict[str, Role]) -> None:
             await db.flush()
             existing[email] = user
         else:
+            # Always reset the seeded password + activation flags so a
+            # botched earlier run (broken bcrypt, partial flush, manual
+            # tampering) heals on re-seed.
+            user.password_hash = hash_password(pw)
+            user.is_active = True
             user.is_admin_portal = is_admin
+            if not user.full_name:
+                user.full_name = full_name
 
         for code in role_codes:
             role = roles.get(code)
