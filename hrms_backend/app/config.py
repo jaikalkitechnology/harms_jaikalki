@@ -31,6 +31,13 @@ class Settings(BaseSettings):
     DATABASE_POOL_SIZE: int = 10
     DATABASE_MAX_OVERFLOW: int = 20
 
+    # If True, the FastAPI lifespan startup hook runs
+    # `Base.metadata.create_all()` so any new model tables are added
+    # without a manual `alembic upgrade head`. Convenient for dev /
+    # first boot. Leave False in production — Alembic migrations are
+    # the source of truth there.
+    AUTO_CREATE_TABLES: bool = False
+
     REDIS_URL: str = "redis://localhost:6379/0"
 
     JWT_SECRET_KEY: str = "change-me"

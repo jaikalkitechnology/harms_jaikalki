@@ -34,3 +34,21 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
             yield session
         finally:
             await session.close()
+
+
+async def init_tables() -> None:
+    """Create any tables that don't yet exist.
+
+    For dev / first-boot convenience. Production should use Alembic
+    migrations (`alembic upgrade head`) instead — this is enabled by
+    `settings.AUTO_CREATE_TABLES`. `create_all()` only adds missing
+    tables, it does NOT migrate columns/indexes on existing ones, so
+    Alembic remains the source of truth.
+
+    Importing `app.models` here ensures every model is registered with
+    `Base.metadata` before we run create_all.
+    """
+    import app.models  # noqa: F401  — register all models
+
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
