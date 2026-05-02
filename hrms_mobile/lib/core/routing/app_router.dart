@@ -57,7 +57,6 @@ class AppRoutes {
   static const home = '/home';
   // Legacy aliases — all roles land on /home (the bottom-nav shell).
   static const dashboard = home;
-  static const directorDashboard = home;
   static const hrDashboard = home;
   static const managerDashboard = home;
   static const employeeDashboard = home;
