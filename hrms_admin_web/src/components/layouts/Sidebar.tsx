@@ -3,6 +3,8 @@ import {
   Activity,
   BadgeCheck,
   Building,
+  ChevronDown,
+  X,
   Calendar,
   ClipboardList,
   Clock,
@@ -49,6 +51,7 @@ import {
 import { Logo } from "@/components/shared/Logo";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/store/auth";
+import { useSidebarStore } from "@/store/sidebar";
 import type { Role } from "@/lib/constants";
 
 interface NavItem {
@@ -339,6 +342,10 @@ export function Sidebar() {
   const logout = useAuthStore((s) => s.logout);
   const user = useAuthStore((s) => s.user);
   const role = useAuthStore((s) => s.role);
+  const mobileOpen = useSidebarStore((s) => s.mobileOpen);
+  const closeMobile = useSidebarStore((s) => s.closeMobile);
+  const collapsed = useSidebarStore((s) => s.collapsed);
+  const toggleSection = useSidebarStore((s) => s.toggleSection);
 
   const visibleSections = SECTIONS.map((section) => ({
     ...section,
@@ -349,39 +356,61 @@ export function Sidebar() {
     }),
   })).filter((s) => s.items.length > 0);
 
-  return (
-    <aside className="w-64 shrink-0 border-r border-brand-brown-100 bg-card flex flex-col">
-      <div className="h-20 flex items-center px-6 border-b border-brand-brown-100">
+  const sidebarContent = (
+    <div className="flex flex-col h-full">
+      <div className="h-20 flex items-center justify-between px-6 border-b border-brand-brown-100">
         <Logo variant="horizontal-light" className="h-10 w-auto" />
+        <button
+          onClick={closeMobile}
+          className="md:hidden h-8 w-8 grid place-items-center rounded-lg hover:bg-brand-brown-50 text-brand-brown-light"
+          aria-label="Close menu"
+        >
+          <X className="h-4 w-4" />
+        </button>
       </div>
 
       <nav className="flex-1 overflow-y-auto px-3 py-4">
-        {visibleSections.map((section) => (
-          <div key={section.label} className="mb-6">
-            <div className="px-3 pb-2 text-[10px] font-mono uppercase tracking-[0.25em] text-brand-brown-light">
-              {section.label}
+        {visibleSections.map((section) => {
+          const isCollapsed = !!collapsed[section.label];
+          return (
+            <div key={section.label} className="mb-3">
+              <button
+                onClick={() => toggleSection(section.label)}
+                className="w-full flex items-center justify-between px-3 py-1.5 text-[10px] font-mono uppercase tracking-[0.25em] text-brand-brown-light hover:text-brand-brown-darker"
+              >
+                <span>{section.label}</span>
+                <ChevronDown
+                  className={cn(
+                    "h-3 w-3 transition-transform",
+                    isCollapsed && "-rotate-90",
+                  )}
+                />
+              </button>
+              {!isCollapsed && (
+                <div className="space-y-1 mt-1">
+                  {section.items.map(({ to, label, icon: Icon }) => (
+                    <NavLink
+                      key={to}
+                      to={to}
+                      onClick={closeMobile}
+                      className={({ isActive }) =>
+                        cn(
+                          "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
+                          isActive
+                            ? "bg-brand-gold/15 text-brand-brown-darker"
+                            : "text-brand-brown-light hover:bg-brand-brown-50 hover:text-brand-brown-darker",
+                        )
+                      }
+                    >
+                      <Icon className="h-4 w-4" />
+                      {label}
+                    </NavLink>
+                  ))}
+                </div>
+              )}
             </div>
-            <div className="space-y-1">
-              {section.items.map(({ to, label, icon: Icon }) => (
-                <NavLink
-                  key={to}
-                  to={to}
-                  className={({ isActive }) =>
-                    cn(
-                      "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
-                      isActive
-                        ? "bg-brand-gold/15 text-brand-brown-darker"
-                        : "text-brand-brown-light hover:bg-brand-brown-50 hover:text-brand-brown-darker",
-                    )
-                  }
-                >
-                  <Icon className="h-4 w-4" />
-                  {label}
-                </NavLink>
-              ))}
-            </div>
-          </div>
-        ))}
+          );
+        })}
       </nav>
 
       <div className="px-4 py-4 border-t border-brand-brown-100">
@@ -403,6 +432,30 @@ export function Sidebar() {
           Sign out
         </button>
       </div>
-    </aside>
+    </div>
+  );
+
+  return (
+    <>
+      {/* Desktop / tablet (≥ md) — sticky inline column */}
+      <aside className="hidden md:flex w-64 shrink-0 border-r border-brand-brown-100 bg-card flex-col">
+        {sidebarContent}
+      </aside>
+
+      {/* Mobile drawer (< md) */}
+      {mobileOpen && (
+        <div className="md:hidden fixed inset-0 z-40 flex">
+          <button
+            type="button"
+            aria-label="Close menu overlay"
+            onClick={closeMobile}
+            className="absolute inset-0 bg-black/40"
+          />
+          <aside className="relative z-10 w-72 max-w-[85vw] bg-card border-r border-brand-brown-100 shadow-xl flex flex-col">
+            {sidebarContent}
+          </aside>
+        </div>
+      )}
+    </>
   );
 }
