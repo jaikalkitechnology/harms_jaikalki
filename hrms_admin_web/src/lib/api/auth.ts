@@ -57,3 +57,37 @@ export async function listPermissions(): Promise<
   const { data } = await apiClient.get(`${ADMIN_API_PREFIX}/permissions`);
   return data;
 }
+
+// ── Account / security (uses /api/v1/auth — same cookie session) ────
+const V1 = "/api/v1";
+
+export async function changePassword(body: {
+  old_password: string;
+  new_password: string;
+}): Promise<void> {
+  await apiClient.post(`${V1}/auth/change-password`, body);
+}
+
+export interface MfaEnrollResponse {
+  secret: string;
+  otpauth_uri: string;
+}
+
+export async function mfaEnroll(): Promise<MfaEnrollResponse> {
+  const { data } = await apiClient.post<MfaEnrollResponse>(
+    `${V1}/auth/mfa/enroll`,
+  );
+  return data;
+}
+
+export async function mfaVerify(code: string): Promise<{ backup_codes: string[] }> {
+  const { data } = await apiClient.post<{ backup_codes: string[] }>(
+    `${V1}/auth/mfa/verify`,
+    { code },
+  );
+  return data;
+}
+
+export async function mfaDisable(code: string): Promise<void> {
+  await apiClient.post(`${V1}/auth/mfa/disable`, { code });
+}

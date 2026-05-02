@@ -59,6 +59,7 @@ import EmailTemplatesPage from "@/features/super-admin/EmailTemplatesPage";
 import DepartmentsPage from "@/features/organization/DepartmentsPage";
 import DesignationsPage from "@/features/organization/DesignationsPage";
 import ShiftsPage from "@/features/organization/ShiftsPage";
+import SettingsPage from "@/features/settings/SettingsPage";
 
 export const router = createBrowserRouter([
   { path: "/", element: <Navigate to="/dashboard" replace /> },
@@ -228,16 +229,7 @@ export const router = createBrowserRouter([
           </ProtectedRoute>
         ),
       },
-      {
-        path: "settings",
-        element: (
-          <PlaceholderPage
-            phase="★ Foundation"
-            title="Settings"
-            description="Account & company settings will be expanded alongside Super Admin in Phase 4.5."
-          />
-        ),
-      },
+      { path: "settings", element: <SettingsPage /> },
     ],
   },
   { path: "*", element: <Navigate to="/dashboard" replace /> },
