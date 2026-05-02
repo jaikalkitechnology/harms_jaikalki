@@ -9,6 +9,10 @@ pydantic==2.6.1
 pydantic-settings==2.2.1
 python-jose[cryptography]==3.3.0
 passlib[bcrypt]==1.7.4
+# bcrypt 4.1+ removed __about__.__version__ which passlib 1.7.4 reads;
+# also enforces a 72-byte password cap that breaks passlib's
+# wrap-bug self-test. Pin until passlib 1.8 ships.
+bcrypt==4.0.1
 python-multipart==0.0.9
 redis==5.0.1
 celery==5.3.6
