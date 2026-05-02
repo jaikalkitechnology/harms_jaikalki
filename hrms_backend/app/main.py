@@ -48,11 +48,23 @@ from app.core.middleware import (
     RequestIDMiddleware,
     SecurityHeadersMiddleware,
 )
+from app.database import init_tables
 from app.services.cache import close_redis, get_redis
+
+logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # Optional dev convenience — only runs when explicitly enabled.
+    # Production environments should run `alembic upgrade head` instead.
+    if settings.AUTO_CREATE_TABLES:
+        try:
+            await init_tables()
+            logger.info("AUTO_CREATE_TABLES: schema synced with models")
+        except Exception:
+            logger.exception("init_tables failed; continuing startup")
+
     get_redis()
     yield
     await close_redis()
