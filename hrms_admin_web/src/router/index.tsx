@@ -46,6 +46,16 @@ import NotificationsPage from "@/features/launch/NotificationsPage";
 import AuditLogPage from "@/features/launch/AuditLogPage";
 import ResignationsPage from "@/features/launch/ResignationsPage";
 import SalaryRevisionsPage from "@/features/compensation/SalaryRevisionsPage";
+import SystemConfigPage from "@/features/super-admin/SystemConfigPage";
+import PermissionCatalogPage from "@/features/super-admin/PermissionCatalogPage";
+import RoleBuilderPage from "@/features/super-admin/RoleBuilderPage";
+import AdminUsersPage from "@/features/super-admin/AdminUsersPage";
+import ModulesPage from "@/features/super-admin/ModulesPage";
+import SuperAuditLogsPage from "@/features/super-admin/SuperAuditLogsPage";
+import BrandingPage from "@/features/super-admin/BrandingPage";
+import BackupsPage from "@/features/super-admin/BackupsPage";
+import ApiKeysPage from "@/features/super-admin/ApiKeysPage";
+import EmailTemplatesPage from "@/features/super-admin/EmailTemplatesPage";
 
 export const router = createBrowserRouter([
   { path: "/", element: <Navigate to="/dashboard" replace /> },
@@ -163,14 +173,82 @@ export const router = createBrowserRouter([
         ),
       },
       {
-        path: "super-admin/*",
+        path: "super-admin/system",
         element: (
           <ProtectedRoute requireRole="super_admin">
-            <PlaceholderPage
-              phase="★ Phase 4.5"
-              title="Super Admin"
-              description="System config, role/permission editor, module toggles, audit logs, and branding ship in Phase 4.5."
-            />
+            <SystemConfigPage />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: "super-admin/permissions",
+        element: (
+          <ProtectedRoute requireRole="super_admin">
+            <PermissionCatalogPage />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: "super-admin/roles",
+        element: (
+          <ProtectedRoute requireRole="super_admin">
+            <RoleBuilderPage />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: "super-admin/admins",
+        element: (
+          <ProtectedRoute requireRole="super_admin">
+            <AdminUsersPage />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: "super-admin/modules",
+        element: (
+          <ProtectedRoute requireRole="super_admin">
+            <ModulesPage />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: "super-admin/audit",
+        element: (
+          <ProtectedRoute requireRole="super_admin">
+            <SuperAuditLogsPage />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: "super-admin/branding",
+        element: (
+          <ProtectedRoute requireRole="super_admin">
+            <BrandingPage />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: "super-admin/backups",
+        element: (
+          <ProtectedRoute requireRole="super_admin">
+            <BackupsPage />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: "super-admin/api-keys",
+        element: (
+          <ProtectedRoute requireRole="super_admin">
+            <ApiKeysPage />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: "super-admin/email-templates",
+        element: (
+          <ProtectedRoute requireRole="super_admin">
+            <EmailTemplatesPage />
           </ProtectedRoute>
         ),
       },

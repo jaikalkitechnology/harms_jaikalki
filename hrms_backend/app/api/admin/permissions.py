@@ -1,32 +1,16 @@
+"""Read-only helpers for the current admin's effective permissions.
+
+Full CRUD on permissions/roles lives in app.api.admin.super_admin (Phase 4.5)."""
 from fastapi import APIRouter, Depends
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import NotFoundError
-from app.core.permissions import require_permission, require_super_admin
+from app.core.permissions import require_permission
 from app.dependencies import get_current_admin_user, get_db
-from app.models import Permission, Role, User
-from app.schemas.auth import PermissionOut, RoleOut
+from app.models import User
 
 router = APIRouter(tags=["admin-permissions"])
-
-
-@router.get("/permissions", response_model=list[PermissionOut])
-async def list_permissions(
-    db: AsyncSession = Depends(get_db),
-    _: User = Depends(require_super_admin()),
-) -> list[PermissionOut]:
-    rows = (await db.execute(select(Permission).order_by(Permission.code))).scalars().all()
-    return [PermissionOut.model_validate(r) for r in rows]
-
-
-@router.get("/roles", response_model=list[RoleOut])
-async def list_roles(
-    db: AsyncSession = Depends(get_db),
-    _: User = Depends(require_permission("admin.roles.view")),
-) -> list[RoleOut]:
-    rows = (await db.execute(select(Role).order_by(Role.level.desc()))).scalars().all()
-    return [RoleOut.model_validate(r) for r in rows]
 
 
 @router.get("/me/permissions", response_model=list[str])

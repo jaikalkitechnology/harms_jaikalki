@@ -315,12 +315,16 @@ const SECTIONS: NavSection[] = [
   {
     label: "Super Admin",
     items: [
+      { label: "System", to: "/super-admin/system", icon: ShieldCheck, roles: ["super_admin"] },
       { label: "Modules", to: "/super-admin/modules", icon: Package, roles: ["super_admin"] },
       { label: "Roles", to: "/super-admin/roles", icon: UserCog, roles: ["super_admin"] },
       { label: "Permissions", to: "/super-admin/permissions", icon: Shield, roles: ["super_admin"] },
+      { label: "Admin Users", to: "/super-admin/admins", icon: Users, roles: ["super_admin"] },
       { label: "Branding", to: "/super-admin/branding", icon: Palette, roles: ["super_admin"] },
       { label: "Audit Logs", to: "/super-admin/audit", icon: Activity, roles: ["super_admin"] },
-      { label: "System", to: "/super-admin/system", icon: ShieldCheck, roles: ["super_admin"] },
+      { label: "Backups", to: "/super-admin/backups", icon: Wallet, roles: ["super_admin"] },
+      { label: "API Keys", to: "/super-admin/api-keys", icon: BadgeCheck, roles: ["super_admin"] },
+      { label: "Email Templates", to: "/super-admin/email-templates", icon: FileText, roles: ["super_admin"] },
     ],
   },
   {

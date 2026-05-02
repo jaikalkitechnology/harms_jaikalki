@@ -2,6 +2,7 @@ from fastapi import APIRouter
 
 from app.api.admin.auth import router as admin_auth_router
 from app.api.admin.permissions import router as admin_permissions_router
+from app.api.admin.super_admin import router as admin_super_admin_router
 from app.api.v1.approvals import router as v1_approvals_router
 from app.api.v1.attendance import router as v1_attendance_router
 from app.api.v1.auth import router as v1_auth_router
@@ -60,3 +61,4 @@ v1_router.include_router(v1_compensation_router)
 admin_router = APIRouter()
 admin_router.include_router(admin_auth_router)
 admin_router.include_router(admin_permissions_router)
+admin_router.include_router(admin_super_admin_router)
