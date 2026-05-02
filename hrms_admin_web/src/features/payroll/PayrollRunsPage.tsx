@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Calendar, Lock, Play, RotateCcw } from "lucide-react";
+import { Lock, Play, RotateCcw } from "lucide-react";
 
 import {
   Card,

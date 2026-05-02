@@ -290,16 +290,18 @@ function Row({
 
 function SalaryGrid({ breakup }: { breakup: SalaryBreakup }) {
   const inr = (n: number) => `₹${n.toLocaleString("en-IN")}`;
-  const earnings: [string, number][] = [
-    ["Basic", breakup.basic],
-    ["HRA", breakup.hra],
-    ["Other Allowance", breakup.other_allowance],
-    ["Special Allowance", breakup.special_allowance],
-    ["Conveyance", breakup.conveyance],
-    ["Medical Allowance", breakup.medical_allowance],
-    ["LTA", breakup.lta],
-    ["Food Coupon", breakup.food_coupon],
-  ].filter(([, v]) => v > 0) as [string, number][];
+  const earnings = (
+    [
+      ["Basic", breakup.basic],
+      ["HRA", breakup.hra],
+      ["Other Allowance", breakup.other_allowance],
+      ["Special Allowance", breakup.special_allowance],
+      ["Conveyance", breakup.conveyance],
+      ["Medical Allowance", breakup.medical_allowance],
+      ["LTA", breakup.lta],
+      ["Food Coupon", breakup.food_coupon],
+    ] as [string, number][]
+  ).filter(([, v]) => v > 0);
 
   return (
     <div className="grid md:grid-cols-3 gap-6 text-sm">
