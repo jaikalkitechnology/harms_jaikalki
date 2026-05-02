@@ -45,7 +45,9 @@ class PushNotificationsService {
 
   final FlutterLocalNotificationsPlugin _local =
       FlutterLocalNotificationsPlugin();
-  final FirebaseMessaging _fcm = FirebaseMessaging.instance;
+  // Lazy — `FirebaseMessaging.instance` throws if accessed before
+  // `Firebase.initializeApp()`, so resolve it on demand.
+  FirebaseMessaging get _fcm => FirebaseMessaging.instance;
 
   static const _androidChannel = AndroidNotificationChannel(
     'jaikalki_default',
