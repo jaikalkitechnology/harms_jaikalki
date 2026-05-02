@@ -56,6 +56,9 @@ import BrandingPage from "@/features/super-admin/BrandingPage";
 import BackupsPage from "@/features/super-admin/BackupsPage";
 import ApiKeysPage from "@/features/super-admin/ApiKeysPage";
 import EmailTemplatesPage from "@/features/super-admin/EmailTemplatesPage";
+import DepartmentsPage from "@/features/organization/DepartmentsPage";
+import DesignationsPage from "@/features/organization/DesignationsPage";
+import ShiftsPage from "@/features/organization/ShiftsPage";
 
 export const router = createBrowserRouter([
   { path: "/", element: <Navigate to="/dashboard" replace /> },
@@ -82,37 +85,10 @@ export const router = createBrowserRouter([
       { path: "employees/:id", element: <EmployeeDetailPage /> },
       { path: "salary-templates", element: <SalaryTemplatesPage /> },
       { path: "intern-expenses", element: <InternExpensesPage /> },
-      {
-        path: "departments",
-        element: (
-          <PlaceholderPage
-            phase="★ Phase 2"
-            title="Departments"
-            description="Department CRUD UI lands alongside Phase 4.5; for now manage via /api/v1/departments."
-          />
-        ),
-      },
-      {
-        path: "designations",
-        element: (
-          <PlaceholderPage
-            phase="★ Phase 2"
-            title="Designations"
-            description="Designation CRUD UI lands alongside Phase 4.5; for now manage via /api/v1/designations."
-          />
-        ),
-      },
+      { path: "departments", element: <DepartmentsPage /> },
+      { path: "designations", element: <DesignationsPage /> },
       { path: "holidays", element: <HolidaysPage /> },
-      {
-        path: "shifts",
-        element: (
-          <PlaceholderPage
-            phase="★ Phase 3"
-            title="Shifts"
-            description="Shift CRUD UI lands in Phase 5; backend supports it via /api/v1 already."
-          />
-        ),
-      },
+      { path: "shifts", element: <ShiftsPage /> },
       { path: "attendance", element: <AttendancePage /> },
       { path: "leaves", element: <LeaveApprovalsPage /> },
       { path: "approvals", element: <ApprovalsInboxPage /> },

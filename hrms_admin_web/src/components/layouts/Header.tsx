@@ -1,9 +1,10 @@
 import { useState } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { Bell, ChevronRight, Moon, Search, Sun, User } from "lucide-react";
+import { Bell, ChevronRight, Menu, Moon, Search, Sun, User } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { useAuthStore } from "@/store/auth";
 import { useThemeStore } from "@/store/theme";
+import { useSidebarStore } from "@/store/sidebar";
 import { COMPANY_NAME, ROLE_LABEL, type Role } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 import { useUnreadCount } from "@/hooks/useUnreadCount";
@@ -23,11 +24,19 @@ export function Header() {
   const crumbs = useBreadcrumbs();
   const [menuOpen, setMenuOpen] = useState(false);
   const unread = useUnreadCount();
+  const toggleMobileSidebar = useSidebarStore((s) => s.toggleMobile);
 
   return (
-    <header className="h-20 border-b border-brand-brown-100 bg-card/80 backdrop-blur px-8 flex items-center justify-between gap-4">
-      <div className="min-w-0">
-        <div className="text-[10px] font-mono uppercase tracking-[0.3em] text-brand-gold-dark flex items-center gap-1">
+    <header className="h-20 border-b border-brand-brown-100 bg-card/80 backdrop-blur px-4 md:px-8 flex items-center justify-between gap-3 md:gap-4">
+      <button
+        onClick={toggleMobileSidebar}
+        className="md:hidden h-10 w-10 grid place-items-center rounded-lg hover:bg-brand-brown-50 text-brand-brown-light"
+        aria-label="Open menu"
+      >
+        <Menu className="h-5 w-5" />
+      </button>
+      <div className="min-w-0 flex-1 md:flex-none">
+        <div className="text-[10px] font-mono uppercase tracking-[0.3em] text-brand-gold-dark flex items-center gap-1 truncate">
           {crumbs.map((seg, i) => (
             <span key={i} className="flex items-center gap-1">
               <span>{seg.replace(/-/g, " ")}</span>
@@ -35,7 +44,7 @@ export function Header() {
             </span>
           ))}
         </div>
-        <h1 className="font-display text-2xl font-semibold text-brand-brown-darker truncate">
+        <h1 className="font-display text-lg md:text-2xl font-semibold text-brand-brown-darker truncate">
           {COMPANY_NAME}
         </h1>
       </div>

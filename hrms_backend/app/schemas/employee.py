@@ -45,11 +45,46 @@ class DepartmentCreate(BaseModel):
     description: Optional[str] = None
 
 
+class DepartmentUpdate(BaseModel):
+    name: Optional[str] = Field(default=None, min_length=1, max_length=96)
+    description: Optional[str] = None
+    head_id: Optional[int] = None
+
+
 class DesignationCreate(BaseModel):
     code: str = Field(min_length=1, max_length=32)
     name: str = Field(min_length=1, max_length=96)
     level: int = Field(default=1, ge=1, le=10)
     department_id: Optional[int] = None
+
+
+class DesignationUpdate(BaseModel):
+    name: Optional[str] = Field(default=None, min_length=1, max_length=96)
+    level: Optional[int] = Field(default=None, ge=1, le=10)
+    department_id: Optional[int] = None
+
+
+# ── Shifts ──────────────────────────────────────────────────────────────
+from datetime import time as _time  # noqa: E402
+
+
+class ShiftCreate(BaseModel):
+    code: str = Field(min_length=1, max_length=16)
+    name: str = Field(min_length=1, max_length=64)
+    start_time: _time
+    end_time: _time
+    break_duration_min: int = Field(default=60, ge=0, le=480)
+    is_default: bool = False
+    is_active: bool = True
+
+
+class ShiftUpdate(BaseModel):
+    name: Optional[str] = None
+    start_time: Optional[_time] = None
+    end_time: Optional[_time] = None
+    break_duration_min: Optional[int] = Field(default=None, ge=0, le=480)
+    is_default: Optional[bool] = None
+    is_active: Optional[bool] = None
 
 
 # ── Salary templates ────────────────────────────────────────────────────
