@@ -70,6 +70,8 @@ async def lifespan(app: FastAPI):
     await close_redis()
 
 
+from app.utils.ist_response import ISTJSONResponse
+
 app = FastAPI(
     title=settings.APP_NAME,
     version=__version__,
@@ -78,6 +80,9 @@ app = FastAPI(
     redoc_url="/redoc",
     openapi_url="/openapi.json",
     lifespan=lifespan,
+    # Convert every datetime in JSON responses to Asia/Kolkata at the
+    # wire — backend stores naive UTC, callers see IST with +05:30.
+    default_response_class=ISTJSONResponse,
 )
 
 app.add_middleware(
