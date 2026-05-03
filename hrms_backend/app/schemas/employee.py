@@ -97,7 +97,9 @@ class SalaryTemplateOut(BaseModel):
     designation_level: int
     ctc_annual_default: Decimal
     basic_amount: Decimal
+    basic_percentage: Decimal
     hra_amount: Decimal
+    hra_percentage: Decimal
     other_allowance: Decimal
     special_allowance: Decimal
     conveyance: Decimal
@@ -105,9 +107,75 @@ class SalaryTemplateOut(BaseModel):
     lta: Decimal
     food_coupon: Decimal
     travel_expense_max: Decimal
+    is_paid_internship: bool
     has_probation: bool
     probation_months: int
+    probation_extension_months: int
+    mediclaim_amount: Decimal
+    pa_insurance_amount: Decimal
+    notice_period_probation: int
+    notice_period_confirmed: int
+    notice_period_termination: int
     is_active: bool
+
+
+class SalaryTemplateCreate(BaseModel):
+    template_code: str = Field(min_length=2, max_length=48)
+    template_name: str = Field(min_length=2, max_length=96)
+    category: str = Field(pattern="^(intern|trainee|permanent|contract)$")
+    designation_level: int = Field(default=1, ge=1, le=10)
+    ctc_annual_default: Decimal = Decimal("0")
+    basic_amount: Decimal = Decimal("0")
+    basic_percentage: Decimal = Decimal("50")
+    hra_amount: Decimal = Decimal("0")
+    hra_percentage: Decimal = Decimal("30")
+    other_allowance: Decimal = Decimal("0")
+    special_allowance: Decimal = Decimal("0")
+    conveyance: Decimal = Decimal("0")
+    medical_allowance: Decimal = Decimal("0")
+    lta: Decimal = Decimal("0")
+    food_coupon: Decimal = Decimal("0")
+    travel_expense_max: Decimal = Decimal("0")
+    is_paid_internship: bool = False
+    has_probation: bool = True
+    probation_months: int = Field(default=6, ge=0, le=24)
+    probation_extension_months: int = Field(default=2, ge=0, le=12)
+    mediclaim_amount: Decimal = Decimal("200000")
+    pa_insurance_amount: Decimal = Decimal("500000")
+    notice_period_probation: int = Field(default=15, ge=0, le=180)
+    notice_period_confirmed: int = Field(default=30, ge=0, le=180)
+    notice_period_termination: int = Field(default=7, ge=0, le=180)
+    is_active: bool = True
+
+
+class SalaryTemplateUpdate(BaseModel):
+    template_name: Optional[str] = Field(default=None, min_length=2, max_length=96)
+    category: Optional[str] = Field(
+        default=None, pattern="^(intern|trainee|permanent|contract)$"
+    )
+    designation_level: Optional[int] = Field(default=None, ge=1, le=10)
+    ctc_annual_default: Optional[Decimal] = None
+    basic_amount: Optional[Decimal] = None
+    basic_percentage: Optional[Decimal] = None
+    hra_amount: Optional[Decimal] = None
+    hra_percentage: Optional[Decimal] = None
+    other_allowance: Optional[Decimal] = None
+    special_allowance: Optional[Decimal] = None
+    conveyance: Optional[Decimal] = None
+    medical_allowance: Optional[Decimal] = None
+    lta: Optional[Decimal] = None
+    food_coupon: Optional[Decimal] = None
+    travel_expense_max: Optional[Decimal] = None
+    is_paid_internship: Optional[bool] = None
+    has_probation: Optional[bool] = None
+    probation_months: Optional[int] = Field(default=None, ge=0, le=24)
+    probation_extension_months: Optional[int] = Field(default=None, ge=0, le=12)
+    mediclaim_amount: Optional[Decimal] = None
+    pa_insurance_amount: Optional[Decimal] = None
+    notice_period_probation: Optional[int] = Field(default=None, ge=0, le=180)
+    notice_period_confirmed: Optional[int] = Field(default=None, ge=0, le=180)
+    notice_period_termination: Optional[int] = Field(default=None, ge=0, le=180)
+    is_active: Optional[bool] = None
 
 
 class SalaryBreakupOut(BaseModel):
