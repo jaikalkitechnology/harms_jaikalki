@@ -263,6 +263,25 @@ export const superAdminApi = {
     await apiClient.delete(`${P}/api-keys/${id}`);
   },
 
+  // Leave policy
+  getLeavePolicy: async (): Promise<{
+    sandwich_enabled: boolean;
+    sandwich_count_holidays: boolean;
+    earned_accrual_enabled: boolean;
+    earned_accrual_days_required: number;
+    earned_accrual_credit_days: number;
+    earned_accrual_leave_type_code: string;
+  }> => (await apiClient.get(`${P}/leave-policy`)).data,
+  setLeavePolicy: async (body: Record<string, unknown>) =>
+    (await apiClient.put(`${P}/leave-policy`, body)).data,
+  recomputeEarnedLeaves: async (): Promise<{
+    enabled: boolean;
+    processed: number;
+    credited_total: number;
+    error?: string;
+  }> =>
+    (await apiClient.post(`${P}/leave-policy/recompute-earned-leaves`)).data,
+
   // Office geo-fence
   getOfficeLocation: async (): Promise<{
     lat: number;

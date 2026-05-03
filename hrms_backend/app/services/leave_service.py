@@ -148,7 +148,16 @@ async def apply_leave(
         raise ConflictError("Leave overlaps with an existing request")
 
     holidays = await _get_holidays(db, from_date, to_date)
-    days = _count_working_days(from_date, to_date, holidays)
+    from app.services.leave_policy import count_leave_days, get_leave_policy
+
+    policy = await get_leave_policy(db)
+    days = count_leave_days(
+        from_date,
+        to_date,
+        holidays,
+        sandwich_enabled=bool(policy["sandwich_enabled"]),
+        sandwich_count_holidays=bool(policy["sandwich_count_holidays"]),
+    )
     if half_day:
         days = Decimal("0.5")
     if days <= 0:

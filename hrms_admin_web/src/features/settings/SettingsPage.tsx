@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
   Building,
+  CalendarDays,
   Crosshair,
   KeyRound,
   MapPin,
@@ -37,7 +38,13 @@ import { ROLE_LABEL, type Role } from "@/lib/constants";
 import { useThemeStore, type ThemeMode } from "@/store/theme";
 import { cn } from "@/lib/utils";
 
-type Tab = "account" | "security" | "company" | "preferences" | "office";
+type Tab =
+  | "account"
+  | "security"
+  | "company"
+  | "preferences"
+  | "office"
+  | "leave";
 
 export default function SettingsPage() {
   const [tab, setTab] = useState<Tab>("account");
@@ -49,7 +56,10 @@ export default function SettingsPage() {
     { id: "security", label: "Security", icon: Shield },
     { id: "preferences", label: "Preferences", icon: KeyRound },
     ...(isSuper
-      ? ([{ id: "office", label: "Office", icon: MapPin }] as const)
+      ? ([
+          { id: "office", label: "Office", icon: MapPin },
+          { id: "leave", label: "Leave policy", icon: CalendarDays },
+        ] as const)
       : []),
     { id: "company", label: "Company", icon: Building },
   ];
@@ -84,6 +94,7 @@ export default function SettingsPage() {
       {tab === "security" && <SecurityTab />}
       {tab === "preferences" && <PreferencesTab />}
       {tab === "office" && <OfficeTab />}
+      {tab === "leave" && <LeavePolicyTab />}
       {tab === "company" && <CompanyTab />}
     </div>
   );
@@ -704,4 +715,218 @@ function haversineMeters(
     Math.sin(dlat / 2) ** 2 +
     Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dlng / 2) ** 2;
   return 2 * R * Math.asin(Math.sqrt(a));
+}
+
+// ── Leave policy ───────────────────────────────────────────────────
+function LeavePolicyTab() {
+  const qc = useQueryClient();
+  const { data, isLoading } = useQuery({
+    queryKey: ["leave-policy"],
+    queryFn: superAdminApi.getLeavePolicy,
+  });
+
+  const [form, setForm] = useState({
+    sandwich_enabled: false,
+    sandwich_count_holidays: true,
+    earned_accrual_enabled: false,
+    earned_accrual_days_required: 19,
+    earned_accrual_credit_days: 1,
+    earned_accrual_leave_type_code: "EL",
+  });
+
+  useEffect(() => {
+    if (data) setForm({ ...form, ...data });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data]);
+
+  const save = useMutation({
+    mutationFn: () =>
+      superAdminApi.setLeavePolicy({
+        ...form,
+        earned_accrual_days_required: Number(form.earned_accrual_days_required),
+        earned_accrual_credit_days: Number(form.earned_accrual_credit_days),
+      }),
+    onSuccess: () => {
+      toast.success("Leave policy saved");
+      qc.invalidateQueries({ queryKey: ["leave-policy"] });
+    },
+    onError: () => toast.error("Save failed"),
+  });
+
+  const recompute = useMutation({
+    mutationFn: () => superAdminApi.recomputeEarnedLeaves(),
+    onSuccess: (r) => {
+      if (!r.enabled) {
+        toast.message("Earned-accrual is disabled — flip the switch first.");
+        return;
+      }
+      if (r.error) {
+        toast.error(r.error);
+        return;
+      }
+      toast.success(
+        `Recomputed for ${r.processed} employees · +${r.credited_total} new days`,
+      );
+    },
+    onError: () => toast.error("Recompute failed"),
+  });
+
+  if (isLoading) return <LoadingScreen />;
+
+  return (
+    <div className="grid md:grid-cols-2 gap-6">
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <CalendarDays className="h-5 w-5" /> Sandwich rule
+          </CardTitle>
+          <CardDescription>
+            When enabled, intermediate Sundays — and optionally public
+            holidays — between two leave days are also counted. A leave
+            spanning Saturday → Monday becomes <strong>3 days</strong>{" "}
+            instead of 2. Single-day or weekend-only requests are
+            unaffected.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <label className="flex items-start gap-2 text-sm cursor-pointer">
+            <input
+              type="checkbox"
+              className="mt-1"
+              checked={form.sandwich_enabled}
+              onChange={(e) =>
+                setForm({ ...form, sandwich_enabled: e.target.checked })
+              }
+            />
+            <span>
+              <span className="font-medium">Enable sandwich leave rule</span>
+              <span className="block text-xs text-brand-brown-light">
+                Sundays inside a leave range count when both endpoints are
+                working days.
+              </span>
+            </span>
+          </label>
+
+          <label className="flex items-start gap-2 text-sm cursor-pointer">
+            <input
+              type="checkbox"
+              className="mt-1"
+              disabled={!form.sandwich_enabled}
+              checked={form.sandwich_count_holidays}
+              onChange={(e) =>
+                setForm({
+                  ...form,
+                  sandwich_count_holidays: e.target.checked,
+                })
+              }
+            />
+            <span>
+              <span className="font-medium">Also count public holidays</span>
+              <span className="block text-xs text-brand-brown-light">
+                Off by default would let employees skip a holiday between two
+                leaves; on by default penalises them like Sundays.
+              </span>
+            </span>
+          </label>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <CalendarDays className="h-5 w-5" /> Earned-leave accrual
+          </CardTitle>
+          <CardDescription>
+            For every <strong>N attendance days</strong> (Sundays counted as
+            present), automatically credit <strong>X leaves</strong> to a
+            specific leave type. Recomputation is idempotent — safe to run
+            on demand or daily.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <label className="flex items-start gap-2 text-sm cursor-pointer">
+            <input
+              type="checkbox"
+              className="mt-1"
+              checked={form.earned_accrual_enabled}
+              onChange={(e) =>
+                setForm({
+                  ...form,
+                  earned_accrual_enabled: e.target.checked,
+                })
+              }
+            />
+            <span className="font-medium">Enable auto-accrual</span>
+          </label>
+
+          <div className="grid sm:grid-cols-3 gap-3">
+            <div>
+              <Label>Days required</Label>
+              <Input
+                type="number"
+                min={1}
+                max={365}
+                value={form.earned_accrual_days_required}
+                onChange={(e) =>
+                  setForm({
+                    ...form,
+                    earned_accrual_days_required: Number(e.target.value),
+                  })
+                }
+              />
+            </div>
+            <div>
+              <Label>Credit (days)</Label>
+              <Input
+                type="number"
+                step="0.5"
+                min={0.5}
+                max={30}
+                value={form.earned_accrual_credit_days}
+                onChange={(e) =>
+                  setForm({
+                    ...form,
+                    earned_accrual_credit_days: Number(e.target.value),
+                  })
+                }
+              />
+            </div>
+            <div>
+              <Label>Leave type code</Label>
+              <Input
+                value={form.earned_accrual_leave_type_code}
+                onChange={(e) =>
+                  setForm({
+                    ...form,
+                    earned_accrual_leave_type_code: e.target.value
+                      .toUpperCase()
+                      .replace(/[^A-Z0-9]/g, ""),
+                  })
+                }
+                placeholder="EL"
+              />
+            </div>
+          </div>
+
+          <div className="text-xs text-brand-brown-light">
+            Example: 19 + 1 + EL means each 19 attendance days credits 1
+            day to the <strong>EL</strong> leave type.
+          </div>
+        </CardContent>
+      </Card>
+
+      <div className="md:col-span-2 flex flex-wrap gap-2 justify-end">
+        <Button
+          variant="outline"
+          disabled={recompute.isPending || !form.earned_accrual_enabled}
+          onClick={() => recompute.mutate()}
+        >
+          {recompute.isPending ? "Recomputing…" : "Recompute earned leaves now"}
+        </Button>
+        <Button onClick={() => save.mutate()} disabled={save.isPending}>
+          <Save className="h-4 w-4 mr-1" /> Save policy
+        </Button>
+      </div>
+    </div>
+  );
 }

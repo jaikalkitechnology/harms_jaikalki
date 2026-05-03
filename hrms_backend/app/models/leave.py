@@ -154,3 +154,36 @@ class CompOff(Base, TimestampMixin):
         ForeignKey("leave_requests.id", ondelete="SET NULL"), nullable=True
     )
     reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+
+# ── Earned-leave accrual ledger (sandwich/auto-accrual policy) ────────
+class EarnedLeaveAccrual(Base, TimestampMixin):
+    """Idempotent per-(employee, leave_type, year) ledger of leaves
+    auto-credited by the earned-leave-accrual policy. Recompute is safe:
+    `days_credited` is always set to `floor(present_count / threshold) * credit`
+    so re-runs converge on the same number."""
+
+    __tablename__ = "earned_leave_accruals"
+    __table_args__ = (
+        UniqueConstraint(
+            "employee_id", "leave_type_id", "year",
+            name="uq_earned_accrual_employee_type_year",
+        ),
+        mysql_table_args,
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    employee_id: Mapped[int] = mapped_column(
+        ForeignKey("employees.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    leave_type_id: Mapped[int] = mapped_column(
+        ForeignKey("leave_types.id", ondelete="CASCADE"), nullable=False
+    )
+    year: Mapped[int] = mapped_column(Integer, nullable=False)
+    days_credited: Mapped[Decimal] = mapped_column(
+        Numeric(8, 2), default=Decimal("0"), nullable=False
+    )
+    last_present_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    last_recomputed_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime, nullable=True
+    )
