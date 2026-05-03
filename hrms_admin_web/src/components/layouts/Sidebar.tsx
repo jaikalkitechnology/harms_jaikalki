@@ -269,6 +269,12 @@ const SECTIONS: NavSection[] = [
         permission: "report.view.all",
       },
       {
+        label: "Export Report",
+        to: "/reports/export",
+        icon: Receipt,
+        permission: "report.view.all",
+      },
+      {
         label: "Saved Reports",
         to: "/reports/saved",
         icon: FileText,

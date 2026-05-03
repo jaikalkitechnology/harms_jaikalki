@@ -2,6 +2,7 @@ from datetime import date
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Query, status
+from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import NotFoundError
@@ -163,3 +164,148 @@ async def delete_saved(
     user: User = Depends(get_current_user),
 ):
     await reports.delete_saved_report(db, report_id, user_id=user.id)
+
+
+# ─── Combined attendance + salary export ────────────────────────────
+@router.get(
+    "/attendance-payroll-export.csv",
+    response_class=StreamingResponse,
+    summary="One-row-per-employee CSV: attendance summary + computed salary "
+    "for the chosen date range.",
+)
+async def attendance_payroll_export(
+    from_date: date = Query(...),
+    to_date: date = Query(...),
+    employee_ids: Optional[str] = Query(
+        default=None,
+        description="Comma-separated employee IDs. Omit for all active.",
+    ),
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_permission("report.view.all")),
+):
+    from datetime import timedelta
+    import csv as _csv
+    import io as _io
+    from decimal import Decimal
+
+    from sqlalchemy import select
+    from app.models import Attendance, Employee, Holiday, SalaryTemplate
+    from app.services.salary_calculator import JaikalkiSalaryCalculator
+
+    if from_date > to_date:
+        raise NotFoundError("from_date must be on or before to_date")
+
+    ids: list[int] | None = None
+    if employee_ids:
+        try:
+            ids = [int(x) for x in employee_ids.split(",") if x.strip()]
+        except ValueError:
+            raise NotFoundError("employee_ids must be comma-separated integers")
+
+    emp_stmt = select(Employee).where(Employee.status == "active")
+    if ids:
+        emp_stmt = emp_stmt.where(Employee.id.in_(ids))
+    employees = (await db.execute(emp_stmt)).scalars().all()
+
+    holidays = {
+        h.date
+        for h in (
+            await db.execute(
+                select(Holiday)
+                .where(Holiday.date >= from_date)
+                .where(Holiday.date <= to_date)
+            )
+        ).scalars().all()
+    }
+
+    # Pre-load templates
+    template_ids = {e.salary_template_id for e in employees if e.salary_template_id}
+    tpls = (
+        await db.execute(
+            select(SalaryTemplate).where(SalaryTemplate.id.in_(template_ids))
+        )
+    ).scalars().all() if template_ids else []
+    tpl_by_id = {t.id: t for t in tpls}
+
+    # Total calendar + working days in range (Mon-Sat working).
+    total_days = (to_date - from_date).days + 1
+    working_days_in_range = 0
+    d = from_date
+    while d <= to_date:
+        if d.weekday() != 6 and d not in holidays:
+            working_days_in_range += 1
+        d = d + timedelta(days=1)
+
+    # Build CSV
+    buf = _io.StringIO()
+    w = _csv.writer(buf)
+    w.writerow([
+        "employee_code", "name", "category", "designation",
+        "from_date", "to_date", "total_days", "working_days_in_range",
+        "present", "wfh", "half_day", "absent", "leave",
+        "holidays_in_range",
+        "ctc_monthly", "gross_monthly", "net_salary_monthly",
+        "earned_gross", "earned_net",
+    ])
+
+    calc = JaikalkiSalaryCalculator()
+    for e in employees:
+        rows = (
+            await db.execute(
+                select(Attendance)
+                .where(Attendance.employee_id == e.id)
+                .where(Attendance.date >= from_date)
+                .where(Attendance.date <= to_date)
+            )
+        ).scalars().all()
+        present = sum(1 for r in rows if r.status == "present")
+        wfh = sum(1 for r in rows if r.status == "wfh")
+        half = sum(1 for r in rows if r.status == "half_day")
+        absent = sum(1 for r in rows if r.status == "absent")
+        leave_d = sum(1 for r in rows if r.status == "leave")
+
+        # Effective working days (present + wfh + 0.5*half + paid leave)
+        effective = Decimal(present) + Decimal(wfh) + Decimal("0.5") * Decimal(half) + Decimal(leave_d)
+
+        ctc_m = gross_m = net_m = earn_g = earn_n = ""
+        if e.salary_template_id and e.salary_template_id in tpl_by_id:
+            tpl = tpl_by_id[e.salary_template_id]
+            br = calc.calculate(tpl, ctc_annual=e.ctc_annual or None)
+            d_ = br.as_dict()
+            if not d_.get("is_intern"):
+                ctc_m = d_["total_ctc_monthly"]
+                gross_m = d_["gross"]
+                net_m = d_["net_salary"]
+                if working_days_in_range > 0:
+                    ratio = float(effective) / working_days_in_range
+                    earn_g = round(d_["gross"] * ratio, 2)
+                    earn_n = round(d_["net_salary"] * ratio, 2)
+                else:
+                    earn_g = 0
+                    earn_n = 0
+
+        w.writerow([
+            e.employee_code,
+            f"{e.first_name} {e.last_name}",
+            getattr(e, "category_code", "") or "",
+            "",  # designation lookup is optional; left blank for speed
+            from_date.isoformat(),
+            to_date.isoformat(),
+            total_days,
+            working_days_in_range,
+            present,
+            wfh,
+            half,
+            absent,
+            leave_d,
+            sum(1 for d_ in holidays if from_date <= d_ <= to_date),
+            ctc_m, gross_m, net_m, earn_g, earn_n,
+        ])
+
+    buf.seek(0)
+    filename = f"jaikalki-attendance-payroll-{from_date}-{to_date}.csv"
+    return StreamingResponse(
+        iter([buf.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )

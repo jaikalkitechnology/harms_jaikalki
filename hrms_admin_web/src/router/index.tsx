@@ -39,6 +39,7 @@ import SessionsPage from "@/features/trainer/SessionsPage";
 import CyclesPage from "@/features/performance/CyclesPage";
 import DirectorDashboardPage from "@/features/reports/DirectorDashboardPage";
 import SavedReportsPage from "@/features/reports/SavedReportsPage";
+import ExportReportPage from "@/features/reports/ExportReportPage";
 import AssetsPage from "@/features/polish/AssetsPage";
 import VisitorsPage from "@/features/polish/VisitorsPage";
 import JobPostingsPage from "@/features/polish/JobPostingsPage";
@@ -132,6 +133,14 @@ export const router = createBrowserRouter([
       { path: "performance/cycles", element: <CyclesPage /> },
       { path: "reports/dashboard", element: <DirectorDashboardPage /> },
       { path: "reports/saved", element: <SavedReportsPage /> },
+      {
+        path: "reports/export",
+        element: (
+          <ProtectedRoute requirePermission="report.view.all">
+            <ExportReportPage />
+          </ProtectedRoute>
+        ),
+      },
       { path: "assets", element: <AssetsPage /> },
       { path: "visitors", element: <VisitorsPage /> },
       { path: "jobs", element: <JobPostingsPage /> },
