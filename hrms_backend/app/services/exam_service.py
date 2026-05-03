@@ -497,3 +497,69 @@ async def get_certificate(
     if not c:
         raise NotFoundError("Certificate not found")
     return c
+
+
+# ── Mutations: question + exam update / delete ────────────────────────
+async def update_question(
+    db: AsyncSession, question_id: int, *, payload: dict
+) -> "QuestionBank":
+    from app.models import QuestionBank
+    q = (
+        await db.execute(select(QuestionBank).where(QuestionBank.id == question_id))
+    ).scalar_one_or_none()
+    if not q:
+        raise NotFoundError("Question not found")
+    allowed = {
+        "question_text", "question_type", "department_id", "topic",
+        "difficulty", "language", "marks", "time_seconds", "explanation",
+        "status",
+    }
+    for k, v in payload.items():
+        if k in allowed and v is not None:
+            setattr(q, k, v)
+    await db.commit()
+    await db.refresh(q)
+    return q
+
+
+async def delete_question(db: AsyncSession, question_id: int) -> None:
+    from app.models import QuestionBank
+    q = (
+        await db.execute(select(QuestionBank).where(QuestionBank.id == question_id))
+    ).scalar_one_or_none()
+    if not q:
+        raise NotFoundError("Question not found")
+    await db.delete(q)
+    await db.commit()
+
+
+async def update_exam(db: AsyncSession, exam_id: int, *, payload: dict) -> "Exam":
+    from app.models import Exam
+    exam = (
+        await db.execute(select(Exam).where(Exam.id == exam_id))
+    ).scalar_one_or_none()
+    if not exam:
+        raise NotFoundError("Exam not found")
+    allowed = {
+        "title", "description", "course_id", "department_id", "exam_type",
+        "total_questions", "time_limit_minutes", "passing_percentage",
+        "shuffle_questions", "shuffle_options", "attempts_allowed",
+        "cooldown_hours", "negative_marking", "validity_months",
+    }
+    for k, v in payload.items():
+        if k in allowed and v is not None:
+            setattr(exam, k, v)
+    await db.commit()
+    await db.refresh(exam)
+    return exam
+
+
+async def delete_exam(db: AsyncSession, exam_id: int) -> None:
+    from app.models import Exam
+    exam = (
+        await db.execute(select(Exam).where(Exam.id == exam_id))
+    ).scalar_one_or_none()
+    if not exam:
+        raise NotFoundError("Exam not found")
+    await db.delete(exam)
+    await db.commit()

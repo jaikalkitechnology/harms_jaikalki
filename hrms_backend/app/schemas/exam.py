@@ -100,6 +100,45 @@ class ExamPublishUpdate(BaseModel):
     is_published: bool
 
 
+class ExamUpdate(BaseModel):
+    title: Optional[str] = None
+    description: Optional[str] = None
+    course_id: Optional[int] = None
+    department_id: Optional[int] = None
+    exam_type: Optional[str] = Field(
+        default=None,
+        pattern="^(practice|assessment|certification|mandatory)$",
+    )
+    total_questions: Optional[int] = Field(default=None, ge=1, le=200)
+    time_limit_minutes: Optional[int] = Field(default=None, ge=1, le=480)
+    passing_percentage: Optional[int] = Field(default=None, ge=0, le=100)
+    shuffle_questions: Optional[bool] = None
+    shuffle_options: Optional[bool] = None
+    attempts_allowed: Optional[int] = Field(default=None, ge=1, le=20)
+    cooldown_hours: Optional[int] = Field(default=None, ge=0, le=720)
+    negative_marking: Optional[bool] = None
+    validity_months: Optional[int] = None
+
+
+class QuestionUpdate(BaseModel):
+    question_text: Optional[str] = None
+    question_type: Optional[str] = Field(
+        default=None,
+        pattern="^(single_choice|multiple_choice|true_false|fill_blank|"
+        "match_pairs|short_answer)$",
+    )
+    department_id: Optional[int] = None
+    topic: Optional[str] = None
+    difficulty: Optional[str] = Field(default=None, pattern="^(easy|medium|hard)$")
+    language: Optional[str] = None
+    marks: Optional[int] = Field(default=None, ge=1, le=20)
+    time_seconds: Optional[int] = Field(default=None, ge=10, le=900)
+    explanation: Optional[str] = None
+    status: Optional[str] = Field(
+        default=None, pattern="^(draft|active|retired)$"
+    )
+
+
 class ExamSummary(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: int

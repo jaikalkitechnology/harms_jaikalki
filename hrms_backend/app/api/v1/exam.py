@@ -18,10 +18,12 @@ from app.schemas.exam import (
     ExamOut,
     ExamPublishUpdate,
     ExamSummary,
+    ExamUpdate,
     FlagSubmit,
     QuestionCreate,
     QuestionOut,
     QuestionPublic,
+    QuestionUpdate,
     StartAttemptResponse,
 )
 from app.services import employee_service as emp_svc
@@ -68,16 +70,53 @@ async def create_question(
     return await exam_svc.create_question(db, payload=payload.model_dump())
 
 
+@router.put("/questions/{question_id}", response_model=QuestionOut)
+async def update_question(
+    question_id: int,
+    payload: QuestionUpdate,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_permission("admin.users.manage")),
+):
+    return await exam_svc.update_question(
+        db, question_id, payload=payload.model_dump(exclude_unset=True)
+    )
+
+
+@router.delete(
+    "/questions/{question_id}", status_code=status.HTTP_204_NO_CONTENT
+)
+async def delete_question(
+    question_id: int,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_permission("admin.users.manage")),
+):
+    await exam_svc.delete_question(db, question_id)
+
+
 # ─── Exams ────────────────────────────────────────────────────────────
 @router.get("/", response_model=list[ExamSummary])
 async def list_exams(
     course_id: Optional[int] = None,
     exam_type: Optional[str] = None,
+    include_unpublished: bool = False,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(get_current_user),
+    user: User = Depends(get_current_user),
 ):
+    show_drafts = False
+    if include_unpublished:
+        from app.core.permissions import Role as RoleEnum
+        if set(user.role_codes) & {
+            RoleEnum.SUPER_ADMIN.value,
+            RoleEnum.HR.value,
+            RoleEnum.ADMIN.value,
+            RoleEnum.DIRECTOR.value,
+        }:
+            show_drafts = True
     return await exam_svc.list_exams(
-        db, course_id=course_id, exam_type=exam_type
+        db,
+        course_id=course_id,
+        exam_type=exam_type,
+        published_only=not show_drafts,
     )
 
 
@@ -113,6 +152,27 @@ async def publish_exam(
     return await exam_svc.publish_exam(
         db, exam_id, is_published=payload.is_published
     )
+
+
+@router.put("/{exam_id}", response_model=ExamOut)
+async def update_exam(
+    exam_id: int,
+    payload: ExamUpdate,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_permission("admin.users.manage")),
+):
+    return await exam_svc.update_exam(
+        db, exam_id, payload=payload.model_dump(exclude_unset=True)
+    )
+
+
+@router.delete("/{exam_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_exam(
+    exam_id: int,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_permission("admin.users.manage")),
+):
+    await exam_svc.delete_exam(db, exam_id)
 
 
 # ─── Attempts ────────────────────────────────────────────────────────

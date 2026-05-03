@@ -1,6 +1,15 @@
+import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Clock, Award, CheckCircle2 } from "lucide-react";
+import {
+  Award,
+  CheckCircle2,
+  Clock,
+  Pencil,
+  Plus,
+  Trash2,
+  X,
+} from "lucide-react";
 
 import {
   Card,
@@ -10,8 +19,10 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { LoadingScreen } from "@/components/shared/LoadingScreen";
-import { examApi } from "@/lib/api/exam";
+import { examApi, type ExamSummary } from "@/lib/api/exam";
 
 const TYPE_COLOR: Record<string, string> = {
   practice: "bg-info/15 text-info",
@@ -20,54 +31,197 @@ const TYPE_COLOR: Record<string, string> = {
   mandatory: "bg-error/15 text-error",
 };
 
+const EXAM_TYPES = ["practice", "assessment", "certification", "mandatory"];
+
+interface ExamDraft {
+  code: string;
+  title: string;
+  description: string;
+  exam_type: string;
+  total_questions: number;
+  time_limit_minutes: number;
+  passing_percentage: number;
+  attempts_allowed: number;
+  cooldown_hours: number;
+  shuffle_questions: boolean;
+  shuffle_options: boolean;
+  negative_marking: boolean;
+}
+
+const EMPTY_DRAFT: ExamDraft = {
+  code: "",
+  title: "",
+  description: "",
+  exam_type: "assessment",
+  total_questions: 10,
+  time_limit_minutes: 30,
+  passing_percentage: 60,
+  attempts_allowed: 3,
+  cooldown_hours: 24,
+  shuffle_questions: true,
+  shuffle_options: true,
+  negative_marking: false,
+};
+
 export default function ExamsPage() {
   const qc = useQueryClient();
+  const [showDrafts, setShowDrafts] = useState(true);
+  const [editorOpen, setEditorOpen] = useState(false);
+  const [editing, setEditing] = useState<ExamSummary | null>(null);
+  const [draft, setDraft] = useState<ExamDraft>(EMPTY_DRAFT);
+
   const { data: exams = [], isLoading } = useQuery({
-    queryKey: ["exams"],
-    queryFn: examApi.listExams,
+    queryKey: ["exams", showDrafts],
+    queryFn: () => examApi.listExams({ include_unpublished: showDrafts }),
   });
+
+  const filtered = useMemo(() => exams, [exams]);
 
   const publish = useMutation({
     mutationFn: ({ id, on }: { id: number; on: boolean }) =>
       examApi.publish(id, on),
-    onSuccess: () => {
-      toast.success("Updated");
+    onSuccess: (_, vars) => {
+      toast.success(vars.on ? "Published" : "Unpublished");
       qc.invalidateQueries({ queryKey: ["exams"] });
     },
-    onError: () => toast.error("Could not update"),
+    onError: (err: { response?: { data?: { detail?: string } } }) =>
+      toast.error(err?.response?.data?.detail ?? "Could not update"),
   });
+
+  const create = useMutation({
+    mutationFn: () => examApi.createExam({ ...draft, question_ids: [] }),
+    onSuccess: () => {
+      toast.success("Exam created");
+      setEditorOpen(false);
+      setDraft(EMPTY_DRAFT);
+      qc.invalidateQueries({ queryKey: ["exams"] });
+    },
+    onError: (err: { response?: { data?: { detail?: string } } }) =>
+      toast.error(err?.response?.data?.detail ?? "Create failed"),
+  });
+
+  const update = useMutation({
+    mutationFn: () =>
+      examApi.updateExam(editing!.id, {
+        title: draft.title,
+        description: draft.description || null,
+        exam_type: draft.exam_type,
+        total_questions: draft.total_questions,
+        time_limit_minutes: draft.time_limit_minutes,
+        passing_percentage: draft.passing_percentage,
+        attempts_allowed: draft.attempts_allowed,
+        cooldown_hours: draft.cooldown_hours,
+        shuffle_questions: draft.shuffle_questions,
+        shuffle_options: draft.shuffle_options,
+        negative_marking: draft.negative_marking,
+      }),
+    onSuccess: () => {
+      toast.success("Saved");
+      setEditorOpen(false);
+      setEditing(null);
+      qc.invalidateQueries({ queryKey: ["exams"] });
+    },
+    onError: () => toast.error("Save failed"),
+  });
+
+  const remove = useMutation({
+    mutationFn: (id: number) => examApi.deleteExam(id),
+    onSuccess: () => {
+      toast.success("Removed");
+      qc.invalidateQueries({ queryKey: ["exams"] });
+    },
+    onError: () =>
+      toast.error("Could not delete (exam may have past attempts)"),
+  });
+
+  const openCreate = () => {
+    setEditing(null);
+    setDraft(EMPTY_DRAFT);
+    setEditorOpen(true);
+  };
+  const openEdit = (e: ExamSummary) => {
+    setEditing(e);
+    setDraft({
+      code: e.code,
+      title: e.title,
+      description: e.description ?? "",
+      exam_type: e.exam_type,
+      total_questions: e.total_questions,
+      time_limit_minutes: e.time_limit_minutes,
+      passing_percentage: e.passing_percentage,
+      attempts_allowed: e.attempts_allowed,
+      // these aren't on the summary type — sensible defaults
+      cooldown_hours: 24,
+      shuffle_questions: true,
+      shuffle_options: true,
+      negative_marking: false,
+    });
+    setEditorOpen(true);
+  };
 
   if (isLoading) return <LoadingScreen label="Loading exams…" />;
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold text-brand-brown-darker">
-          Examinations
-        </h1>
-        <p className="text-sm text-brand-brown-light">
-          {exams.length} exam{exams.length === 1 ? "" : "s"} configured.
-        </p>
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <div className="text-[10px] font-mono uppercase tracking-[0.3em] text-brand-gold-dark">
+            ★ Exams · Configuration
+          </div>
+          <h1 className="font-display text-2xl md:text-3xl font-bold text-brand-brown-darker">
+            Examination <span className="display-em">setup</span>
+          </h1>
+          <p className="text-sm text-brand-brown-light mt-1">
+            {filtered.length} exam{filtered.length === 1 ? "" : "s"} ·
+            mobile app only sees published exams.
+          </p>
+        </div>
+        <div className="flex gap-2 items-end">
+          <label className="flex items-center gap-2 text-sm h-10">
+            <input
+              type="checkbox"
+              checked={showDrafts}
+              onChange={(e) => setShowDrafts(e.target.checked)}
+            />
+            Show drafts
+          </label>
+          <Button onClick={openCreate}>
+            <Plus className="h-4 w-4 mr-1" /> New exam
+          </Button>
+        </div>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-        {exams.length === 0 ? (
+        {filtered.length === 0 ? (
           <Card className="md:col-span-2 xl:col-span-3">
             <CardContent className="py-10 text-center text-brand-brown-light">
-              No exams configured.
+              No exams configured. Click "New exam" to add one.
             </CardContent>
           </Card>
         ) : (
-          exams.map((e) => (
+          filtered.map((e) => (
             <Card key={e.id} className="flex flex-col">
               <CardHeader>
-                <div className="flex items-start justify-between gap-2">
+                <div className="flex items-start justify-between gap-2 flex-wrap">
                   <CardTitle className="text-base">{e.title}</CardTitle>
-                  <span
-                    className={`rounded-full px-2 py-0.5 text-[10px] uppercase ${TYPE_COLOR[e.exam_type] ?? ""}`}
-                  >
-                    {e.exam_type}
-                  </span>
+                  <div className="flex gap-1 flex-shrink-0">
+                    <span
+                      className={`rounded-full px-2 py-0.5 text-[10px] uppercase ${
+                        TYPE_COLOR[e.exam_type] ?? ""
+                      }`}
+                    >
+                      {e.exam_type}
+                    </span>
+                    {e.is_published ? (
+                      <span className="rounded-full bg-success/15 px-2 py-0.5 text-[10px] uppercase text-success">
+                        Published
+                      </span>
+                    ) : (
+                      <span className="rounded-full bg-warning/15 px-2 py-0.5 text-[10px] uppercase text-warning">
+                        Draft
+                      </span>
+                    )}
+                  </div>
                 </div>
                 <CardDescription className="font-mono text-xs">
                   {e.code}
@@ -77,43 +231,254 @@ export default function ExamsPage() {
                 {e.description && (
                   <p className="text-brand-brown-light">{e.description}</p>
                 )}
-                <div className="flex gap-3 flex-wrap">
-                  <span className="inline-flex items-center gap-1 text-xs">
+                <div className="flex gap-3 flex-wrap text-xs">
+                  <span className="inline-flex items-center gap-1">
                     <Clock className="size-3" />
                     {e.time_limit_minutes} min
                   </span>
-                  <span className="inline-flex items-center gap-1 text-xs">
+                  <span className="inline-flex items-center gap-1">
                     <Award className="size-3" />
                     Pass {e.passing_percentage}%
                   </span>
-                  <span className="text-xs">
+                  <span>
                     {e.total_questions} Qs · {e.attempts_allowed} attempts
                   </span>
                 </div>
-                <div className="pt-2">
-                  {e.is_published ? (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="gap-1"
-                      onClick={() => publish.mutate({ id: e.id, on: false })}
-                    >
-                      <CheckCircle2 className="size-4 text-success" />
-                      Published — unpublish
-                    </Button>
-                  ) : (
-                    <Button
-                      size="sm"
-                      onClick={() => publish.mutate({ id: e.id, on: true })}
-                    >
-                      Publish
-                    </Button>
-                  )}
+                <div className="pt-3 border-t border-brand-brown-50 mt-auto flex flex-wrap gap-1">
+                  <Button
+                    size="sm"
+                    variant={e.is_published ? "outline" : "default"}
+                    onClick={() => publish.mutate({ id: e.id, on: !e.is_published })}
+                  >
+                    <CheckCircle2 className="size-3 mr-1" />
+                    {e.is_published ? "Unpublish" : "Publish"}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => openEdit(e)}
+                  >
+                    <Pencil className="size-3" />
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => {
+                      if (confirm(`Delete "${e.title}"?`)) remove.mutate(e.id);
+                    }}
+                  >
+                    <Trash2 className="size-3" />
+                  </Button>
                 </div>
               </CardContent>
             </Card>
           ))
         )}
+      </div>
+
+      {editorOpen && (
+        <Editor
+          mode={editing ? "edit" : "create"}
+          draft={draft}
+          setDraft={setDraft}
+          onClose={() => setEditorOpen(false)}
+          onSubmit={() => (editing ? update.mutate() : create.mutate())}
+          submitting={create.isPending || update.isPending}
+        />
+      )}
+    </div>
+  );
+}
+
+function Editor({
+  mode,
+  draft,
+  setDraft,
+  onClose,
+  onSubmit,
+  submitting,
+}: {
+  mode: "create" | "edit";
+  draft: ExamDraft;
+  setDraft: (v: ExamDraft) => void;
+  onClose: () => void;
+  onSubmit: () => void;
+  submitting: boolean;
+}) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-start md:items-center justify-center p-4 bg-black/40">
+      <div className="bg-card rounded-xl border border-brand-brown-100 shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col">
+        <div className="flex items-center justify-between p-4 border-b border-brand-brown-100">
+          <div className="font-display text-lg">
+            {mode === "create" ? "New" : "Edit"} exam
+          </div>
+          <button
+            onClick={onClose}
+            className="h-8 w-8 grid place-items-center rounded-lg hover:bg-brand-brown-50"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+        <div className="overflow-y-auto p-4 grid sm:grid-cols-2 gap-3">
+          <div>
+            <Label>Code</Label>
+            <Input
+              value={draft.code}
+              disabled={mode === "edit"}
+              onChange={(e) =>
+                setDraft({ ...draft, code: e.target.value.toUpperCase() })
+              }
+            />
+          </div>
+          <div>
+            <Label>Title</Label>
+            <Input
+              value={draft.title}
+              onChange={(e) => setDraft({ ...draft, title: e.target.value })}
+            />
+          </div>
+          <div className="sm:col-span-2">
+            <Label>Description</Label>
+            <textarea
+              rows={3}
+              className="w-full border border-brand-brown-50 rounded p-2 text-sm bg-card"
+              value={draft.description}
+              onChange={(e) =>
+                setDraft({ ...draft, description: e.target.value })
+              }
+            />
+          </div>
+          <div>
+            <Label>Type</Label>
+            <select
+              className="w-full h-10 px-3 rounded border border-brand-brown-50 bg-card text-sm"
+              value={draft.exam_type}
+              onChange={(e) =>
+                setDraft({ ...draft, exam_type: e.target.value })
+              }
+            >
+              {EXAM_TYPES.map((t) => (
+                <option key={t} value={t}>
+                  {t}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <Label>Total questions</Label>
+            <Input
+              type="number"
+              min={1}
+              max={200}
+              value={draft.total_questions}
+              onChange={(e) =>
+                setDraft({ ...draft, total_questions: Number(e.target.value) })
+              }
+            />
+          </div>
+          <div>
+            <Label>Time limit (min)</Label>
+            <Input
+              type="number"
+              min={1}
+              max={480}
+              value={draft.time_limit_minutes}
+              onChange={(e) =>
+                setDraft({
+                  ...draft,
+                  time_limit_minutes: Number(e.target.value),
+                })
+              }
+            />
+          </div>
+          <div>
+            <Label>Passing %</Label>
+            <Input
+              type="number"
+              min={0}
+              max={100}
+              value={draft.passing_percentage}
+              onChange={(e) =>
+                setDraft({
+                  ...draft,
+                  passing_percentage: Number(e.target.value),
+                })
+              }
+            />
+          </div>
+          <div>
+            <Label>Attempts allowed</Label>
+            <Input
+              type="number"
+              min={1}
+              max={20}
+              value={draft.attempts_allowed}
+              onChange={(e) =>
+                setDraft({
+                  ...draft,
+                  attempts_allowed: Number(e.target.value),
+                })
+              }
+            />
+          </div>
+          <div>
+            <Label>Cooldown (hours)</Label>
+            <Input
+              type="number"
+              min={0}
+              max={720}
+              value={draft.cooldown_hours}
+              onChange={(e) =>
+                setDraft({ ...draft, cooldown_hours: Number(e.target.value) })
+              }
+            />
+          </div>
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={draft.shuffle_questions}
+              onChange={(e) =>
+                setDraft({ ...draft, shuffle_questions: e.target.checked })
+              }
+            />
+            Shuffle questions
+          </label>
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={draft.shuffle_options}
+              onChange={(e) =>
+                setDraft({ ...draft, shuffle_options: e.target.checked })
+              }
+            />
+            Shuffle options
+          </label>
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={draft.negative_marking}
+              onChange={(e) =>
+                setDraft({ ...draft, negative_marking: e.target.checked })
+              }
+            />
+            Negative marking
+          </label>
+        </div>
+        <div className="p-4 border-t border-brand-brown-100 flex justify-end gap-2">
+          <Button variant="outline" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button
+            disabled={submitting || !draft.code || !draft.title}
+            onClick={onSubmit}
+          >
+            {submitting
+              ? "Saving…"
+              : mode === "create"
+              ? "Create"
+              : "Save changes"}
+          </Button>
+        </div>
       </div>
     </div>
   );

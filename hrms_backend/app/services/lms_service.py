@@ -533,3 +533,29 @@ async def compliance_status(
             }
         )
     return out
+
+
+# ── Course mutations: update + delete ─────────────────────────────────
+async def update_course(
+    db: AsyncSession, course_id: int, *, payload: dict
+) -> Course:
+    course = await get_course(db, course_id)
+    # Whitelist editable columns — we never want is_published flipped
+    # silently here (use publish_course() for that).
+    allowed = {
+        "title", "description", "category", "department_id", "difficulty",
+        "estimated_hours", "thumbnail_url", "is_mandatory",
+        "validity_months", "points",
+    }
+    for k, v in payload.items():
+        if k in allowed:
+            setattr(course, k, v)
+    await db.commit()
+    await db.refresh(course)
+    return course
+
+
+async def delete_course(db: AsyncSession, course_id: int) -> None:
+    course = await get_course(db, course_id)
+    await db.delete(course)
+    await db.commit()
