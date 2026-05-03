@@ -67,7 +67,14 @@ from .launch import (
     Resignation,
 )
 from .compensation import SalaryRevision
-from .leave import CompOff, Holiday, LeaveBalance, LeaveRequest, LeaveType
+from .leave import (
+    CompOff,
+    EarnedLeaveAccrual,
+    Holiday,
+    LeaveBalance,
+    LeaveRequest,
+    LeaveType,
+)
 from .lms import (
     Badge,
     Course,
@@ -166,6 +173,7 @@ __all__ = [
     "LeaveRequest",
     "Holiday",
     "CompOff",
+    "EarnedLeaveAccrual",
     "ApprovalWorkflow",
     "Approval",
     "ApprovalAction",

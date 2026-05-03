@@ -981,3 +981,48 @@ async def set_office_location_endpoint(
         payload={"lat": lat, "lng": lng, "radius_m": radius_m},
     )
     return {"lat": lat, "lng": lng, "radius_m": radius_m}
+
+
+# ── Leave policy (sandwich + earned accrual) ───────────────────────────
+@router.get("/leave-policy")
+async def get_leave_policy_endpoint(
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_super_admin()),
+):
+    from app.services.leave_policy import get_leave_policy
+
+    return await get_leave_policy(db)
+
+
+@router.put("/leave-policy")
+async def set_leave_policy_endpoint(
+    body: dict,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    actor: User = Depends(require_super_admin()),
+):
+    from app.services.leave_policy import set_leave_policy
+
+    data = await set_leave_policy(db, body, actor=actor)
+    await _record(
+        db, request, actor, "leave_policy.update",
+        entity_type="system_config", payload=data,
+    )
+    return data
+
+
+@router.post("/leave-policy/recompute-earned-leaves")
+async def recompute_earned_leaves_endpoint(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    actor: User = Depends(require_super_admin()),
+):
+    from app.services.leave_policy import recompute_earned_leaves
+
+    summary = await recompute_earned_leaves(db)
+    await _record(
+        db, request, actor, "leave_policy.recompute",
+        entity_type="leave_balance",
+        payload={"processed": summary.get("processed", 0)},
+    )
+    return summary
