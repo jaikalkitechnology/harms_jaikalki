@@ -15,6 +15,21 @@ from app.services.storage import delete, storage_info, upload_fileobj
 router = APIRouter()
 
 
+def _safe_redis_url() -> str:
+    """Return REDIS_URL with the password (if any) masked, so we can
+    show it in health responses without leaking secrets."""
+    raw = settings.REDIS_URL or ""
+    # redis://[user[:password]@]host[:port][/db]
+    if "@" in raw and "://" in raw:
+        scheme, rest = raw.split("://", 1)
+        creds, host = rest.split("@", 1)
+        if ":" in creds:
+            user, _ = creds.split(":", 1)
+            return f"{scheme}://{user}:***@{host}"
+        return f"{scheme}://***@{host}"
+    return raw
+
+
 @router.get("/health", response_model=HealthCheck)
 async def health(db: AsyncSession = Depends(get_db)) -> HealthCheck:
     db_status = "ok"
@@ -27,7 +42,10 @@ async def health(db: AsyncSession = Depends(get_db)) -> HealthCheck:
     try:
         await ping_redis()
     except Exception as exc:  # pragma: no cover - environment dependent
-        redis_status = f"error: {exc.__class__.__name__}"
+        # Surface the actual error string + (sanitised) configured URL so
+        # the operator can see immediately whether it's a refused
+        # connection, an auth failure, the wrong host, etc.
+        redis_status = f"error: {exc.__class__.__name__}: {str(exc)[:160]} | url={_safe_redis_url()}"
 
     return HealthCheck(
         status="ok",
@@ -66,9 +84,14 @@ async def health_ready(
     # Redis round-trip (degraded, not fatal — caching is best-effort)
     try:
         await ping_redis()
-        checks["redis"] = {"status": "ok"}
+        checks["redis"] = {"status": "ok", "url": _safe_redis_url()}
     except Exception as exc:
-        checks["redis"] = {"status": "down", "error": exc.__class__.__name__}
+        checks["redis"] = {
+            "status": "down",
+            "error": exc.__class__.__name__,
+            "detail": str(exc)[:200],
+            "url": _safe_redis_url(),
+        }
 
     # Storage write + delete round-trip
     storage_check: dict = {"info": storage_info()}
