@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { LoadingScreen } from "@/components/shared/LoadingScreen";
 import { examApi, type Question, type QuestionOption } from "@/lib/api/exam";
+import { lmsApi } from "@/lib/api/lms";
 import { organizationApi } from "@/lib/api/organization";
 
 interface OptionDraft {
@@ -25,6 +26,7 @@ interface QuestionDraft {
   question_text: string;
   question_type: string;
   department_id: number | null;
+  course_id: number | null;
   topic: string;
   difficulty: string;
   marks: number;
@@ -49,6 +51,7 @@ const EMPTY_DRAFT: QuestionDraft = {
   question_text: "",
   question_type: "single_choice",
   department_id: null,
+  course_id: null,
   topic: "",
   difficulty: "medium",
   marks: 1,
@@ -64,6 +67,7 @@ const EMPTY_DRAFT: QuestionDraft = {
 export default function QuestionBankPage() {
   const qc = useQueryClient();
   const [departmentId, setDepartmentId] = useState<number | "">("");
+  const [courseId, setCourseId] = useState<number | "">("");
   const [topic, setTopic] = useState("");
   const [difficulty, setDifficulty] = useState("");
   const [search, setSearch] = useState("");
@@ -72,10 +76,11 @@ export default function QuestionBankPage() {
   const [draft, setDraft] = useState<QuestionDraft>(EMPTY_DRAFT);
 
   const { data: questions = [], isLoading } = useQuery({
-    queryKey: ["questions", departmentId, topic, difficulty],
+    queryKey: ["questions", departmentId, courseId, topic, difficulty],
     queryFn: () =>
       examApi.listQuestions({
         department_id: departmentId === "" ? undefined : departmentId,
+        course_id: courseId === "" ? undefined : courseId,
         topic: topic || undefined,
         difficulty: difficulty || undefined,
       }),
@@ -85,7 +90,11 @@ export default function QuestionBankPage() {
     queryKey: ["departments"],
     queryFn: () => organizationApi.listDepartments(),
   });
-  useEffect(() => undefined, [departments]);
+  const { data: courses = [] } = useQuery({
+    queryKey: ["courses-for-questions"],
+    queryFn: () => lmsApi.listCourses({ include_unpublished: true }),
+  });
+  useEffect(() => undefined, [departments, courses]);
 
   const filtered = useMemo(() => {
     if (!search.trim()) return questions;
@@ -109,6 +118,7 @@ export default function QuestionBankPage() {
         ...draft,
         topic: draft.topic || null,
         department_id: draft.department_id,
+        course_id: draft.course_id,
         explanation: draft.explanation || null,
       }),
     onSuccess: () => {
@@ -126,6 +136,7 @@ export default function QuestionBankPage() {
         question_text: draft.question_text,
         question_type: draft.question_type,
         department_id: draft.department_id,
+        course_id: draft.course_id,
         topic: draft.topic || null,
         difficulty: draft.difficulty,
         marks: draft.marks,
@@ -174,6 +185,7 @@ export default function QuestionBankPage() {
       question_text: q.question_text,
       question_type: q.question_type,
       department_id: q.department_id,
+      course_id: q.course_id ?? null,
       topic: q.topic ?? "",
       difficulty: q.difficulty,
       marks: q.marks,
@@ -212,7 +224,21 @@ export default function QuestionBankPage() {
         </Button>
       </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+        <select
+          value={courseId}
+          onChange={(e) =>
+            setCourseId(e.target.value ? Number(e.target.value) : "")
+          }
+          className="h-10 rounded-md border border-input bg-card px-3 text-sm"
+        >
+          <option value="">All courses</option>
+          {courses.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.title}
+            </option>
+          ))}
+        </select>
         <select
           value={departmentId}
           onChange={(e) =>
@@ -364,6 +390,7 @@ export default function QuestionBankPage() {
           draft={draft}
           setDraft={setDraft}
           departments={departments}
+          courses={courses.map((c) => ({ id: c.id, title: c.title }))}
           onClose={() => setEditorOpen(false)}
           onSubmit={() => (editing ? update.mutate() : create.mutate())}
           submitting={create.isPending || update.isPending}
@@ -378,6 +405,7 @@ function Editor({
   draft,
   setDraft,
   departments,
+  courses,
   onClose,
   onSubmit,
   submitting,
@@ -386,6 +414,7 @@ function Editor({
   draft: QuestionDraft;
   setDraft: (v: QuestionDraft) => void;
   departments: { id: number; name: string }[];
+  courses: { id: number; title: string }[];
   onClose: () => void;
   onSubmit: () => void;
   submitting: boolean;
@@ -474,6 +503,26 @@ function Editor({
                 {departments.map((d) => (
                   <option key={d.id} value={d.id}>
                     {d.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <Label>Course</Label>
+              <select
+                className="w-full h-10 px-3 rounded border border-brand-brown-50 bg-card text-sm"
+                value={draft.course_id ?? ""}
+                onChange={(e) =>
+                  setDraft({
+                    ...draft,
+                    course_id: e.target.value ? Number(e.target.value) : null,
+                  })
+                }
+              >
+                <option value="">— No course —</option>
+                {courses.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.title}
                   </option>
                 ))}
               </select>

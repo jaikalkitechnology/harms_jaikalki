@@ -101,7 +101,38 @@ async def list_courses(
     if mandatory_only:
         stmt = stmt.where(Course.is_mandatory.is_(True))
     stmt = stmt.order_by(Course.created_at.desc()).limit(limit)
-    return (await db.execute(stmt)).scalars().all()
+    rows = (await db.execute(stmt)).scalars().all()
+
+    # Decorate with question / exam counts so the admin UI can show
+    # "12 Qs · 1 exam" on each card without N+1 round-trips.
+    if rows:
+        from sqlalchemy import func
+        from app.models import Exam, QuestionBank
+
+        ids = [r.id for r in rows]
+        q_counts = dict(
+            (
+                await db.execute(
+                    select(QuestionBank.course_id, func.count(QuestionBank.id))
+                    .where(QuestionBank.course_id.in_(ids))
+                    .group_by(QuestionBank.course_id)
+                )
+            ).all()
+        )
+        e_counts = dict(
+            (
+                await db.execute(
+                    select(Exam.course_id, func.count(Exam.id))
+                    .where(Exam.course_id.in_(ids))
+                    .group_by(Exam.course_id)
+                )
+            ).all()
+        )
+        for r in rows:
+            # Transient attrs — Pydantic from_attributes picks them up.
+            r.question_count = q_counts.get(r.id, 0)
+            r.exam_count = e_counts.get(r.id, 0)
+    return rows
 
 
 async def get_course(db: AsyncSession, course_id: int) -> Course:

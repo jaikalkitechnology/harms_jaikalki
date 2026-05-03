@@ -127,6 +127,10 @@ class CourseSummary(BaseModel):
     is_mandatory: bool
     points: int
     thumbnail_url: Optional[str]
+    department_id: Optional[int] = None
+    is_published: bool = False
+    question_count: int = 0
+    exam_count: int = 0
 
 
 # ── Enrollment / progress ───────────────────────────────────────────

@@ -44,16 +44,20 @@ async def _self_employee(db: AsyncSession, user: User):
 @router.get("/questions", response_model=list[QuestionOut])
 async def list_questions(
     department_id: Optional[int] = None,
+    course_id: Optional[int] = None,
     topic: Optional[str] = None,
     difficulty: Optional[str] = None,
+    status: Optional[str] = None,
     db: AsyncSession = Depends(get_db),
     _: User = Depends(require_permission("admin.users.manage")),
 ):
     return await exam_svc.list_questions(
         db,
         department_id=department_id,
+        course_id=course_id,
         topic=topic,
         difficulty=difficulty,
+        status=status if status else "active",
     )
 
 
@@ -173,6 +177,23 @@ async def delete_exam(
     _: User = Depends(require_permission("admin.users.manage")),
 ):
     await exam_svc.delete_exam(db, exam_id)
+
+
+@router.post("/{exam_id}/questions/bulk", response_model=ExamOut)
+async def set_exam_questions_endpoint(
+    exam_id: int,
+    body: dict,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_permission("admin.users.manage")),
+):
+    """Replace the question set on an exam in one shot.
+    Body: {"question_ids": [1, 2, 3, ...]}"""
+    ids = body.get("question_ids") or []
+    if not isinstance(ids, list) or not all(isinstance(i, int) for i in ids):
+        from fastapi import HTTPException
+        raise HTTPException(400, detail="question_ids must be a list of ints")
+    await exam_svc.set_exam_questions(db, exam_id, question_ids=ids)
+    return await exam_svc.get_exam(db, exam_id)
 
 
 # ─── Attempts ────────────────────────────────────────────────────────

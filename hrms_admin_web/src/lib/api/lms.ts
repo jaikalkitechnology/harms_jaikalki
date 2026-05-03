@@ -13,6 +13,10 @@ export interface CourseSummary {
   is_mandatory: boolean;
   points: number;
   thumbnail_url: string | null;
+  department_id: number | null;
+  is_published: boolean;
+  question_count: number;
+  exam_count: number;
 }
 
 export interface Lesson {
@@ -77,8 +81,6 @@ export interface ComplianceRow {
 }
 
 export interface CourseRich extends CourseSummary {
-  department_id: number | null;
-  is_published: boolean;
   validity_months: number | null;
 }
 

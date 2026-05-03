@@ -66,22 +66,64 @@ async def list_questions(
     db: AsyncSession,
     *,
     department_id: Optional[int] = None,
+    course_id: Optional[int] = None,
     topic: Optional[str] = None,
     difficulty: Optional[str] = None,
-    status: str = "active",
-    limit: int = 200,
+    status: Optional[str] = "active",
+    limit: int = 500,
 ) -> Sequence[QuestionBank]:
     stmt = select(QuestionBank)
     if status:
         stmt = stmt.where(QuestionBank.status == status)
     if department_id is not None:
         stmt = stmt.where(QuestionBank.department_id == department_id)
+    if course_id is not None:
+        stmt = stmt.where(QuestionBank.course_id == course_id)
     if topic:
         stmt = stmt.where(QuestionBank.topic == topic)
     if difficulty:
         stmt = stmt.where(QuestionBank.difficulty == difficulty)
     stmt = stmt.order_by(QuestionBank.created_at.desc()).limit(limit)
     return (await db.execute(stmt)).scalars().all()
+
+
+async def set_exam_questions(
+    db: AsyncSession, exam_id: int, *, question_ids: list[int]
+) -> "Exam":
+    """Replace the full set of questions on an exam, idempotently.
+
+    Removes anything not in the new list, adds anything missing,
+    preserves existing rows that overlap (so created_at on the join
+    rows isn't churned)."""
+    from app.models import Exam, ExamQuestion
+
+    exam = (
+        await db.execute(select(Exam).where(Exam.id == exam_id))
+    ).scalar_one_or_none()
+    if not exam:
+        raise NotFoundError("Exam not found")
+
+    existing_rows = (
+        await db.execute(
+            select(ExamQuestion).where(ExamQuestion.exam_id == exam_id)
+        )
+    ).scalars().all()
+    existing_ids = {r.question_id for r in existing_rows}
+    target_ids = set(question_ids)
+
+    # Remove
+    for r in existing_rows:
+        if r.question_id not in target_ids:
+            await db.delete(r)
+    # Add
+    for q_id in target_ids - existing_ids:
+        db.add(ExamQuestion(exam_id=exam_id, question_id=q_id))
+
+    # Keep total_questions consistent with the actual selection
+    exam.total_questions = len(target_ids) or exam.total_questions
+    await db.commit()
+    await db.refresh(exam)
+    return exam
 
 
 # ── Exam config ──────────────────────────────────────────────────────

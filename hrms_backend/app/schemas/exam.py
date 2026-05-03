@@ -36,6 +36,7 @@ class QuestionCreate(BaseModel):
         "match_pairs|short_answer)$",
     )
     department_id: Optional[int] = None
+    course_id: Optional[int] = None
     topic: Optional[str] = None
     difficulty: str = Field(default="medium", pattern="^(easy|medium|hard)$")
     language: str = "en"
@@ -51,6 +52,7 @@ class QuestionOut(BaseModel):
     question_text: str
     question_type: str
     department_id: Optional[int]
+    course_id: Optional[int] = None
     topic: Optional[str]
     difficulty: str
     language: str
@@ -128,6 +130,7 @@ class QuestionUpdate(BaseModel):
         "match_pairs|short_answer)$",
     )
     department_id: Optional[int] = None
+    course_id: Optional[int] = None
     topic: Optional[str] = None
     difficulty: Optional[str] = Field(default=None, pattern="^(easy|medium|hard)$")
     language: Optional[str] = None

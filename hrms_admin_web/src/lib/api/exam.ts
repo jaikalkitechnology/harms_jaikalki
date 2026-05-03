@@ -14,6 +14,7 @@ export interface Question {
   question_text: string;
   question_type: string;
   department_id: number | null;
+  course_id: number | null;
   topic: string | null;
   difficulty: string;
   language: string;
@@ -30,6 +31,7 @@ export interface ExamSummary {
   title: string;
   description: string | null;
   course_id: number | null;
+  department_id?: number | null;
   exam_type: string;
   total_questions: number;
   time_limit_minutes: number;
@@ -53,8 +55,10 @@ export interface CertificateVerifyResponse {
 export const examApi = {
   listQuestions: async (params?: {
     department_id?: number;
+    course_id?: number;
     topic?: string;
     difficulty?: string;
+    status?: string;
   }) => {
     const { data } = await apiClient.get<Question[]>(
       `${v1}/exams/questions`,
@@ -110,6 +114,13 @@ export const examApi = {
     const { data } = await apiClient.post<ExamSummary>(
       `${v1}/exams/${id}/publish`,
       { is_published: isPublished },
+    );
+    return data;
+  },
+  setExamQuestions: async (id: number, questionIds: number[]) => {
+    const { data } = await apiClient.post(
+      `${v1}/exams/${id}/questions/bulk`,
+      { question_ids: questionIds },
     );
     return data;
   },

@@ -22,7 +22,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { LoadingScreen } from "@/components/shared/LoadingScreen";
-import { examApi, type ExamSummary } from "@/lib/api/exam";
+import { examApi, type ExamSummary, type Question } from "@/lib/api/exam";
+import { lmsApi } from "@/lib/api/lms";
 
 const TYPE_COLOR: Record<string, string> = {
   practice: "bg-info/15 text-info",
@@ -37,6 +38,7 @@ interface ExamDraft {
   code: string;
   title: string;
   description: string;
+  course_id: number | null;
   exam_type: string;
   total_questions: number;
   time_limit_minutes: number;
@@ -52,6 +54,7 @@ const EMPTY_DRAFT: ExamDraft = {
   code: "",
   title: "",
   description: "",
+  course_id: null,
   exam_type: "assessment",
   total_questions: 10,
   time_limit_minutes: 30,
@@ -69,10 +72,28 @@ export default function ExamsPage() {
   const [editorOpen, setEditorOpen] = useState(false);
   const [editing, setEditing] = useState<ExamSummary | null>(null);
   const [draft, setDraft] = useState<ExamDraft>(EMPTY_DRAFT);
+  const [pickedQuestionIds, setPickedQuestionIds] = useState<number[]>([]);
+  const [autoFillEnabled, setAutoFillEnabled] = useState(true);
+  const [questionsTouched, setQuestionsTouched] = useState(false);
 
   const { data: exams = [], isLoading } = useQuery({
     queryKey: ["exams", showDrafts],
     queryFn: () => examApi.listExams({ include_unpublished: showDrafts }),
+  });
+  const { data: courses = [] } = useQuery({
+    queryKey: ["courses-for-exams"],
+    queryFn: () => lmsApi.listCourses({ include_unpublished: true }),
+  });
+  // Bank questions filtered to the currently-selected course (if any),
+  // used by the editor's question picker.
+  const { data: bankQuestions = [] } = useQuery({
+    queryKey: ["bank-questions", draft.course_id],
+    queryFn: () =>
+      examApi.listQuestions({
+        course_id: draft.course_id ?? undefined,
+        status: "active",
+      }),
+    enabled: editorOpen,
   });
 
   const filtered = useMemo(() => exams, [exams]);
@@ -89,11 +110,33 @@ export default function ExamsPage() {
   });
 
   const create = useMutation({
-    mutationFn: () => examApi.createExam({ ...draft, question_ids: [] }),
+    mutationFn: async () => {
+      const created = await examApi.createExam({
+        ...draft,
+        question_ids: pickedQuestionIds,
+      });
+      // If a course is set and the user didn't manually pick yet,
+      // auto-fill from the course's question bank.
+      if (
+        draft.course_id != null &&
+        pickedQuestionIds.length === 0 &&
+        autoFillEnabled
+      ) {
+        const bank = await examApi.listQuestions({
+          course_id: draft.course_id,
+        });
+        const ids = bank.map((q) => q.id);
+        if (ids.length > 0) {
+          await examApi.setExamQuestions(created.id, ids);
+        }
+      }
+      return created;
+    },
     onSuccess: () => {
       toast.success("Exam created");
       setEditorOpen(false);
       setDraft(EMPTY_DRAFT);
+      setPickedQuestionIds([]);
       qc.invalidateQueries({ queryKey: ["exams"] });
     },
     onError: (err: { response?: { data?: { detail?: string } } }) =>
@@ -101,10 +144,11 @@ export default function ExamsPage() {
   });
 
   const update = useMutation({
-    mutationFn: () =>
-      examApi.updateExam(editing!.id, {
+    mutationFn: async () => {
+      await examApi.updateExam(editing!.id, {
         title: draft.title,
         description: draft.description || null,
+        course_id: draft.course_id,
         exam_type: draft.exam_type,
         total_questions: draft.total_questions,
         time_limit_minutes: draft.time_limit_minutes,
@@ -114,7 +158,13 @@ export default function ExamsPage() {
         shuffle_questions: draft.shuffle_questions,
         shuffle_options: draft.shuffle_options,
         negative_marking: draft.negative_marking,
-      }),
+      });
+      // Sync question selection if the user touched it.
+      if (questionsTouched) {
+        await examApi.setExamQuestions(editing!.id, pickedQuestionIds);
+      }
+      return editing!;
+    },
     onSuccess: () => {
       toast.success("Saved");
       setEditorOpen(false);
@@ -137,6 +187,9 @@ export default function ExamsPage() {
   const openCreate = () => {
     setEditing(null);
     setDraft(EMPTY_DRAFT);
+    setPickedQuestionIds([]);
+    setAutoFillEnabled(true);
+    setQuestionsTouched(false);
     setEditorOpen(true);
   };
   const openEdit = (e: ExamSummary) => {
@@ -145,6 +198,7 @@ export default function ExamsPage() {
       code: e.code,
       title: e.title,
       description: e.description ?? "",
+      course_id: e.course_id ?? null,
       exam_type: e.exam_type,
       total_questions: e.total_questions,
       time_limit_minutes: e.time_limit_minutes,
@@ -156,6 +210,9 @@ export default function ExamsPage() {
       shuffle_options: true,
       negative_marking: false,
     });
+    setPickedQuestionIds([]);
+    setAutoFillEnabled(false);
+    setQuestionsTouched(false);
     setEditorOpen(true);
   };
 
@@ -281,6 +338,15 @@ export default function ExamsPage() {
           mode={editing ? "edit" : "create"}
           draft={draft}
           setDraft={setDraft}
+          courses={courses.map((c) => ({ id: c.id, title: c.title }))}
+          bankQuestions={bankQuestions}
+          pickedQuestionIds={pickedQuestionIds}
+          setPickedQuestionIds={(ids) => {
+            setPickedQuestionIds(ids);
+            setQuestionsTouched(true);
+          }}
+          autoFillEnabled={autoFillEnabled}
+          setAutoFillEnabled={setAutoFillEnabled}
           onClose={() => setEditorOpen(false)}
           onSubmit={() => (editing ? update.mutate() : create.mutate())}
           submitting={create.isPending || update.isPending}
@@ -294,6 +360,12 @@ function Editor({
   mode,
   draft,
   setDraft,
+  courses,
+  bankQuestions,
+  pickedQuestionIds,
+  setPickedQuestionIds,
+  autoFillEnabled,
+  setAutoFillEnabled,
   onClose,
   onSubmit,
   submitting,
@@ -301,10 +373,24 @@ function Editor({
   mode: "create" | "edit";
   draft: ExamDraft;
   setDraft: (v: ExamDraft) => void;
+  courses: { id: number; title: string }[];
+  bankQuestions: Question[];
+  pickedQuestionIds: number[];
+  setPickedQuestionIds: (ids: number[]) => void;
+  autoFillEnabled: boolean;
+  setAutoFillEnabled: (v: boolean) => void;
   onClose: () => void;
   onSubmit: () => void;
   submitting: boolean;
 }) {
+  const togglePick = (id: number) => {
+    if (pickedQuestionIds.includes(id))
+      setPickedQuestionIds(pickedQuestionIds.filter((x) => x !== id));
+    else setPickedQuestionIds([...pickedQuestionIds, id]);
+  };
+  const allFromBank = () =>
+    setPickedQuestionIds(bankQuestions.map((q) => q.id));
+  const clearPicks = () => setPickedQuestionIds([]);
   return (
     <div className="fixed inset-0 z-50 flex items-start md:items-center justify-center p-4 bg-black/40">
       <div className="bg-card rounded-xl border border-brand-brown-100 shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col">
@@ -347,6 +433,26 @@ function Editor({
                 setDraft({ ...draft, description: e.target.value })
               }
             />
+          </div>
+          <div>
+            <Label>Course (links the exam to a course)</Label>
+            <select
+              className="w-full h-10 px-3 rounded border border-brand-brown-50 bg-card text-sm"
+              value={draft.course_id ?? ""}
+              onChange={(e) =>
+                setDraft({
+                  ...draft,
+                  course_id: e.target.value ? Number(e.target.value) : null,
+                })
+              }
+            >
+              <option value="">— None (standalone exam) —</option>
+              {courses.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.title}
+                </option>
+              ))}
+            </select>
           </div>
           <div>
             <Label>Type</Label>
@@ -464,6 +570,91 @@ function Editor({
             Negative marking
           </label>
         </div>
+
+        {/* Question picker panel */}
+        <div className="px-4 pb-4">
+          <div className="border-t border-brand-brown-50 pt-4">
+            <div className="flex items-center justify-between flex-wrap gap-2 mb-2">
+              <div>
+                <div className="text-[10px] font-mono uppercase tracking-[0.2em] text-brand-brown-light">
+                  Questions
+                </div>
+                <div className="text-sm">
+                  {draft.course_id
+                    ? `${bankQuestions.length} question${
+                        bankQuestions.length === 1 ? "" : "s"
+                      } in this course's bank · ${pickedQuestionIds.length} selected`
+                    : "Pick a course to load its question bank, or leave blank for a standalone exam."}
+                </div>
+              </div>
+              <div className="flex gap-2 flex-wrap">
+                {mode === "create" && draft.course_id != null && (
+                  <label className="flex items-center gap-2 text-xs">
+                    <input
+                      type="checkbox"
+                      checked={autoFillEnabled}
+                      onChange={(e) => setAutoFillEnabled(e.target.checked)}
+                    />
+                    Auto-fill on save
+                  </label>
+                )}
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={bankQuestions.length === 0}
+                  onClick={allFromBank}
+                >
+                  Select all
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  disabled={pickedQuestionIds.length === 0}
+                  onClick={clearPicks}
+                >
+                  Clear
+                </Button>
+              </div>
+            </div>
+            {bankQuestions.length > 0 && (
+              <div className="border border-brand-brown-50 rounded max-h-56 overflow-y-auto">
+                <table className="w-full text-sm">
+                  <tbody>
+                    {bankQuestions.map((q) => (
+                      <tr
+                        key={q.id}
+                        className="border-b border-brand-brown-50 last:border-0 hover:bg-brand-brown-50/40 cursor-pointer"
+                        onClick={() => togglePick(q.id)}
+                      >
+                        <td className="py-2 px-3 w-8">
+                          <input
+                            type="checkbox"
+                            checked={pickedQuestionIds.includes(q.id)}
+                            onChange={() => togglePick(q.id)}
+                            onClick={(ev) => ev.stopPropagation()}
+                          />
+                        </td>
+                        <td className="py-2 pr-3">
+                          <div className="line-clamp-2">{q.question_text}</div>
+                          <div className="text-xs text-brand-brown-light">
+                            {q.topic ?? "no topic"} · {q.difficulty} · {q.marks}m
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+            {mode === "edit" && pickedQuestionIds.length === 0 && draft.course_id != null && (
+              <div className="text-xs text-brand-brown-light mt-2">
+                Save without ticking anything to leave the existing
+                question set unchanged.
+              </div>
+            )}
+          </div>
+        </div>
+
         <div className="p-4 border-t border-brand-brown-100 flex justify-end gap-2">
           <Button variant="outline" onClick={onClose}>
             Cancel

@@ -41,6 +41,9 @@ class QuestionBank(Base, TimestampMixin):
     department_id: Mapped[Optional[int]] = mapped_column(
         ForeignKey("departments.id", ondelete="SET NULL"), nullable=True, index=True
     )
+    course_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("courses.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     topic: Mapped[Optional[str]] = mapped_column(String(120), nullable=True, index=True)
     difficulty: Mapped[str] = mapped_column(
         Enum("easy", "medium", "hard", name="question_difficulty"),

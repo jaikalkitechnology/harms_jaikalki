@@ -330,6 +330,12 @@ function CourseCard({
         <CardDescription className="font-mono text-xs">
           {course.code} · {course.estimated_hours}h · {course.difficulty}
           {departmentName && ` · ${departmentName}`}
+          {" · "}
+          {course.question_count} Q
+          {course.question_count === 1 ? "" : "s"}
+          {" · "}
+          {course.exam_count} exam
+          {course.exam_count === 1 ? "" : "s"}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-3 flex-1 flex flex-col">
