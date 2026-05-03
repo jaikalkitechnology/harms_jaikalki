@@ -16,6 +16,7 @@ import { Label } from "@/components/ui/label";
 import { LoadingScreen } from "@/components/shared/LoadingScreen";
 import { verificationApi } from "@/lib/api/verification";
 import { employeesApi } from "@/lib/api/employees";
+import { fmtIst } from "@/lib/datetime";
 
 const STATUS_COLOR: Record<string, string> = {
   pending: "bg-info/15 text-info",
@@ -275,7 +276,7 @@ export default function VerificationQueuePage() {
                         className={`px-4 py-3 text-xs ${breached ? "text-error font-semibold" : ""}`}
                       >
                         {v.deadline_at
-                          ? new Date(v.deadline_at).toLocaleString()
+                          ? fmtIst(v.deadline_at)
                           : "—"}
                       </td>
                       <td className="px-4 py-3">

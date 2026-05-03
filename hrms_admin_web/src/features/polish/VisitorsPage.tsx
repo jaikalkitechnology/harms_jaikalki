@@ -15,6 +15,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { LoadingScreen } from "@/components/shared/LoadingScreen";
 import { polishApi } from "@/lib/api/polish";
+import { fmtIst } from "@/lib/datetime";
 
 const STATUS_COLOR: Record<string, string> = {
   scheduled: "bg-info/15 text-info",
@@ -136,7 +137,7 @@ export default function VisitorsPage() {
                     <td className="px-4 py-3">{v.company ?? "—"}</td>
                     <td className="px-4 py-3">{v.purpose}</td>
                     <td className="px-4 py-3 text-xs">
-                      {new Date(v.expected_at).toLocaleString()}
+                      {fmtIst(v.expected_at)}
                     </td>
                     <td className="px-4 py-3">
                       <span

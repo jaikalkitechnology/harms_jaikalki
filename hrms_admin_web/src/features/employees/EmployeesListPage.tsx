@@ -13,6 +13,7 @@ import {
   type EmployeeListItem,
 } from "@/lib/api/employees";
 import { CategoryBadge } from "./CategoryBadge";
+import { fmtIstDate } from "@/lib/datetime";
 
 export default function EmployeesListPage() {
   const navigate = useNavigate();
@@ -100,7 +101,7 @@ export default function EmployeesListPage() {
         header: "Joined",
         cell: ({ row }) =>
           row.original.date_of_joining
-            ? new Date(row.original.date_of_joining).toLocaleDateString()
+            ? fmtIstDate(row.original.date_of_joining)
             : "—",
       },
     ],

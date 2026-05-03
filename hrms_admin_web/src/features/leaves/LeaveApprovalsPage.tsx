@@ -12,6 +12,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { LoadingScreen } from "@/components/shared/LoadingScreen";
 import { leavesApi, type LeaveRequest } from "@/lib/api/leaves";
+import { fmtIstDate } from "@/lib/datetime";
 
 export default function LeaveApprovalsPage() {
   const queryClient = useQueryClient();
@@ -97,7 +98,7 @@ function LeaveCard({
             </CardTitle>
             <CardDescription>
               Employee #{request.employee_id} ·{" "}
-              {new Date(request.applied_at).toLocaleDateString()}
+              {fmtIstDate(request.applied_at)}
             </CardDescription>
           </div>
           {request.half_day && (

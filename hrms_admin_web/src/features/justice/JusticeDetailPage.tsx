@@ -16,6 +16,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { LoadingScreen } from "@/components/shared/LoadingScreen";
 import { COMPLAINT_TYPE_LABEL, justiceApi } from "@/lib/api/justice";
+import { fmtIst, fmtIstDate } from "@/lib/datetime";
 
 const ACTION_TYPES = [
   "acknowledged",
@@ -132,12 +133,12 @@ export default function JusticeDetailPage() {
             <Field label="Incident location" value={c.incident_location ?? "—"} />
             <Field
               label="Submitted"
-              value={new Date(c.submitted_at).toLocaleString()}
+              value={fmtIst(c.submitted_at)}
             />
             {c.deadline_at && (
               <Field
                 label="Deadline"
-                value={new Date(c.deadline_at).toLocaleDateString()}
+                value={fmtIstDate(c.deadline_at)}
               />
             )}
           </CardContent>
@@ -267,7 +268,7 @@ export default function JusticeDetailPage() {
                         {a.action_type.replace(/_/g, " ")}
                       </div>
                       <div className="text-xs text-brand-brown-light">
-                        {new Date(a.action_date).toLocaleString()}
+                        {fmtIst(a.action_date)}
                       </div>
                       {a.notes && <p>{a.notes}</p>}
                     </li>
@@ -297,7 +298,7 @@ export default function JusticeDetailPage() {
                     <span className="font-mono text-xs">{e.action}</span>
                   </div>
                   <div className="text-xs text-brand-brown-light text-right">
-                    {new Date(e.timestamp).toLocaleString()}
+                    {fmtIst(e.timestamp)}
                     {e.user_id && ` · user #${e.user_id}`}
                   </div>
                 </li>

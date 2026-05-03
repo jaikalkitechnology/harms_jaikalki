@@ -23,6 +23,7 @@ import {
 } from "@/lib/api/employees";
 import { payrollApi, type GeneratedDocument } from "@/lib/api/payroll";
 import { CategoryBadge } from "./CategoryBadge";
+import { fmtIstDate } from "@/lib/datetime";
 
 export default function EmployeeDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -471,7 +472,7 @@ function DocumentRow({ doc }: { doc: GeneratedDocument }) {
               : doc.doc_type}
         </div>
         <div className="text-xs font-mono text-brand-brown-light">
-          {doc.letter_number ?? "—"} · {new Date(doc.created_at).toLocaleDateString()}
+          {doc.letter_number ?? "—"} · {fmtIstDate(doc.created_at)}
         </div>
       </div>
       {doc.file_url && !doc.file_url.startsWith("local://") && (

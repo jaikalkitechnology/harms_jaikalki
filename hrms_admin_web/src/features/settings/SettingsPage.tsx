@@ -37,6 +37,7 @@ import { useAuthStore } from "@/store/auth";
 import { ROLE_LABEL, type Role } from "@/lib/constants";
 import { useThemeStore, type ThemeMode } from "@/store/theme";
 import { cn } from "@/lib/utils";
+import { fmtIst } from "@/lib/datetime";
 
 type Tab =
   | "account"
@@ -155,7 +156,7 @@ function AccountTab() {
             label="Last login"
             value={
               u.last_login_at
-                ? new Date(u.last_login_at).toLocaleString()
+                ? fmtIst(u.last_login_at)
                 : "—"
             }
           />

@@ -19,6 +19,7 @@ import {
   type AdminUser,
   type AuditLogRow,
 } from "@/lib/api/super-admin";
+import { fmtIst } from "@/lib/datetime";
 
 export default function AdminUsersPage() {
   const qc = useQueryClient();
@@ -283,7 +284,7 @@ function AdminEditor({
               {audit.map((row: AuditLogRow) => (
                 <tr key={row.id} className="border-t border-brand-brown-50">
                   <td className="py-2 text-xs text-brand-brown-light">
-                    {new Date(row.occurred_at).toLocaleString()}
+                    {fmtIst(row.occurred_at)}
                   </td>
                   <td className="py-2 font-mono">{row.action}</td>
                   <td className="py-2 text-brand-brown-light">

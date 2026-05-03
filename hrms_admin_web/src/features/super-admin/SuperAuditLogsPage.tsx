@@ -13,6 +13,7 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { LoadingScreen } from "@/components/shared/LoadingScreen";
 import { superAdminApi, type AuditLogRow } from "@/lib/api/super-admin";
+import { fmtIst } from "@/lib/datetime";
 
 export default function SuperAuditLogsPage() {
   const [filters, setFilters] = useState({
@@ -146,7 +147,7 @@ export default function SuperAuditLogsPage() {
                 {(data as AuditLogRow[]).map((r) => (
                   <tr key={r.id} className="border-t border-brand-brown-50">
                     <td className="py-2 px-4 text-xs">
-                      {new Date(r.occurred_at).toLocaleString()}
+                      {fmtIst(r.occurred_at)}
                     </td>
                     <td>{r.actor_label ?? "—"}</td>
                     <td className="font-mono">{r.action}</td>

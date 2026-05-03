@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { LoadingScreen } from "@/components/shared/LoadingScreen";
 import { launchApi, type Resignation } from "@/lib/api/launch";
+import { fmtIstDate } from "@/lib/datetime";
 
 const STATUS_COLOR: Record<string, string> = {
   manager_review: "bg-info/15 text-info",
@@ -116,7 +117,7 @@ export default function ResignationsPage() {
                   </div>
                   <CardDescription>
                     Notice {r.notice_period_days} days · Requested{" "}
-                    {new Date(r.requested_at).toLocaleDateString()}
+                    {fmtIstDate(r.requested_at)}
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-3 text-sm">

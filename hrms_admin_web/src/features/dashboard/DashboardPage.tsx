@@ -17,6 +17,7 @@ import {
   Cake,
   Briefcase,
 } from "lucide-react";
+import { fmtIstDate } from "@/lib/datetime";
 
 const HEALTH_OK = new Set(["ok", "healthy", "available", "live"]);
 
@@ -138,10 +139,7 @@ export default function DashboardPage() {
                       >
                         <span>{b.full_name}</span>
                         <span className="text-brand-brown-light text-xs">
-                          {new Date(b.date_of_birth).toLocaleDateString(
-                            undefined,
-                            { day: "2-digit", month: "short" },
-                          )}
+                          {fmtIstDate(b.date_of_birth)}
                         </span>
                       </li>
                     ))}
