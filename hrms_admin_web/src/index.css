@@ -34,6 +34,19 @@
     --ring: 43 89% 54%;
 
     --radius: 0.75rem;
+
+    /* Brand-* tokens (themed). The codebase uses tailwind classes
+       like text-brand-brown-darker / bg-brand-brown-50 in many places —
+       routing them through CSS vars lets dark mode flip them without
+       touching every component. Hex format keeps tailwind opacity
+       modifiers (`/20`, etc.) working. */
+    --brand-surface: #FDF8EE;          /* page background */
+    --brand-surface-warm: #FAFAF7;     /* cards */
+    --brand-text: #1A0F08;             /* primary text on light bg */
+    --brand-text-muted: #5C3D24;       /* secondary / labels */
+    --brand-tint-50: #F5EFE8;          /* subtle highlight bg */
+    --brand-tint-100: #E8DACA;         /* hairline borders */
+    --brand-gold-dark: #C8941A;        /* accent (already gold) */
   }
 
   .dark {
@@ -56,6 +69,17 @@
     --border: 24 30% 20%;
     --input: 24 30% 20%;
     --ring: 43 89% 54%;
+
+    /* Dark-mode brand-* — high-contrast, warm to keep the brand feel.
+       brand-text becomes near-cream, brand-tint-50/100 become subtle
+       lifts on the dark base instead of staying near-white. */
+    --brand-surface: #150C06;
+    --brand-surface-warm: #1F140C;
+    --brand-text: #F8F0E1;
+    --brand-text-muted: #C9B59A;
+    --brand-tint-50: #2A1B11;
+    --brand-tint-100: #3A2818;
+    --brand-gold-dark: #F4B71F;
   }
 
   * {
@@ -70,8 +94,37 @@
     background-attachment: fixed;
   }
 
+  .dark body {
+    background-image:
+      radial-gradient(circle at 15% 25%, rgba(244, 183, 31, 0.06), transparent 50%),
+      radial-gradient(circle at 85% 75%, rgba(244, 183, 31, 0.03), transparent 50%);
+  }
+
   h1, h2, h3, h4 {
     @apply font-display tracking-tight;
+  }
+
+  /* shadcn/ui form controls — make them readable on the dark canvas */
+  .dark input,
+  .dark textarea,
+  .dark select {
+    color-scheme: dark;
+  }
+
+  /* Code / mono blocks were near-invisible on dark cards. */
+  .dark code {
+    @apply text-brand-brown-darker;
+  }
+
+  /* Native scrollbars styled to match the theme. */
+  .dark ::-webkit-scrollbar { width: 10px; height: 10px; }
+  .dark ::-webkit-scrollbar-track { background: hsl(var(--background)); }
+  .dark ::-webkit-scrollbar-thumb {
+    background: hsl(var(--border));
+    border-radius: 6px;
+  }
+  .dark ::-webkit-scrollbar-thumb:hover {
+    background: hsl(var(--muted));
   }
 }
 

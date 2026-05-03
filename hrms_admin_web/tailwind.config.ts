@@ -12,26 +12,28 @@ const config: Config = {
     },
     extend: {
       colors: {
-        // Jaikalki brand
+        // Jaikalki brand. Text + surface tokens point at CSS vars so
+        // dark mode can flip them. Pure decorative shades (gold, etc.)
+        // stay as static hex.
         brand: {
           brown: "#3D2817",
           "brown-dark": "#2D1810",
-          "brown-darker": "#1A0F08",
-          "brown-light": "#5C3D24",
-          "brown-50": "#F5EFE8",
-          "brown-100": "#E8DACA",
+          "brown-darker": "var(--brand-text)",
+          "brown-light": "var(--brand-text-muted)",
+          "brown-50": "var(--brand-tint-50)",
+          "brown-100": "var(--brand-tint-100)",
           gold: "#F4B71F",
           "gold-bright": "#FFC72C",
           "gold-light": "#FFD66B",
           "gold-lighter": "#FCD34D",
-          "gold-dark": "#C8941A",
+          "gold-dark": "var(--brand-gold-dark)",
           "gold-pale": "#FEF3C7",
         },
         surface: {
-          warm: "#FAFAF7",
-          cream: "#FDF8EE",
-          "cream-50": "#FBF6E9",
-          "off-white": "#FAF0E6",
+          warm: "var(--brand-surface-warm)",
+          cream: "var(--brand-surface)",
+          "cream-50": "var(--brand-surface)",
+          "off-white": "var(--brand-surface-warm)",
         },
         role: {
           superadmin: "#6B46C1",
