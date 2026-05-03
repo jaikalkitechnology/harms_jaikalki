@@ -13,6 +13,7 @@ import {
   type AttendanceRecord,
   type RegularizationRequest,
 } from "@/lib/api/attendance";
+import { fmtIst, fmtIstTime } from "@/lib/datetime";
 
 function todayISO() {
   return new Date().toISOString().slice(0, 10);
@@ -108,11 +109,11 @@ function AttendanceRow({ record }: { record: AttendanceRecord }) {
           <div className="font-medium text-sm">Employee #{record.employee_id}</div>
           <div className="text-xs text-brand-brown-light">
             {record.check_in
-              ? new Date(record.check_in).toLocaleTimeString()
+              ? fmtIstTime(record.check_in)
               : "—"}{" "}
             →{" "}
             {record.check_out
-              ? new Date(record.check_out).toLocaleTimeString()
+              ? fmtIstTime(record.check_out)
               : "—"}
             {record.check_in_distance_m !== null &&
               ` · ${record.check_in_distance_m}m from office`}
@@ -222,9 +223,9 @@ function RegRow({
         </div>
         <div className="text-xs text-brand-brown-light">
           {req.requested_check_in &&
-            new Date(req.requested_check_in).toLocaleString()}{" "}
+            fmtIst(req.requested_check_in)}{" "}
           {req.requested_check_out &&
-            `→ ${new Date(req.requested_check_out).toLocaleString()}`}
+            `→ ${fmtIst(req.requested_check_out)}`}
         </div>
         <p className="text-xs mt-1">{req.reason}</p>
       </div>

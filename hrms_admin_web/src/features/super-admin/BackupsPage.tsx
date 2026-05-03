@@ -15,6 +15,7 @@ import {
   superAdminApi,
   type DatabaseBackup as Backup,
 } from "@/lib/api/super-admin";
+import { fmtIst } from "@/lib/datetime";
 
 const STATUS_COLOR: Record<string, string> = {
   completed: "bg-success/15 text-success",
@@ -79,7 +80,7 @@ export default function BackupsPage() {
             {(data as Backup[]).map((b) => (
               <tr key={b.id} className="border-t border-brand-brown-50">
                 <td className="py-2 px-4 text-xs">
-                  {new Date(b.started_at).toLocaleString()}
+                  {fmtIst(b.started_at)}
                 </td>
                 <td className="font-mono text-xs">{b.file_name}</td>
                 <td>{fmtBytes(b.size_bytes)}</td>

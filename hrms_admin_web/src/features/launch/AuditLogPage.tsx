@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { LoadingScreen } from "@/components/shared/LoadingScreen";
 import { launchApi } from "@/lib/api/launch";
+import { fmtIst } from "@/lib/datetime";
 
 const METHOD_COLOR: Record<string, string> = {
   POST: "bg-info/15 text-info",
@@ -108,7 +109,7 @@ export default function AuditLogPage() {
                 logs.map((l) => (
                   <tr key={l.id} className="border-t border-brand-brown-50">
                     <td className="px-4 py-3 text-xs">
-                      {new Date(l.occurred_at).toLocaleString()}
+                      {fmtIst(l.occurred_at)}
                     </td>
                     <td className="px-4 py-3 text-xs">
                       {l.actor_label ?? l.actor_user_id ?? "system"}

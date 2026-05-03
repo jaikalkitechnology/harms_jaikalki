@@ -16,6 +16,7 @@ import {
   justiceApi,
   type ComplaintListItem,
 } from "@/lib/api/justice";
+import { fmtIstDate } from "@/lib/datetime";
 
 const SEVERITY_COLOR: Record<string, string> = {
   low: "bg-brand-brown-50 text-brand-brown-darker",
@@ -178,11 +179,11 @@ function ComplaintCard({ complaint }: { complaint: ComplaintListItem }) {
       </CardHeader>
       <CardContent className="space-y-2">
         <div className="text-xs text-brand-brown-light">
-          Submitted {new Date(complaint.submitted_at).toLocaleDateString()}
+          Submitted {fmtIstDate(complaint.submitted_at)}
           {complaint.deadline_at && (
             <>
               {" · "}deadline{" "}
-              {new Date(complaint.deadline_at).toLocaleDateString()}
+              {fmtIstDate(complaint.deadline_at)}
             </>
           )}
         </div>

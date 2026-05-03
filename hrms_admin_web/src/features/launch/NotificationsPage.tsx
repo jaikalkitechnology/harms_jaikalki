@@ -12,6 +12,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { LoadingScreen } from "@/components/shared/LoadingScreen";
 import { launchApi } from "@/lib/api/launch";
+import { fmtIst } from "@/lib/datetime";
 
 export default function NotificationsPage() {
   const qc = useQueryClient();
@@ -92,7 +93,7 @@ export default function NotificationsPage() {
                   )}
                 </div>
                 <CardDescription className="text-xs">
-                  {n.type} · {new Date(n.created_at).toLocaleString()}
+                  {n.type} · {fmtIst(n.created_at)}
                 </CardDescription>
               </CardHeader>
               {n.body && (

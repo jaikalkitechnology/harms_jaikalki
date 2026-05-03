@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { LoadingScreen } from "@/components/shared/LoadingScreen";
 import { verificationApi } from "@/lib/api/verification";
+import { fmtIst } from "@/lib/datetime";
 
 export default function VerificationAuditPage() {
   const qc = useQueryClient();
@@ -99,7 +100,7 @@ export default function VerificationAuditPage() {
                   <div>
                     <span className="text-brand-brown-light">Submitted: </span>
                     {v.submitted_at
-                      ? new Date(v.submitted_at).toLocaleString()
+                      ? fmtIst(v.submitted_at)
                       : "—"}
                   </div>
                 </div>

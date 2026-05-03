@@ -16,6 +16,7 @@ import { Label } from "@/components/ui/label";
 import { LoadingScreen } from "@/components/shared/LoadingScreen";
 import { PermissionGate } from "@/components/shared/PermissionGate";
 import { leavesApi } from "@/lib/api/leaves";
+import { fmtIstDate } from "@/lib/datetime";
 
 export default function HolidaysPage() {
   const queryClient = useQueryClient();
@@ -162,12 +163,7 @@ export default function HolidaysPage() {
                   <div>
                     <div className="font-medium">{h.name}</div>
                     <div className="text-xs text-brand-brown-light">
-                      {new Date(h.date).toLocaleDateString(undefined, {
-                        weekday: "short",
-                        day: "numeric",
-                        month: "short",
-                        year: "numeric",
-                      })}{" "}
+                      {fmtIstDate(h.date)}{" "}
                       · {h.type}
                     </div>
                   </div>

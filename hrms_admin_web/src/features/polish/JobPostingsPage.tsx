@@ -15,6 +15,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { LoadingScreen } from "@/components/shared/LoadingScreen";
 import { polishApi, type JobPosting } from "@/lib/api/polish";
+import { fmtIst } from "@/lib/datetime";
 
 const STATUS_COLOR: Record<string, string> = {
   draft: "bg-brand-brown-50 text-brand-brown-darker",
@@ -254,7 +255,7 @@ export default function JobPostingsPage() {
                           : "—"}
                       </td>
                       <td className="px-4 py-3 text-xs">
-                        {new Date(a.submitted_at).toLocaleString()}
+                        {fmtIst(a.submitted_at)}
                       </td>
                       <td className="px-4 py-3 capitalize">
                         {a.status.replaceAll("_", " ")}

@@ -15,6 +15,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { LoadingScreen } from "@/components/shared/LoadingScreen";
 import { trainerApi } from "@/lib/api/trainer";
+import { fmtIst, fmtIstTime } from "@/lib/datetime";
 
 const STATUS_COLOR: Record<string, string> = {
   scheduled: "bg-info/15 text-info",
@@ -247,8 +248,8 @@ export default function SessionsPage() {
                 <CardContent className="space-y-2 text-sm">
                   <div className="flex items-center gap-1 text-xs">
                     <Calendar className="size-3" />
-                    {new Date(s.scheduled_start).toLocaleString()} →{" "}
-                    {new Date(s.scheduled_end).toLocaleTimeString()}
+                    {fmtIst(s.scheduled_start)} →{" "}
+                    {fmtIstTime(s.scheduled_end)}
                   </div>
                   <div className="flex items-center gap-1 text-xs">
                     <Users className="size-3" />
