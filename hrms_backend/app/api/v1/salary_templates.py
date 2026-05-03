@@ -5,11 +5,16 @@ from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.exceptions import NotFoundError
+from app.core.exceptions import ConflictError, NotFoundError
 from app.core.permissions import require_permission, require_super_admin
 from app.dependencies import get_current_user, get_db
 from app.models import SalaryTemplate, User
-from app.schemas.employee import SalaryBreakupOut, SalaryTemplateOut
+from app.schemas.employee import (
+    SalaryBreakupOut,
+    SalaryTemplateCreate,
+    SalaryTemplateOut,
+    SalaryTemplateUpdate,
+)
 from app.services.salary_calculator import JaikalkiSalaryCalculator
 
 router = APIRouter(prefix="/salary-templates", tags=["salary-templates"])
@@ -42,6 +47,70 @@ async def get_template(
     if not t:
         raise NotFoundError("Salary template not found")
     return t
+
+
+@router.post(
+    "",
+    response_model=SalaryTemplateOut,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_template(
+    body: SalaryTemplateCreate,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_permission("admin.users.manage")),
+) -> SalaryTemplate:
+    if (
+        await db.execute(
+            select(SalaryTemplate).where(SalaryTemplate.template_code == body.template_code)
+        )
+    ).scalar_one_or_none():
+        raise ConflictError("template_code already exists")
+    obj = SalaryTemplate(**body.model_dump())
+    db.add(obj)
+    await db.commit()
+    await db.refresh(obj)
+    return obj
+
+
+@router.put("/{template_id}", response_model=SalaryTemplateOut)
+async def update_template(
+    template_id: int,
+    body: SalaryTemplateUpdate,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_permission("admin.users.manage")),
+) -> SalaryTemplate:
+    obj = (
+        await db.execute(select(SalaryTemplate).where(SalaryTemplate.id == template_id))
+    ).scalar_one_or_none()
+    if not obj:
+        raise NotFoundError("Salary template not found")
+    for k, v in body.model_dump(exclude_unset=True).items():
+        setattr(obj, k, v)
+    await db.commit()
+    await db.refresh(obj)
+    return obj
+
+
+@router.delete("/{template_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_template(
+    template_id: int,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_permission("admin.users.manage")),
+) -> None:
+    """Hard delete falls back to soft-delete (is_active=false) if the
+    template is referenced by an employee."""
+    obj = (
+        await db.execute(select(SalaryTemplate).where(SalaryTemplate.id == template_id))
+    ).scalar_one_or_none()
+    if not obj:
+        raise NotFoundError("Salary template not found")
+    try:
+        await db.delete(obj)
+        await db.commit()
+    except Exception:
+        await db.rollback()
+        obj.is_active = False
+        await db.commit()
 
 
 @router.get("/{template_id}/calculate", response_model=SalaryBreakupOut)

@@ -34,13 +34,29 @@ export interface SalaryTemplate {
   designation_level: number;
   ctc_annual_default: string;
   basic_amount: string;
+  basic_percentage: string;
   hra_amount: string;
+  hra_percentage: string;
   other_allowance: string;
+  special_allowance: string;
+  conveyance: string;
+  medical_allowance: string;
+  lta: string;
+  food_coupon: string;
   travel_expense_max: string;
+  is_paid_internship: boolean;
   has_probation: boolean;
   probation_months: number;
+  probation_extension_months: number;
+  mediclaim_amount: string;
+  pa_insurance_amount: string;
+  notice_period_probation: number;
+  notice_period_confirmed: number;
+  notice_period_termination: number;
   is_active: boolean;
 }
+
+export type SalaryTemplateInput = Omit<SalaryTemplate, "id">;
 
 export interface SalaryBreakup {
   template_code: string;
@@ -207,10 +223,13 @@ export const lookupsApi = {
 };
 
 export const salaryTemplatesApi = {
-  async list(category?: string): Promise<SalaryTemplate[]> {
-    const { data } = await apiClient.get(`${v1}/salary-templates`, {
-      params: category ? { category } : undefined,
-    });
+  async list(
+    category?: string,
+    activeOnly = false,
+  ): Promise<SalaryTemplate[]> {
+    const params: Record<string, unknown> = { active_only: activeOnly };
+    if (category) params.category = category;
+    const { data } = await apiClient.get(`${v1}/salary-templates`, { params });
     return data;
   },
 
@@ -220,6 +239,26 @@ export const salaryTemplatesApi = {
       { params: ctc ? { ctc } : undefined },
     );
     return data;
+  },
+
+  async create(body: SalaryTemplateInput): Promise<SalaryTemplate> {
+    const { data } = await apiClient.post(`${v1}/salary-templates`, body);
+    return data;
+  },
+
+  async update(
+    id: number,
+    body: Partial<SalaryTemplateInput>,
+  ): Promise<SalaryTemplate> {
+    const { data } = await apiClient.put(
+      `${v1}/salary-templates/${id}`,
+      body,
+    );
+    return data;
+  },
+
+  async remove(id: number): Promise<void> {
+    await apiClient.delete(`${v1}/salary-templates/${id}`);
   },
 };
 
