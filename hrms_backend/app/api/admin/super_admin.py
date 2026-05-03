@@ -928,3 +928,56 @@ async def send_test_email(
             detail=error or "Failed to send",
         )
     return {"sent": True}
+
+
+# ── Office location (geo-fence) ───────────────────────────────────────
+class _OfficeLocationOut:
+    """Pydantic-free helper — the endpoints return plain dicts so we
+    don't have to add another schema for three numbers."""
+
+
+@router.get("/office-location")
+async def get_office_location_endpoint(
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_super_admin()),
+):
+    from app.services.office_location import get_office_location
+
+    lat, lng, radius_m = await get_office_location(db)
+    return {"lat": lat, "lng": lng, "radius_m": radius_m}
+
+
+@router.put("/office-location")
+async def set_office_location_endpoint(
+    body: dict,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    actor: User = Depends(require_super_admin()),
+):
+    from app.services.office_location import set_office_location
+
+    try:
+        lat = float(body["lat"])
+        lng = float(body["lng"])
+        radius_m = int(body["radius_m"])
+    except (KeyError, ValueError, TypeError):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Body must include numeric lat, lng and integer radius_m",
+        )
+    if not (-90 <= lat <= 90):
+        raise HTTPException(400, detail="lat must be between -90 and 90")
+    if not (-180 <= lng <= 180):
+        raise HTTPException(400, detail="lng must be between -180 and 180")
+    if not (10 <= radius_m <= 50_000):
+        raise HTTPException(400, detail="radius_m must be between 10 and 50000")
+
+    lat, lng, radius_m = await set_office_location(
+        db, lat=lat, lng=lng, radius_m=radius_m, actor=actor
+    )
+    await _record(
+        db, request, actor, "office_location.update",
+        entity_type="system_config",
+        payload={"lat": lat, "lng": lng, "radius_m": radius_m},
+    )
+    return {"lat": lat, "lng": lng, "radius_m": radius_m}

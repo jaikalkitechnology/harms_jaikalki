@@ -263,6 +263,19 @@ export const superAdminApi = {
     await apiClient.delete(`${P}/api-keys/${id}`);
   },
 
+  // Office geo-fence
+  getOfficeLocation: async (): Promise<{
+    lat: number;
+    lng: number;
+    radius_m: number;
+  }> => (await apiClient.get(`${P}/office-location`)).data,
+  setOfficeLocation: async (body: {
+    lat: number;
+    lng: number;
+    radius_m: number;
+  }): Promise<{ lat: number; lng: number; radius_m: number }> =>
+    (await apiClient.put(`${P}/office-location`, body)).data,
+
   // Email templates
   listEmailTemplates: async (): Promise<EmailTemplate[]> =>
     (await apiClient.get(`${P}/email-templates`)).data,

@@ -1,9 +1,11 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
   Building,
+  Crosshair,
   KeyRound,
+  MapPin,
   Save,
   Shield,
   ShieldCheck,
@@ -35,15 +37,20 @@ import { ROLE_LABEL, type Role } from "@/lib/constants";
 import { useThemeStore, type ThemeMode } from "@/store/theme";
 import { cn } from "@/lib/utils";
 
-type Tab = "account" | "security" | "company" | "preferences";
+type Tab = "account" | "security" | "company" | "preferences" | "office";
 
 export default function SettingsPage() {
   const [tab, setTab] = useState<Tab>("account");
+  const role = useAuthStore((s) => s.role);
+  const isSuper = role === "super_admin";
 
   const tabs: Array<{ id: Tab; label: string; icon: typeof User }> = [
     { id: "account", label: "Account", icon: User },
     { id: "security", label: "Security", icon: Shield },
     { id: "preferences", label: "Preferences", icon: KeyRound },
+    ...(isSuper
+      ? ([{ id: "office", label: "Office", icon: MapPin }] as const)
+      : []),
     { id: "company", label: "Company", icon: Building },
   ];
 
@@ -76,6 +83,7 @@ export default function SettingsPage() {
       {tab === "account" && <AccountTab />}
       {tab === "security" && <SecurityTab />}
       {tab === "preferences" && <PreferencesTab />}
+      {tab === "office" && <OfficeTab />}
       {tab === "company" && <CompanyTab />}
     </div>
   );
@@ -484,4 +492,216 @@ function CompanyTab() {
       </CardContent>
     </Card>
   );
+}
+
+// ── Office geo-fence ───────────────────────────────────────────────
+function OfficeTab() {
+  const qc = useQueryClient();
+  const { data, isLoading } = useQuery({
+    queryKey: ["office-location"],
+    queryFn: superAdminApi.getOfficeLocation,
+  });
+  const [form, setForm] = useState({ lat: "", lng: "", radius_m: "500" });
+  const [picking, setPicking] = useState(false);
+  const [myPos, setMyPos] = useState<{ lat: number; lng: number } | null>(null);
+
+  // Hydrate the form once the server payload arrives.
+  useEffect(() => {
+    if (data) {
+      setForm({
+        lat: String(data.lat),
+        lng: String(data.lng),
+        radius_m: String(data.radius_m),
+      });
+    }
+  }, [data]);
+
+  const save = useMutation({
+    mutationFn: () =>
+      superAdminApi.setOfficeLocation({
+        lat: Number(form.lat),
+        lng: Number(form.lng),
+        radius_m: Number(form.radius_m),
+      }),
+    onSuccess: (resp) => {
+      toast.success("Office location saved");
+      setForm({
+        lat: String(resp.lat),
+        lng: String(resp.lng),
+        radius_m: String(resp.radius_m),
+      });
+      qc.invalidateQueries({ queryKey: ["office-location"] });
+    },
+    onError: (err: { response?: { data?: { detail?: string } } }) =>
+      toast.error(err?.response?.data?.detail ?? "Save failed"),
+  });
+
+  const useCurrentLocation = () => {
+    if (!navigator.geolocation) {
+      toast.error("Geolocation not supported in this browser");
+      return;
+    }
+    setPicking(true);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const { latitude, longitude } = pos.coords;
+        setForm((f) => ({
+          ...f,
+          lat: latitude.toFixed(6),
+          lng: longitude.toFixed(6),
+        }));
+        setMyPos({ lat: latitude, lng: longitude });
+        toast.success("Captured your current GPS reading");
+        setPicking(false);
+      },
+      (err) => {
+        toast.error(`Location: ${err.message}`);
+        setPicking(false);
+      },
+      { enableHighAccuracy: true, timeout: 15000 },
+    );
+  };
+
+  const previewMapUrl = useMemo(() => {
+    const lat = Number(form.lat);
+    const lng = Number(form.lng);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+    const r = Number(form.radius_m) || 500;
+    const halfDeg = (r / 111_000) * 4; // rough — show ~4× the radius
+    const left = lng - halfDeg;
+    const right = lng + halfDeg;
+    const top = lat + halfDeg;
+    const bottom = lat - halfDeg;
+    return `https://www.openstreetmap.org/export/embed.html?bbox=${left}%2C${bottom}%2C${right}%2C${top}&layer=mapnik&marker=${lat}%2C${lng}`;
+  }, [form.lat, form.lng, form.radius_m]);
+
+  if (isLoading) return <LoadingScreen />;
+
+  const distance = myPos && data
+    ? haversineMeters(myPos.lat, myPos.lng, Number(form.lat), Number(form.lng))
+    : null;
+
+  return (
+    <div className="grid md:grid-cols-2 gap-6">
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <MapPin className="h-5 w-5" /> Office geo-fence
+          </CardTitle>
+          <CardDescription>
+            Employees can only mark <strong>office</strong>-mode attendance
+            from inside this radius. WFH / hybrid modes are unaffected.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="grid sm:grid-cols-2 gap-3">
+            <div>
+              <Label>Latitude</Label>
+              <Input
+                value={form.lat}
+                onChange={(e) => setForm({ ...form, lat: e.target.value })}
+                placeholder="19.285300"
+                inputMode="decimal"
+              />
+            </div>
+            <div>
+              <Label>Longitude</Label>
+              <Input
+                value={form.lng}
+                onChange={(e) => setForm({ ...form, lng: e.target.value })}
+                placeholder="72.853300"
+                inputMode="decimal"
+              />
+            </div>
+          </div>
+          <div>
+            <Label>Radius (metres)</Label>
+            <Input
+              type="number"
+              min={10}
+              max={50000}
+              value={form.radius_m}
+              onChange={(e) => setForm({ ...form, radius_m: e.target.value })}
+            />
+            <div className="text-xs text-brand-brown-light mt-1">
+              500 m covers a typical office building plus its parking; 200 m
+              is tight but secure; lift to ~1000 m for a campus.
+            </div>
+          </div>
+
+          <div className="flex gap-2 flex-wrap">
+            <Button onClick={() => save.mutate()} disabled={save.isPending}>
+              <Save className="h-4 w-4 mr-1" /> Save
+            </Button>
+            <Button
+              variant="outline"
+              onClick={useCurrentLocation}
+              disabled={picking}
+            >
+              <Crosshair className="h-4 w-4 mr-1" />
+              {picking ? "Locating…" : "Use my current location"}
+            </Button>
+          </div>
+
+          {distance != null && (
+            <div className="text-xs text-brand-brown-light">
+              Your current position is <strong>{Math.round(distance)} m</strong>{" "}
+              from the configured office point.
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Preview</CardTitle>
+          <CardDescription>
+            OpenStreetMap pin at the configured coordinates.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {previewMapUrl ? (
+            <iframe
+              title="Office location preview"
+              src={previewMapUrl}
+              className="w-full h-72 rounded-lg border border-brand-brown-50"
+            />
+          ) : (
+            <div className="text-sm text-brand-brown-light">
+              Enter valid lat / lng to preview.
+            </div>
+          )}
+          <a
+            href={
+              Number.isFinite(Number(form.lat))
+                ? `https://www.openstreetmap.org/?mlat=${form.lat}&mlon=${form.lng}#map=18/${form.lat}/${form.lng}`
+                : "#"
+            }
+            target="_blank"
+            rel="noreferrer"
+            className="text-xs text-brand-gold-dark underline mt-2 inline-block"
+          >
+            Open in OpenStreetMap →
+          </a>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+function haversineMeters(
+  lat1: number,
+  lng1: number,
+  lat2: number,
+  lng2: number,
+): number {
+  if (![lat1, lng1, lat2, lng2].every((n) => Number.isFinite(n))) return 0;
+  const R = 6_371_000;
+  const toRad = (x: number) => (x * Math.PI) / 180;
+  const dlat = toRad(lat2 - lat1);
+  const dlng = toRad(lng2 - lng1);
+  const a =
+    Math.sin(dlat / 2) ** 2 +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dlng / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(a));
 }

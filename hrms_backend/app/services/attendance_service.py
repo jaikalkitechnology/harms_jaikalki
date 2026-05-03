@@ -63,7 +63,15 @@ async def check_in(
 
     geo: Optional[GeoFenceCheck] = None
     if work_mode == "office":
-        geo = check_office_geofence(lat, lng)
+        from app.services.office_location import get_office_location
+        o_lat, o_lng, o_rad = await get_office_location(db)
+        geo = check_office_geofence(
+            lat,
+            lng,
+            office_lat=o_lat,
+            office_lng=o_lng,
+            radius_m=o_rad,
+        )
         if not geo.inside:
             raise ValidationError(
                 f"Outside office geo-fence ({geo.distance_m}m from office; "
