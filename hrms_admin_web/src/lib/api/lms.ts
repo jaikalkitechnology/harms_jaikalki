@@ -76,9 +76,19 @@ export interface ComplianceRow {
   next_due_at: string | null;
 }
 
+export interface CourseRich extends CourseSummary {
+  department_id: number | null;
+  is_published: boolean;
+  validity_months: number | null;
+}
+
 export const lmsApi = {
-  listCourses: async (params?: { category?: string }) => {
-    const { data } = await apiClient.get<CourseSummary[]>(
+  listCourses: async (params?: {
+    category?: string;
+    department_id?: number;
+    include_unpublished?: boolean;
+  }) => {
+    const { data } = await apiClient.get<CourseRich[]>(
       `${v1}/lms/courses`,
       { params },
     );
@@ -107,6 +117,16 @@ export const lmsApi = {
       { is_published: isPublished },
     );
     return data;
+  },
+  updateCourse: async (id: number, payload: Record<string, unknown>) => {
+    const { data } = await apiClient.put<Course>(
+      `${v1}/lms/courses/${id}`,
+      payload,
+    );
+    return data;
+  },
+  deleteCourse: async (id: number) => {
+    await apiClient.delete(`${v1}/lms/courses/${id}`);
   },
   adminEnroll: async (courseId: number, employeeId: number, dueDate?: string) => {
     const { data } = await apiClient.post<Enrollment>(`${v1}/lms/enroll`, {

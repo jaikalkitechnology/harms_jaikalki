@@ -51,9 +51,14 @@ export interface CertificateVerifyResponse {
 }
 
 export const examApi = {
-  listQuestions: async () => {
+  listQuestions: async (params?: {
+    department_id?: number;
+    topic?: string;
+    difficulty?: string;
+  }) => {
     const { data } = await apiClient.get<Question[]>(
       `${v1}/exams/questions`,
+      { params },
     );
     return data;
   },
@@ -64,9 +69,42 @@ export const examApi = {
     );
     return data;
   },
-  listExams: async () => {
-    const { data } = await apiClient.get<ExamSummary[]>(`${v1}/exams/`);
+  updateQuestion: async (id: number, payload: Record<string, unknown>) => {
+    const { data } = await apiClient.put<Question>(
+      `${v1}/exams/questions/${id}`,
+      payload,
+    );
     return data;
+  },
+  deleteQuestion: async (id: number) => {
+    await apiClient.delete(`${v1}/exams/questions/${id}`);
+  },
+  listExams: async (params?: {
+    course_id?: number;
+    exam_type?: string;
+    include_unpublished?: boolean;
+  }) => {
+    const { data } = await apiClient.get<ExamSummary[]>(`${v1}/exams/`, {
+      params,
+    });
+    return data;
+  },
+  createExam: async (payload: Record<string, unknown>) => {
+    const { data } = await apiClient.post<ExamSummary>(
+      `${v1}/exams/`,
+      payload,
+    );
+    return data;
+  },
+  updateExam: async (id: number, payload: Record<string, unknown>) => {
+    const { data } = await apiClient.put<ExamSummary>(
+      `${v1}/exams/${id}`,
+      payload,
+    );
+    return data;
+  },
+  deleteExam: async (id: number) => {
+    await apiClient.delete(`${v1}/exams/${id}`);
   },
   publish: async (id: number, isPublished: boolean) => {
     const { data } = await apiClient.post<ExamSummary>(

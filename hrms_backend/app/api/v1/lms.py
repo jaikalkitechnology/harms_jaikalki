@@ -12,6 +12,7 @@ from app.schemas.lms import (
     CourseOut,
     CoursePublishUpdate,
     CourseSummary,
+    CourseUpdate,
     EnrollmentCreate,
     EnrollmentOut,
     LeaderboardEntry,
@@ -40,11 +41,27 @@ async def _self_employee(db: AsyncSession, user: User):
 async def list_courses(
     category: Optional[str] = None,
     department_id: Optional[int] = None,
+    include_unpublished: bool = False,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(get_current_user),
+    user: User = Depends(get_current_user),
 ):
+    """Employees see only published courses. Admins / HR can opt in to
+    unpublished + drafts via include_unpublished=true."""
+    show_drafts = False
+    if include_unpublished:
+        from app.core.permissions import Role as RoleEnum
+        if set(user.role_codes) & {
+            RoleEnum.SUPER_ADMIN.value,
+            RoleEnum.HR.value,
+            RoleEnum.ADMIN.value,
+            RoleEnum.DIRECTOR.value,
+        }:
+            show_drafts = True
     return await lms_svc.list_courses(
-        db, category=category, department_id=department_id
+        db,
+        category=category,
+        department_id=department_id,
+        published_only=not show_drafts,
     )
 
 
@@ -90,6 +107,29 @@ async def publish_course(
     return await lms_svc.publish_course(
         db, course_id, is_published=payload.is_published
     )
+
+
+@router.put("/courses/{course_id}", response_model=CourseOut)
+async def update_course(
+    course_id: int,
+    payload: CourseUpdate,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_permission("admin.users.manage")),
+):
+    return await lms_svc.update_course(
+        db, course_id, payload=payload.model_dump(exclude_unset=True)
+    )
+
+
+@router.delete(
+    "/courses/{course_id}", status_code=status.HTTP_204_NO_CONTENT
+)
+async def delete_course(
+    course_id: int,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_permission("admin.users.manage")),
+):
+    await lms_svc.delete_course(db, course_id)
 
 
 @router.post(

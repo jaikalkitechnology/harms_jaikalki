@@ -76,6 +76,25 @@ class CoursePublishUpdate(BaseModel):
     is_published: bool
 
 
+class CourseUpdate(BaseModel):
+    title: Optional[str] = None
+    description: Optional[str] = None
+    category: Optional[str] = Field(
+        default=None,
+        pattern="^(onboarding|compliance|technical|leadership|soft_skills|"
+        "product|other)$",
+    )
+    department_id: Optional[int] = None
+    difficulty: Optional[str] = Field(
+        default=None, pattern="^(beginner|intermediate|advanced)$"
+    )
+    estimated_hours: Optional[int] = Field(default=None, ge=1, le=200)
+    thumbnail_url: Optional[str] = None
+    is_mandatory: Optional[bool] = None
+    validity_months: Optional[int] = Field(default=None, ge=1, le=120)
+    points: Optional[int] = Field(default=None, ge=0)
+
+
 class CourseOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: int
