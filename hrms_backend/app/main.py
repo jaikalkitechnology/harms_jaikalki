@@ -64,6 +64,12 @@ async def lifespan(app: FastAPI):
             logger.info("AUTO_CREATE_TABLES: schema synced with models")
         except Exception:
             logger.exception("init_tables failed; continuing startup")
+        try:
+            from app.database import sync_columns
+            await sync_columns()
+            logger.info("AUTO_CREATE_TABLES: column sync complete")
+        except Exception:
+            logger.exception("sync_columns failed; continuing startup")
 
     get_redis()
     yield

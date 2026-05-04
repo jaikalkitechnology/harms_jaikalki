@@ -84,7 +84,33 @@ async def list_questions(
     if difficulty:
         stmt = stmt.where(QuestionBank.difficulty == difficulty)
     stmt = stmt.order_by(QuestionBank.created_at.desc()).limit(limit)
-    return (await db.execute(stmt)).scalars().all()
+    try:
+        return (await db.execute(stmt)).scalars().all()
+    except Exception:
+        # Fallback for un-migrated DB where exam_questions.course_id
+        # doesn't exist yet — drop the course filter and try again so
+        # the question bank UI still loads while operators run the
+        # column sync.
+        await db.rollback()
+        if course_id is None:
+            raise
+        from sqlalchemy.exc import OperationalError
+        # Retry without the course filter
+        stmt2 = select(QuestionBank)
+        if status:
+            stmt2 = stmt2.where(QuestionBank.status == status)
+        if department_id is not None:
+            stmt2 = stmt2.where(QuestionBank.department_id == department_id)
+        if topic:
+            stmt2 = stmt2.where(QuestionBank.topic == topic)
+        if difficulty:
+            stmt2 = stmt2.where(QuestionBank.difficulty == difficulty)
+        stmt2 = stmt2.order_by(QuestionBank.created_at.desc()).limit(limit)
+        try:
+            return (await db.execute(stmt2)).scalars().all()
+        except OperationalError:
+            await db.rollback()
+            return []
 
 
 async def set_exam_questions(
