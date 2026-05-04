@@ -105,29 +105,40 @@ async def list_courses(
 
     # Decorate with question / exam counts so the admin UI can show
     # "12 Qs · 1 exam" on each card without N+1 round-trips.
+    # Tolerant of an un-migrated DB: if the COUNT query fails (e.g.
+    # the new exam_questions.course_id column hasn't been ALTERed in
+    # yet), we fall back to zero counts and keep the page usable.
     if rows:
         from sqlalchemy import func
         from app.models import Exam, QuestionBank
 
         ids = [r.id for r in rows]
-        q_counts = dict(
-            (
-                await db.execute(
-                    select(QuestionBank.course_id, func.count(QuestionBank.id))
-                    .where(QuestionBank.course_id.in_(ids))
-                    .group_by(QuestionBank.course_id)
-                )
-            ).all()
-        )
-        e_counts = dict(
-            (
-                await db.execute(
-                    select(Exam.course_id, func.count(Exam.id))
-                    .where(Exam.course_id.in_(ids))
-                    .group_by(Exam.course_id)
-                )
-            ).all()
-        )
+        try:
+            q_counts = dict(
+                (
+                    await db.execute(
+                        select(QuestionBank.course_id, func.count(QuestionBank.id))
+                        .where(QuestionBank.course_id.in_(ids))
+                        .group_by(QuestionBank.course_id)
+                    )
+                ).all()
+            )
+        except Exception:
+            await db.rollback()
+            q_counts = {}
+        try:
+            e_counts = dict(
+                (
+                    await db.execute(
+                        select(Exam.course_id, func.count(Exam.id))
+                        .where(Exam.course_id.in_(ids))
+                        .group_by(Exam.course_id)
+                    )
+                ).all()
+            )
+        except Exception:
+            await db.rollback()
+            e_counts = {}
         for r in rows:
             # Transient attrs — Pydantic from_attributes picks them up.
             r.question_count = q_counts.get(r.id, 0)

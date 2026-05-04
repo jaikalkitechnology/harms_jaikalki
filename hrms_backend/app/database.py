@@ -52,3 +52,61 @@ async def init_tables() -> None:
 
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+
+
+# Columns that need to be added to *existing* tables — `create_all`
+# only handles new tables, not new columns. Each entry is run
+# idempotently at startup if AUTO_CREATE_TABLES is on.
+#   (table, column, column_definition, optional_fk_constraint_target)
+_PENDING_COLUMNS: list[tuple[str, str, str, str | None]] = [
+    (
+        "exam_questions",
+        "course_id",
+        "INT NULL",
+        "courses(id) ON DELETE SET NULL",
+    ),
+]
+
+
+async def sync_columns() -> None:
+    """Add any columns listed in _PENDING_COLUMNS that are missing
+    from the live schema. Safe to call repeatedly; existing columns
+    are skipped and FK constraint failures are swallowed (they happen
+    when the constraint already exists or the dialect doesn't support
+    it). Runs only when AUTO_CREATE_TABLES is enabled."""
+    from sqlalchemy import text
+
+    async with engine.begin() as conn:
+        for table, column, col_def, fk in _PENDING_COLUMNS:
+            exists = (
+                await conn.execute(
+                    text(
+                        "SELECT COUNT(*) FROM information_schema.COLUMNS "
+                        "WHERE TABLE_SCHEMA = DATABASE() "
+                        "AND TABLE_NAME = :t AND COLUMN_NAME = :c"
+                    ),
+                    {"t": table, "c": column},
+                )
+            ).scalar()
+            if exists:
+                continue
+            await conn.execute(
+                text(f"ALTER TABLE `{table}` ADD COLUMN `{column}` {col_def}")
+            )
+            await conn.execute(
+                text(
+                    f"CREATE INDEX `idx_{table}_{column}` "
+                    f"ON `{table}` (`{column}`)"
+                )
+            )
+            if fk:
+                try:
+                    await conn.execute(
+                        text(
+                            f"ALTER TABLE `{table}` "
+                            f"ADD CONSTRAINT `fk_{table}_{column}` "
+                            f"FOREIGN KEY (`{column}`) REFERENCES {fk}"
+                        )
+                    )
+                except Exception:
+                    pass  # FK may already exist or be unsupported
