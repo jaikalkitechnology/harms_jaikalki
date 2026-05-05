@@ -631,3 +631,35 @@ async def delete_exam(db: AsyncSession, exam_id: int) -> None:
         raise NotFoundError("Exam not found")
     await db.delete(exam)
     await db.commit()
+
+
+async def replace_question_options(
+    db: AsyncSession, question_id: int, *, options: list[dict]
+) -> "QuestionBank":
+    """Replace the full set of options on a question. Used when an
+    admin edits a saved question's choices (which row is correct,
+    a typo in the option text, etc.)."""
+    from app.models import QuestionBank, QuestionOption
+
+    q = (
+        await db.execute(select(QuestionBank).where(QuestionBank.id == question_id))
+    ).scalar_one_or_none()
+    if not q:
+        raise NotFoundError("Question not found")
+
+    # Wipe existing options and re-insert in the order received.
+    for o in list(q.options or []):
+        await db.delete(o)
+    await db.flush()
+    for i, opt in enumerate(options):
+        db.add(
+            QuestionOption(
+                question_id=q.id,
+                option_text=str(opt.get("option_text", "")),
+                is_correct=bool(opt.get("is_correct", False)),
+                sort_order=int(opt.get("sort_order", i)),
+            )
+        )
+    await db.commit()
+    await db.refresh(q)
+    return q

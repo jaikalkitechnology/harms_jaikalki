@@ -130,6 +130,67 @@ export const lmsApi = {
   deleteCourse: async (id: number) => {
     await apiClient.delete(`${v1}/lms/courses/${id}`);
   },
+
+  // Modules
+  addModule: async (courseId: number, body: { title: string; description?: string; sort_order?: number }) => {
+    const { data } = await apiClient.post<CourseModule>(
+      `${v1}/lms/courses/${courseId}/modules`,
+      { ...body, lessons: [] },
+    );
+    return data;
+  },
+  updateModule: async (id: number, body: Record<string, unknown>) => {
+    const { data } = await apiClient.put<CourseModule>(
+      `${v1}/lms/modules/${id}`,
+      body,
+    );
+    return data;
+  },
+  deleteModule: async (id: number) => {
+    await apiClient.delete(`${v1}/lms/modules/${id}`);
+  },
+
+  // Lessons
+  addLesson: async (
+    moduleId: number,
+    body: {
+      title: string;
+      content_type: string;
+      content_url?: string;
+      article_body?: string;
+      duration_minutes?: number;
+      sort_order?: number;
+      points?: number;
+    },
+  ) => {
+    const { data } = await apiClient.post<Lesson>(
+      `${v1}/lms/modules/${moduleId}/lessons`,
+      body,
+    );
+    return data;
+  },
+  updateLesson: async (id: number, body: Record<string, unknown>) => {
+    const { data } = await apiClient.put<Lesson>(
+      `${v1}/lms/lessons/${id}`,
+      body,
+    );
+    return data;
+  },
+  deleteLesson: async (id: number) => {
+    await apiClient.delete(`${v1}/lms/lessons/${id}`);
+  },
+
+  // File upload (returns a URL the lesson editor can paste into content_url)
+  uploadAsset: async (
+    file: File,
+  ): Promise<{ url: string; filename: string; content_type: string; size_bytes: number }> => {
+    const fd = new FormData();
+    fd.append("file", file);
+    const { data } = await apiClient.post(`${v1}/lms/upload`, fd, {
+      headers: { "Content-Type": "multipart/form-data" },
+    });
+    return data;
+  },
   adminEnroll: async (courseId: number, employeeId: number, dueDate?: string) => {
     const { data } = await apiClient.post<Enrollment>(`${v1}/lms/enroll`, {
       course_id: courseId,

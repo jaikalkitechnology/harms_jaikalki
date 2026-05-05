@@ -131,8 +131,8 @@ export default function QuestionBankPage() {
   });
 
   const update = useMutation({
-    mutationFn: () =>
-      examApi.updateQuestion(editing!.id, {
+    mutationFn: async () => {
+      await examApi.updateQuestion(editing!.id, {
         question_text: draft.question_text,
         question_type: draft.question_type,
         department_id: draft.department_id,
@@ -143,7 +143,18 @@ export default function QuestionBankPage() {
         time_seconds: draft.time_seconds,
         explanation: draft.explanation || null,
         status: draft.status,
-      }),
+      });
+      // Always re-sync options on save — cheap and keeps the UI in
+      // sync with whatever the admin sees in the editor.
+      await examApi.replaceQuestionOptions(
+        editing!.id,
+        draft.options.map((o, i) => ({
+          option_text: o.option_text,
+          is_correct: o.is_correct,
+          sort_order: i,
+        })),
+      );
+    },
     onSuccess: () => {
       toast.success("Saved");
       setEditorOpen(false);
@@ -576,8 +587,7 @@ function Editor({
               </select>
             </div>
           </div>
-          {mode === "create" && (
-            <div>
+          <div>
               <Label>Options</Label>
               <div className="space-y-2 mt-1">
                 {draft.options.map((o, i) => (
@@ -647,11 +657,11 @@ function Editor({
                 </Button>
               </div>
               <div className="text-xs text-brand-brown-light mt-1">
-                Options are only editable on creation. To rewrite a saved
-                question's options, delete and re-add it.
+                {mode === "create"
+                  ? "At least one option must be marked correct."
+                  : "Updating options replaces the full set on save."}
               </div>
             </div>
-          )}
           <div>
             <Label>Explanation (optional)</Label>
             <textarea

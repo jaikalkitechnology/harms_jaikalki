@@ -1,6 +1,6 @@
 from typing import Optional
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import NotFoundError
@@ -148,6 +148,25 @@ async def add_module(
     )
 
 
+@router.put("/modules/{module_id}", response_model=ModuleOut)
+async def update_module(
+    module_id: int,
+    payload: dict,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_permission("admin.users.manage")),
+):
+    return await lms_svc.update_module(db, module_id, payload=payload)
+
+
+@router.delete("/modules/{module_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_module(
+    module_id: int,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_permission("admin.users.manage")),
+):
+    await lms_svc.delete_module(db, module_id)
+
+
 @router.post(
     "/modules/{module_id}/lessons",
     response_model=LessonOut,
@@ -160,6 +179,53 @@ async def add_lesson(
     _: User = Depends(require_permission("admin.users.manage")),
 ):
     return await lms_svc.add_lesson(db, module_id, payload=payload.model_dump())
+
+
+@router.put("/lessons/{lesson_id}", response_model=LessonOut)
+async def update_lesson(
+    lesson_id: int,
+    payload: dict,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_permission("admin.users.manage")),
+):
+    return await lms_svc.update_lesson(db, lesson_id, payload=payload)
+
+
+@router.delete("/lessons/{lesson_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_lesson(
+    lesson_id: int,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_permission("admin.users.manage")),
+):
+    await lms_svc.delete_lesson(db, lesson_id)
+
+
+@router.post("/upload", status_code=status.HTTP_201_CREATED)
+async def upload_lesson_asset(
+    file: UploadFile = File(...),
+    _: User = Depends(require_permission("admin.users.manage")),
+):
+    """Upload a PDF / image / generic file and return its public URL.
+    Used by the lesson editor to attach study materials."""
+    import io
+    from app.services.storage import upload_fileobj
+
+    contents = await file.read()
+    if len(contents) > 25 * 1024 * 1024:
+        raise HTTPException(413, detail="File too large (max 25 MB)")
+    key, url = upload_fileobj(
+        io.BytesIO(contents),
+        key_prefix="lms/lesson-assets",
+        filename=file.filename or "upload",
+        content_type=file.content_type,
+    )
+    return {
+        "url": url,
+        "key": key,
+        "size_bytes": len(contents),
+        "content_type": file.content_type,
+        "filename": file.filename,
+    }
 
 
 # ─── Enrollment ───────────────────────────────────────────────────────
