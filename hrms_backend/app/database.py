@@ -71,10 +71,16 @@ _PENDING_COLUMNS: list[tuple[str, str, str, str | None]] = [
 async def sync_columns() -> None:
     """Add any columns listed in _PENDING_COLUMNS that are missing
     from the live schema. Safe to call repeatedly; existing columns
-    are skipped and FK constraint failures are swallowed (they happen
-    when the constraint already exists or the dialect doesn't support
-    it). Runs only when AUTO_CREATE_TABLES is enabled."""
+    are skipped and FK constraint failures are swallowed.
+
+    Logs each ALTER it runs (or skips), and re-raises with an
+    actionable message if it can't apply a needed change so the
+    operator sees something useful in journalctl."""
+    import logging
+
     from sqlalchemy import text
+
+    log = logging.getLogger(__name__)
 
     async with engine.begin() as conn:
         for table, column, col_def, fk in _PENDING_COLUMNS:
@@ -89,16 +95,35 @@ async def sync_columns() -> None:
                 )
             ).scalar()
             if exists:
+                log.info("sync_columns: %s.%s already present", table, column)
                 continue
-            await conn.execute(
-                text(f"ALTER TABLE `{table}` ADD COLUMN `{column}` {col_def}")
-            )
-            await conn.execute(
-                text(
-                    f"CREATE INDEX `idx_{table}_{column}` "
-                    f"ON `{table}` (`{column}`)"
+
+            try:
+                await conn.execute(
+                    text(f"ALTER TABLE `{table}` ADD COLUMN `{column}` {col_def}")
                 )
-            )
+                log.info("sync_columns: added %s.%s", table, column)
+            except Exception as e:
+                log.error(
+                    "sync_columns: FAILED to add %s.%s — %s. "
+                    "Run this once as a privileged DB user:\n"
+                    "  ALTER TABLE %s ADD COLUMN %s %s;",
+                    table, column, e, table, column, col_def,
+                )
+                raise
+
+            try:
+                await conn.execute(
+                    text(
+                        f"CREATE INDEX `idx_{table}_{column}` "
+                        f"ON `{table}` (`{column}`)"
+                    )
+                )
+            except Exception as e:
+                log.warning(
+                    "sync_columns: index for %s.%s skipped — %s", table, column, e
+                )
+
             if fk:
                 try:
                     await conn.execute(
@@ -108,5 +133,8 @@ async def sync_columns() -> None:
                             f"FOREIGN KEY (`{column}`) REFERENCES {fk}"
                         )
                     )
-                except Exception:
-                    pass  # FK may already exist or be unsupported
+                except Exception as e:
+                    log.warning(
+                        "sync_columns: FK %s.%s -> %s skipped — %s",
+                        table, column, fk, e,
+                    )
