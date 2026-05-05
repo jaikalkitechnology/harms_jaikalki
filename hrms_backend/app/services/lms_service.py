@@ -603,3 +603,63 @@ async def delete_course(db: AsyncSession, course_id: int) -> None:
     course = await get_course(db, course_id)
     await db.delete(course)
     await db.commit()
+
+
+# ── Module + lesson mutations ─────────────────────────────────────────
+async def update_module(
+    db: AsyncSession, module_id: int, *, payload: dict
+) -> "CourseModule":
+    from app.models import CourseModule
+    m = (
+        await db.execute(select(CourseModule).where(CourseModule.id == module_id))
+    ).scalar_one_or_none()
+    if not m:
+        raise NotFoundError("Module not found")
+    for k in ("title", "description", "sort_order"):
+        if k in payload and payload[k] is not None:
+            setattr(m, k, payload[k])
+    await db.commit()
+    await db.refresh(m)
+    return m
+
+
+async def delete_module(db: AsyncSession, module_id: int) -> None:
+    from app.models import CourseModule
+    m = (
+        await db.execute(select(CourseModule).where(CourseModule.id == module_id))
+    ).scalar_one_or_none()
+    if not m:
+        raise NotFoundError("Module not found")
+    await db.delete(m)
+    await db.commit()
+
+
+async def update_lesson(
+    db: AsyncSession, lesson_id: int, *, payload: dict
+) -> "CourseLesson":
+    from app.models import CourseLesson
+    l = (
+        await db.execute(select(CourseLesson).where(CourseLesson.id == lesson_id))
+    ).scalar_one_or_none()
+    if not l:
+        raise NotFoundError("Lesson not found")
+    for k in (
+        "title", "content_type", "content_url", "article_body",
+        "duration_minutes", "sort_order", "points",
+    ):
+        if k in payload and payload[k] is not None:
+            setattr(l, k, payload[k])
+    await db.commit()
+    await db.refresh(l)
+    return l
+
+
+async def delete_lesson(db: AsyncSession, lesson_id: int) -> None:
+    from app.models import CourseLesson
+    l = (
+        await db.execute(select(CourseLesson).where(CourseLesson.id == lesson_id))
+    ).scalar_one_or_none()
+    if not l:
+        raise NotFoundError("Lesson not found")
+    await db.delete(l)
+    await db.commit()

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
@@ -358,7 +359,10 @@ function CourseCard({
             <Award className="size-4" />
             {course.points} pts
           </span>
-          <div className="flex gap-1">
+          <div className="flex gap-1 flex-wrap">
+            <Button asChild size="sm" variant="outline">
+              <Link to={`/lms/courses/${course.id}`}>Manage content</Link>
+            </Button>
             <Button
               size="sm"
               variant={course.is_published ? "outline" : "default"}

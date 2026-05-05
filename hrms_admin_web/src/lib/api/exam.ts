@@ -83,6 +83,16 @@ export const examApi = {
   deleteQuestion: async (id: number) => {
     await apiClient.delete(`${v1}/exams/questions/${id}`);
   },
+  replaceQuestionOptions: async (
+    id: number,
+    options: { option_text: string; is_correct: boolean; sort_order: number }[],
+  ) => {
+    const { data } = await apiClient.put<Question>(
+      `${v1}/exams/questions/${id}/options`,
+      { options },
+    );
+    return data;
+  },
   listExams: async (params?: {
     course_id?: number;
     exam_type?: string;

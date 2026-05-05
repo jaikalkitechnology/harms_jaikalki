@@ -126,6 +126,23 @@ async def delete_question(
     await exam_svc.delete_question(db, question_id)
 
 
+@router.put("/questions/{question_id}/options", response_model=QuestionOut)
+async def replace_question_options(
+    question_id: int,
+    body: dict,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_permission("admin.users.manage")),
+):
+    """Replace the option list on a saved question — used to fix the
+    correct answer post-creation. Body: {"options": [...]}"""
+    options = body.get("options") or []
+    return await _wrap_db_call(
+        exam_svc.replace_question_options(
+            db, question_id, options=options
+        )
+    )
+
+
 # ─── Exams ────────────────────────────────────────────────────────────
 @router.get("/", response_model=list[ExamSummary])
 async def list_exams(
