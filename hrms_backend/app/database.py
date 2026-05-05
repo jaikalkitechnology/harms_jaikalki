@@ -63,7 +63,7 @@ _PENDING_COLUMNS: list[tuple[str, str, str, str | None]] = [
         "exam_questions",
         "course_id",
         "INT NULL",
-        "courses(id) ON DELETE SET NULL",
+        "lms_courses(id) ON DELETE SET NULL",
     ),
 ]
 
