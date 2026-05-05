@@ -83,6 +83,11 @@ async def sync_columns() -> None:
     log = logging.getLogger(__name__)
 
     async with engine.begin() as conn:
+        # Resolve the live database name once so log messages and the
+        # actionable runbook on failure are fully qualified.
+        dbname = (await conn.execute(text("SELECT DATABASE()"))).scalar() or ""
+        qual = lambda t: f"{dbname}.{t}" if dbname else t  # noqa: E731
+
         for table, column, col_def, fk in _PENDING_COLUMNS:
             exists = (
                 await conn.execute(
@@ -95,20 +100,20 @@ async def sync_columns() -> None:
                 )
             ).scalar()
             if exists:
-                log.info("sync_columns: %s.%s already present", table, column)
+                log.info("sync_columns: %s.%s already present", qual(table), column)
                 continue
 
             try:
                 await conn.execute(
                     text(f"ALTER TABLE `{table}` ADD COLUMN `{column}` {col_def}")
                 )
-                log.info("sync_columns: added %s.%s", table, column)
+                log.info("sync_columns: added %s.%s", qual(table), column)
             except Exception as e:
                 log.error(
                     "sync_columns: FAILED to add %s.%s — %s. "
                     "Run this once as a privileged DB user:\n"
                     "  ALTER TABLE %s ADD COLUMN %s %s;",
-                    table, column, e, table, column, col_def,
+                    qual(table), column, e, qual(table), column, col_def,
                 )
                 raise
 
@@ -121,7 +126,8 @@ async def sync_columns() -> None:
                 )
             except Exception as e:
                 log.warning(
-                    "sync_columns: index for %s.%s skipped — %s", table, column, e
+                    "sync_columns: index for %s.%s skipped — %s",
+                    qual(table), column, e,
                 )
 
             if fk:
@@ -136,5 +142,5 @@ async def sync_columns() -> None:
                 except Exception as e:
                     log.warning(
                         "sync_columns: FK %s.%s -> %s skipped — %s",
-                        table, column, fk, e,
+                        qual(table), column, fk, e,
                     )
