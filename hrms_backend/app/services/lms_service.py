@@ -159,8 +159,10 @@ async def publish_course(
     db: AsyncSession, course_id: int, *, is_published: bool
 ) -> Course:
     course = await get_course(db, course_id)
-    if is_published and not course.modules:
-        raise ValidationError("Cannot publish a course without modules")
+    # Courses can publish without modules — useful for "policy"-style
+    # courses that exist only to host an exam, or content that will be
+    # added incrementally after launch. The mobile app degrades fine
+    # to "no modules yet" copy when it sees an empty list.
     course.is_published = is_published
     await db.commit()
     await db.refresh(course)

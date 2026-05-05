@@ -61,6 +61,31 @@ async def list_questions(
     )
 
 
+def _wrap_db_call(coro):
+    """Translate a missing-column / Unknown-column DB error into a
+    503 with an actionable message, instead of an opaque 500. Lets
+    the admin web display "schema needs migration" toast cleanly."""
+    from fastapi import HTTPException
+    from sqlalchemy.exc import DBAPIError, OperationalError
+
+    async def _run():
+        try:
+            return await coro
+        except (OperationalError, DBAPIError) as e:
+            msg = str(e).lower()
+            if "unknown column" in msg or "no such column" in msg:
+                raise HTTPException(
+                    status_code=503,
+                    detail=(
+                        "DB schema is out of date — run the column "
+                        "migration. See backend logs for the SQL."
+                    ),
+                ) from e
+            raise
+
+    return _run()
+
+
 @router.post(
     "/questions",
     response_model=QuestionOut,
@@ -71,7 +96,9 @@ async def create_question(
     db: AsyncSession = Depends(get_db),
     _: User = Depends(require_permission("admin.users.manage")),
 ):
-    return await exam_svc.create_question(db, payload=payload.model_dump())
+    return await _wrap_db_call(
+        exam_svc.create_question(db, payload=payload.model_dump())
+    )
 
 
 @router.put("/questions/{question_id}", response_model=QuestionOut)
@@ -81,8 +108,10 @@ async def update_question(
     db: AsyncSession = Depends(get_db),
     _: User = Depends(require_permission("admin.users.manage")),
 ):
-    return await exam_svc.update_question(
-        db, question_id, payload=payload.model_dump(exclude_unset=True)
+    return await _wrap_db_call(
+        exam_svc.update_question(
+            db, question_id, payload=payload.model_dump(exclude_unset=True)
+        )
     )
 
 
