@@ -214,6 +214,18 @@ class SalesTargetOut(BaseModel):
     achieved_amount: Decimal
     commission_pct: Decimal
     notes: Optional[str]
+    achievement_pct: float = 0.0
+
+
+class SalesTargetUpdate(BaseModel):
+    period_type: Optional[str] = Field(
+        default=None, pattern="^(monthly|quarterly|yearly)$"
+    )
+    period_start: Optional[date] = None
+    period_end: Optional[date] = None
+    target_amount: Optional[Decimal] = Field(default=None, gt=0)
+    commission_pct: Optional[Decimal] = Field(default=None, ge=0, le=100)
+    notes: Optional[str] = None
 
 
 class SalesTargetSummary(BaseModel):

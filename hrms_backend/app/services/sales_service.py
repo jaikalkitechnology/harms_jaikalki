@@ -561,12 +561,126 @@ async def list_targets(
     db: AsyncSession,
     *,
     employee_id: Optional[int] = None,
+    period_type: Optional[str] = None,
+    from_date=None,
+    to_date=None,
 ) -> Sequence[SalesTarget]:
     stmt = select(SalesTarget)
     if employee_id is not None:
         stmt = stmt.where(SalesTarget.employee_id == employee_id)
+    if period_type:
+        stmt = stmt.where(SalesTarget.period_type == period_type)
+    if from_date is not None:
+        stmt = stmt.where(SalesTarget.period_end >= from_date)
+    if to_date is not None:
+        stmt = stmt.where(SalesTarget.period_start <= to_date)
     stmt = stmt.order_by(SalesTarget.period_start.desc())
-    return (await db.execute(stmt)).scalars().all()
+    rows = (await db.execute(stmt)).scalars().all()
+    # Decorate with achievement_pct so the admin list renders progress
+    # bars without doing the math client-side.
+    for t in rows:
+        try:
+            t.achievement_pct = (
+                round(float(t.achieved_amount / t.target_amount * 100), 2)
+                if t.target_amount and t.target_amount > 0
+                else 0.0
+            )
+        except Exception:
+            t.achievement_pct = 0.0
+    return rows
+
+
+async def update_target(
+    db: AsyncSession, target_id: int, *, payload: dict
+) -> SalesTarget:
+    t = (
+        await db.execute(select(SalesTarget).where(SalesTarget.id == target_id))
+    ).scalar_one_or_none()
+    if not t:
+        raise NotFoundError("Target not found")
+    allowed = {
+        "period_type", "period_start", "period_end",
+        "target_amount", "commission_pct", "notes",
+    }
+    for k, v in payload.items():
+        if k in allowed and v is not None:
+            setattr(t, k, v)
+    await db.commit()
+    await db.refresh(t)
+    return t
+
+
+async def delete_target(db: AsyncSession, target_id: int) -> None:
+    t = (
+        await db.execute(select(SalesTarget).where(SalesTarget.id == target_id))
+    ).scalar_one_or_none()
+    if not t:
+        raise NotFoundError("Target not found")
+    await db.delete(t)
+    await db.commit()
+
+
+async def recompute_target_achievement(
+    db: AsyncSession, target_id: int
+) -> SalesTarget:
+    """Recompute achieved_amount from actual records.
+
+    Source of truth: SalesOrders for the assigned employee inside the
+    target's period (most accurate). Falls back to summing won leads'
+    expected_value when no orders exist, so a quick lead-driven
+    pipeline still shows progress."""
+    from datetime import datetime as _dt, time as _time
+    from sqlalchemy import func as _f
+    from app.models import Lead as _Lead, SalesOrder as _Order
+
+    t = (
+        await db.execute(select(SalesTarget).where(SalesTarget.id == target_id))
+    ).scalar_one_or_none()
+    if not t:
+        raise NotFoundError("Target not found")
+
+    period_start_dt = _dt.combine(t.period_start, _time.min)
+    period_end_dt = _dt.combine(t.period_end, _time.max)
+
+    # Primary: confirmed/delivered orders inside the period.
+    orders_total = (
+        await db.execute(
+            select(_f.coalesce(_f.sum(_Order.total_amount), 0))
+            .where(_Order.employee_id == t.employee_id)
+            .where(_Order.placed_at >= period_start_dt)
+            .where(_Order.placed_at <= period_end_dt)
+            .where(_Order.status != "cancelled")
+        )
+    ).scalar() or 0
+
+    achieved = Decimal(str(orders_total))
+
+    # Secondary: won leads inside the period (only if no orders).
+    if achieved == 0:
+        won_total = (
+            await db.execute(
+                select(_f.coalesce(_f.sum(_Lead.expected_value), 0))
+                .where(_Lead.assigned_to == t.employee_id)
+                .where(_Lead.stage == "won")
+                .where(_Lead.expected_close_date >= t.period_start)
+                .where(_Lead.expected_close_date <= t.period_end)
+            )
+        ).scalar() or 0
+        achieved = Decimal(str(won_total))
+
+    t.achieved_amount = _money(achieved)
+    await db.commit()
+    await db.refresh(t)
+    # Decorate for response
+    try:
+        t.achievement_pct = (
+            round(float(t.achieved_amount / t.target_amount * 100), 2)
+            if t.target_amount and t.target_amount > 0
+            else 0.0
+        )
+    except Exception:
+        t.achievement_pct = 0.0
+    return t
 
 
 async def current_target_for(
