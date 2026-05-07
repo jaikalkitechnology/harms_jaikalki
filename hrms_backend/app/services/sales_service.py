@@ -79,6 +79,7 @@ async def list_leads(
     source: Optional[str] = None,
     customer_id: Optional[int] = None,
     search: Optional[str] = None,
+    won_status: Optional[str] = None,
     limit: int = 500,
 ) -> Sequence[Lead]:
     from sqlalchemy import or_
@@ -92,6 +93,8 @@ async def list_leads(
         stmt = stmt.where(Lead.source == source)
     if customer_id is not None:
         stmt = stmt.where(Lead.customer_id == customer_id)
+    if won_status in {"pending", "approved", "rejected"}:
+        stmt = stmt.where(Lead.won_approval_status == won_status)
     if search:
         like = f"%{search.strip()}%"
         stmt = stmt.where(
@@ -187,6 +190,13 @@ async def get_lead(db: AsyncSession, lead_id: int) -> Lead:
     return lead
 
 
+def _actor_can_approve(actor) -> bool:
+    if actor is None:
+        return False
+    perms = getattr(actor, "permission_codes", None) or set()
+    return "approval.act" in perms or "system.config" in perms
+
+
 async def update_lead_stage(
     db: AsyncSession,
     lead_id: int,
@@ -198,7 +208,7 @@ async def update_lead_stage(
     from app.models import LeadActivity
 
     lead = await get_lead(db, lead_id)
-    if lead.stage == stage:
+    if lead.stage == stage and stage != "won":
         return lead
     if stage == "lost" and not lost_reason:
         raise ValidationError("lost_reason is required when marking a lead as lost")
@@ -207,6 +217,34 @@ async def update_lead_stage(
     lead.score = _STAGE_SCORE.get(stage, lead.score)
     if stage == "lost":
         lead.lost_reason = lost_reason
+
+    # Won-approval workflow.
+    if stage == "won":
+        if _actor_can_approve(actor):
+            # Admin direct close → auto-approve.
+            lead.won_approval_status = "approved"
+            lead.won_requested_at = lead.won_requested_at or _now()
+            lead.won_decided_at = _now()
+            lead.won_decided_by_user_id = getattr(actor, "id", None)
+            lead.won_rejection_reason = None
+            activity_body = "Closed-won (admin direct)"
+        else:
+            # Sales rep request → goes to pending queue.
+            lead.won_approval_status = "pending"
+            lead.won_requested_at = _now()
+            lead.won_decided_at = None
+            lead.won_decided_by_user_id = None
+            lead.won_rejection_reason = None
+            activity_body = "Won submitted — awaiting admin approval"
+    else:
+        # Leaving the won state clears any prior decision so that a
+        # later re-promotion goes through the queue cleanly.
+        if prev == "won":
+            lead.won_approval_status = None
+            lead.won_decided_at = None
+            lead.won_decided_by_user_id = None
+        activity_body = lost_reason if stage == "lost" else None
+
     db.add(
         LeadActivity(
             lead_id=lead.id,
@@ -215,12 +253,84 @@ async def update_lead_stage(
             activity_type="stage_change",
             from_stage=prev,
             to_stage=stage,
-            body=lost_reason if stage == "lost" else None,
+            body=activity_body,
         )
     )
     await db.commit()
     await db.refresh(lead)
     return lead
+
+
+async def decide_won(
+    db: AsyncSession,
+    lead_id: int,
+    *,
+    decision: str,
+    reason: Optional[str] = None,
+    actor,
+) -> Lead:
+    """Admin approves or rejects a pending won lead.
+
+    Approve: keeps stage="won" and flips status to "approved".
+    Reject: stage rolls back to "negotiation" and stores the reason."""
+    from app.models import LeadActivity
+
+    if decision not in {"approve", "reject"}:
+        raise ValidationError("decision must be approve or reject")
+
+    lead = await get_lead(db, lead_id)
+    if lead.won_approval_status != "pending" or lead.stage != "won":
+        raise ValidationError("Lead has no pending won-approval to act on")
+
+    now = _now()
+    if decision == "approve":
+        lead.won_approval_status = "approved"
+        lead.won_decided_at = now
+        lead.won_decided_by_user_id = getattr(actor, "id", None)
+        lead.won_rejection_reason = None
+        db.add(
+            LeadActivity(
+                lead_id=lead.id,
+                actor_user_id=actor.id,
+                actor_label=getattr(actor, "full_name", None),
+                activity_type="system",
+                body="Won approved by admin",
+            )
+        )
+    else:
+        prev_stage = lead.stage
+        lead.won_approval_status = "rejected"
+        lead.won_rejection_reason = (reason or "").strip() or None
+        lead.won_decided_at = now
+        lead.won_decided_by_user_id = getattr(actor, "id", None)
+        # Roll the lead back so the rep can keep working it.
+        lead.stage = "negotiation"
+        lead.score = _STAGE_SCORE["negotiation"]
+        db.add(
+            LeadActivity(
+                lead_id=lead.id,
+                actor_user_id=actor.id,
+                actor_label=getattr(actor, "full_name", None),
+                activity_type="stage_change",
+                from_stage=prev_stage,
+                to_stage="negotiation",
+                body=f"Won rejected by admin: {lead.won_rejection_reason or 'no reason given'}",
+            )
+        )
+    await db.commit()
+    await db.refresh(lead)
+    return lead
+
+
+async def list_pending_won_leads(db: AsyncSession) -> Sequence[Lead]:
+    return (
+        await db.execute(
+            select(Lead)
+            .where(Lead.stage == "won")
+            .where(Lead.won_approval_status == "pending")
+            .order_by(Lead.won_requested_at.desc().nullslast())
+        )
+    ).scalars().all()
 
 
 async def pipeline_kanban(
@@ -656,12 +766,20 @@ async def recompute_target_achievement(
     achieved = Decimal(str(orders_total))
 
     # Secondary: won leads inside the period (only if no orders).
+    # Pending / rejected wins do NOT count.
     if achieved == 0:
+        from sqlalchemy import or_ as _or
         won_total = (
             await db.execute(
                 select(_f.coalesce(_f.sum(_Lead.expected_value), 0))
                 .where(_Lead.assigned_to == t.employee_id)
                 .where(_Lead.stage == "won")
+                .where(
+                    _or(
+                        _Lead.won_approval_status.is_(None),
+                        _Lead.won_approval_status == "approved",
+                    )
+                )
                 .where(_Lead.expected_close_date >= t.period_start)
                 .where(_Lead.expected_close_date <= t.period_end)
             )

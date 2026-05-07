@@ -17,6 +17,8 @@ class Lead extends Equatable {
     this.nextActionDate,
     this.notes,
     this.lostReason,
+    this.wonApprovalStatus,
+    this.wonRejectionReason,
   });
 
   final int id;
@@ -34,6 +36,8 @@ class Lead extends Equatable {
   final String? nextActionDate;
   final String? notes;
   final String? lostReason;
+  final String? wonApprovalStatus; // pending | approved | rejected | null
+  final String? wonRejectionReason;
 
   factory Lead.fromJson(Map<String, dynamic> j) => Lead(
         id: j['id'] as int,
@@ -51,10 +55,12 @@ class Lead extends Equatable {
         nextActionDate: j['next_action_date'] as String?,
         notes: j['notes'] as String?,
         lostReason: j['lost_reason'] as String?,
+        wonApprovalStatus: j['won_approval_status'] as String?,
+        wonRejectionReason: j['won_rejection_reason'] as String?,
       );
 
   @override
-  List<Object?> get props => [id, stage];
+  List<Object?> get props => [id, stage, wonApprovalStatus];
 }
 
 class PipelineColumn extends Equatable {

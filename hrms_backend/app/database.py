@@ -65,6 +65,11 @@ _PENDING_COLUMNS: list[tuple[str, str, str, str | None]] = [
         "INT NULL",
         "lms_courses(id) ON DELETE SET NULL",
     ),
+    ("sales_leads", "won_approval_status", "VARCHAR(16) NULL", None),
+    ("sales_leads", "won_rejection_reason", "VARCHAR(500) NULL", None),
+    ("sales_leads", "won_requested_at", "DATETIME NULL", None),
+    ("sales_leads", "won_decided_at", "DATETIME NULL", None),
+    ("sales_leads", "won_decided_by_user_id", "INT NULL", None),
 ]
 
 

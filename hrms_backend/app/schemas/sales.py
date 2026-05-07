@@ -67,6 +67,16 @@ class LeadOut(BaseModel):
     next_action_date: Optional[date]
     notes: Optional[str]
     lost_reason: Optional[str]
+    won_approval_status: Optional[str] = None
+    won_rejection_reason: Optional[str] = None
+    won_requested_at: Optional[datetime] = None
+    won_decided_at: Optional[datetime] = None
+    won_decided_by_user_id: Optional[int] = None
+
+
+class WonDecision(BaseModel):
+    decision: str = Field(pattern="^(approve|reject)$")
+    reason: Optional[str] = None
 
 
 class LeadActivityOut(BaseModel):
