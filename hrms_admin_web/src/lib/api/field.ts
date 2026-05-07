@@ -70,6 +70,8 @@ export interface LiveMapEntry {
   battery_pct: number | null;
   current_status: string;
   last_visit_customer: string | null;
+  is_online: boolean;
+  last_seen_minutes: number;
 }
 
 export interface TeamPerformanceEntry {

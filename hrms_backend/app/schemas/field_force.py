@@ -190,6 +190,8 @@ class LiveMapEntry(BaseModel):
     battery_pct: Optional[int] = None
     current_status: str = "idle"
     last_visit_customer: Optional[str] = None
+    is_online: bool = False
+    last_seen_minutes: int = 0
 
 
 class TeamPerformanceEntry(BaseModel):
