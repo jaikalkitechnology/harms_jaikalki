@@ -1,10 +1,10 @@
 from typing import Optional
 
-from fastapi import APIRouter, Depends, Query, Response, status
+from fastapi import APIRouter, Depends, File, Form, Query, Response, UploadFile, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.exceptions import NotFoundError
+from app.core.exceptions import NotFoundError, ValidationError
 from app.core.permissions import require_permission
 from app.dependencies import get_current_user, get_db
 from app.models import Employee, User
@@ -23,6 +23,7 @@ from app.schemas.verification import (
 )
 from app.services import employee_service as emp_svc
 from app.services import verification_service as v_svc
+from app.services.storage import upload_fileobj
 from app.services.verification_pdf import render_verification_report
 
 router = APIRouter(prefix="/verification", tags=["verification"])
@@ -95,6 +96,66 @@ async def delete_template(
     _: User = Depends(require_permission("admin.users.manage")),
 ):
     await v_svc.delete_template(db, template_id)
+
+
+# ─── File uploads (photos / signature / attachments) ────────────────
+ALLOWED_UPLOAD_KINDS = {"photo", "signature", "document"}
+ALLOWED_MIME = {
+    "image/jpeg",
+    "image/jpg",
+    "image/png",
+    "image/webp",
+    "image/heic",
+    "application/pdf",
+}
+MAX_UPLOAD_BYTES = 15 * 1024 * 1024  # 15 MB
+
+
+@router.post("/upload")
+async def upload_verification_file(
+    file: UploadFile = File(...),
+    kind: str = Form("photo"),
+    field_key: Optional[str] = Form(None),
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Upload a photo / signature / attachment for a verification job.
+
+    Returns: {"url": str, "key": str, "kind": str, "field_key": Optional[str]}.
+
+    The mobile app calls this before /submit so the URLs included in
+    form_data, photos[] or signature_url point at real, downloadable
+    objects rather than placeholders."""
+    if kind not in ALLOWED_UPLOAD_KINDS:
+        raise ValidationError(f"kind must be one of: {sorted(ALLOWED_UPLOAD_KINDS)}")
+    if file.content_type and file.content_type.lower() not in ALLOWED_MIME:
+        raise ValidationError(f"Unsupported content type: {file.content_type}")
+
+    contents = await file.read()
+    if len(contents) > MAX_UPLOAD_BYTES:
+        raise ValidationError("File too large (max 15 MB)")
+
+    emp = await emp_svc.get_self_employee(db, user)
+    emp_code = emp.employee_code if emp else f"u{user.id}"
+    prefix = f"verification/{emp_code}/{kind}"
+    if field_key:
+        prefix = f"{prefix}/{field_key}"
+
+    import io
+    key, url = upload_fileobj(
+        io.BytesIO(contents),
+        key_prefix=prefix,
+        filename=file.filename or f"{kind}.bin",
+        content_type=file.content_type,
+    )
+    return {
+        "url": url,
+        "key": key,
+        "kind": kind,
+        "field_key": field_key,
+        "size": len(contents),
+        "mime": file.content_type,
+    }
 
 
 # ─── Verifications ────────────────────────────────────────────────────
