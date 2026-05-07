@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.exceptions import ForbiddenError, NotFoundError
 from app.core.permissions import require_permission
 from app.dependencies import get_current_user, get_db
-from app.models import Attendance, AttendanceRegularization, User
+from app.models import Attendance, AttendanceRegularization, LeaveRequest, User
 from app.schemas.attendance import (
     AttendanceCheckIn,
     AttendanceCheckOut,
@@ -126,6 +126,67 @@ async def my_summary(
     )
 
 
+async def _synthesize_leave_rows(
+    db: AsyncSession,
+    *,
+    from_date: date,
+    to_date: date,
+    employee_ids: Optional[list[int]] = None,
+):
+    """Produce virtual Attendance rows (status='leave') for each
+    (employee, date) covered by an approved LeaveRequest in the range.
+    Used to surface employees on leave even when they didn't punch in."""
+    from datetime import timedelta as _td
+
+    stmt = (
+        select(LeaveRequest)
+        .where(LeaveRequest.status == "approved")
+        .where(LeaveRequest.from_date <= to_date)
+        .where(LeaveRequest.to_date >= from_date)
+    )
+    if employee_ids is not None:
+        if not employee_ids:
+            return []
+        stmt = stmt.where(LeaveRequest.employee_id.in_(employee_ids))
+    leaves = (await db.execute(stmt)).scalars().all()
+
+    out: list[Attendance] = []
+    for lr in leaves:
+        d = max(lr.from_date, from_date)
+        end = min(lr.to_date, to_date)
+        while d <= end:
+            virt = Attendance(
+                employee_id=lr.employee_id,
+                date=d,
+                status="leave",
+                work_mode="office",
+                source="leave",
+                total_minutes=0,
+                notes=(lr.reason or None),
+            )
+            # Use a deterministic negative id derived from the leave row
+            # so React's `key={r.id}` stays unique across the synthesized
+            # set. Real (positive) attendance ids are never overwritten.
+            virt.id = -(lr.id * 100 + (d - lr.from_date).days)
+            out.append(virt)
+            d = d + _td(days=1)
+    return out
+
+
+def _merge_attendance_with_leave(
+    real: list[Attendance], virtual: list[Attendance]
+) -> list[Attendance]:
+    """Add synthesized leave rows for any (employee_id, date) that
+    isn't already represented in the real attendance set."""
+    seen = {(a.employee_id, a.date) for a in real}
+    merged = list(real)
+    for v in virtual:
+        if (v.employee_id, v.date) not in seen:
+            merged.append(v)
+    merged.sort(key=lambda r: (r.date, r.employee_id), reverse=True)
+    return merged
+
+
 @router.get("/team", response_model=list[AttendanceOut])
 async def team_attendance(
     on_date: Optional[date] = Query(default=None, alias="date"),
@@ -139,7 +200,15 @@ async def team_attendance(
     stmt = select(Attendance).where(Attendance.date == on)
     if allowed is not None:
         stmt = stmt.where(Attendance.employee_id.in_(allowed))
-    return (await db.execute(stmt)).scalars().all()
+    real = (await db.execute(stmt)).scalars().all()
+
+    virtual = await _synthesize_leave_rows(
+        db,
+        from_date=on,
+        to_date=on,
+        employee_ids=list(allowed) if allowed is not None else None,
+    )
+    return _merge_attendance_with_leave(list(real), virtual)
 
 
 @router.get("/report", response_model=list[AttendanceOut])
@@ -158,7 +227,15 @@ async def attendance_report(
     )
     if employee_id:
         stmt = stmt.where(Attendance.employee_id == employee_id)
-    return (await db.execute(stmt)).scalars().all()
+    real = (await db.execute(stmt)).scalars().all()
+
+    virtual = await _synthesize_leave_rows(
+        db,
+        from_date=from_date,
+        to_date=to_date,
+        employee_ids=[employee_id] if employee_id else None,
+    )
+    return _merge_attendance_with_leave(list(real), virtual)
 
 
 # ── Regularization ──────────────────────────────────────────────────────
@@ -266,7 +343,14 @@ async def attendance_report_csv(
     )
     if employee_id:
         stmt = stmt.where(Attendance.employee_id == employee_id)
-    rows = (await db.execute(stmt)).scalars().all()
+    real = (await db.execute(stmt)).scalars().all()
+    virtual = await _synthesize_leave_rows(
+        db,
+        from_date=from_date,
+        to_date=to_date,
+        employee_ids=[employee_id] if employee_id else None,
+    )
+    rows = _merge_attendance_with_leave(list(real), virtual)
     emps = (await db.execute(select(EmpModel))).scalars().all()
     by_id = {e.id: e for e in emps}
 
