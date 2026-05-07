@@ -101,6 +101,13 @@ class SalesApi {
     return TargetSummary.fromJson(res.data as Map<String, dynamic>);
   }
 
+  Future<SalesTarget> refreshTarget(int targetId) async {
+    final res = await _dio.post<Map<String, dynamic>>(
+      '$_v1/sales/targets/$targetId/recompute',
+    );
+    return SalesTarget.fromJson(res.data!);
+  }
+
   Future<void> logPromotion({
     required String eventName,
     required String activityDate,
