@@ -210,3 +210,40 @@ class Quote extends Equatable {
   @override
   List<Object?> get props => [id, status];
 }
+
+
+class LeadActivity extends Equatable {
+  const LeadActivity({
+    required this.id,
+    required this.leadId,
+    required this.activityType,
+    required this.createdAt,
+    this.actorLabel,
+    this.body,
+    this.fromStage,
+    this.toStage,
+  });
+
+  final int id;
+  final int leadId;
+  final String? actorLabel;
+  final String activityType;
+  final String? body;
+  final String? fromStage;
+  final String? toStage;
+  final String createdAt;
+
+  factory LeadActivity.fromJson(Map<String, dynamic> j) => LeadActivity(
+        id: j['id'] as int,
+        leadId: j['lead_id'] as int,
+        actorLabel: j['actor_label'] as String?,
+        activityType: j['activity_type'] as String,
+        body: j['body'] as String?,
+        fromStage: j['from_stage'] as String?,
+        toStage: j['to_stage'] as String?,
+        createdAt: j['created_at'] as String,
+      );
+
+  @override
+  List<Object?> get props => [id];
+}

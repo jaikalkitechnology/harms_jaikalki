@@ -28,6 +28,18 @@ export interface Lead {
   created_at: string;
 }
 
+export interface LeadActivity {
+  id: number;
+  lead_id: number;
+  actor_user_id: number | null;
+  actor_label: string | null;
+  activity_type: "comment" | "stage_change" | "assignment" | "system";
+  body: string | null;
+  from_stage: string | null;
+  to_stage: string | null;
+  created_at: string;
+}
+
 export interface PipelineColumn {
   stage: Lead["stage"];
   leads: Lead[];
@@ -104,6 +116,19 @@ export const salesApi = {
   },
   deleteLead: async (leadId: number) => {
     await apiClient.delete(`${v1}/sales/leads/${leadId}`);
+  },
+  listLeadActivities: async (leadId: number): Promise<LeadActivity[]> => {
+    const { data } = await apiClient.get<LeadActivity[]>(
+      `${v1}/sales/leads/${leadId}/activities`,
+    );
+    return data;
+  },
+  addLeadComment: async (leadId: number, body: string): Promise<LeadActivity> => {
+    const { data } = await apiClient.post<LeadActivity>(
+      `${v1}/sales/leads/${leadId}/comments`,
+      { body },
+    );
+    return data;
   },
   updateStage: async (leadId: number, stage: string, lostReason?: string) => {
     const { data } = await apiClient.patch<Lead>(

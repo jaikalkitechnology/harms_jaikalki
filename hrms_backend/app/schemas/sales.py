@@ -67,6 +67,23 @@ class LeadOut(BaseModel):
     next_action_date: Optional[date]
     notes: Optional[str]
     lost_reason: Optional[str]
+
+
+class LeadActivityOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    lead_id: int
+    actor_user_id: Optional[int]
+    actor_label: Optional[str]
+    activity_type: str
+    body: Optional[str]
+    from_stage: Optional[str]
+    to_stage: Optional[str]
+    created_at: datetime
+
+
+class LeadCommentCreate(BaseModel):
+    body: str = Field(min_length=1, max_length=4000)
     created_at: datetime
 
 

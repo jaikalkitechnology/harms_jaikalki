@@ -41,6 +41,23 @@ class SalesApi {
     return Lead.fromJson(res.data!);
   }
 
+  Future<List<LeadActivity>> leadActivities(int leadId) async {
+    final res = await _dio.get<List<dynamic>>(
+      '$_v1/sales/leads/$leadId/activities',
+    );
+    return (res.data ?? const [])
+        .map((e) => LeadActivity.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<LeadActivity> addLeadComment(int leadId, String body) async {
+    final res = await _dio.post<Map<String, dynamic>>(
+      '$_v1/sales/leads/$leadId/comments',
+      data: {'body': body},
+    );
+    return LeadActivity.fromJson(res.data!);
+  }
+
   Future<List<PipelineColumn>> myPipeline() async {
     final res = await _dio.get<List<dynamic>>(
       '$_v1/sales/pipeline',

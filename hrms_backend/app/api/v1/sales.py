@@ -9,6 +9,8 @@ from app.core.permissions import require_permission
 from app.dependencies import get_current_user, get_db
 from app.models import Customer, User
 from app.schemas.sales import (
+    LeadActivityOut,
+    LeadCommentCreate,
     LeadCreate,
     LeadOut,
     LeadStageUpdate,
@@ -100,10 +102,13 @@ async def update_lead_stage(
     lead_id: int,
     payload: LeadStageUpdate,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(get_current_user),
+    user: User = Depends(get_current_user),
 ):
     return await sales_svc.update_lead_stage(
-        db, lead_id, stage=payload.stage, lost_reason=payload.lost_reason
+        db, lead_id,
+        stage=payload.stage,
+        lost_reason=payload.lost_reason,
+        actor=user,
     )
 
 
@@ -112,10 +117,12 @@ async def update_lead(
     lead_id: int,
     payload: LeadUpdate,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(get_current_user),
+    user: User = Depends(get_current_user),
 ):
     return await sales_svc.update_lead(
-        db, lead_id, payload=payload.model_dump(exclude_unset=True)
+        db, lead_id,
+        payload=payload.model_dump(exclude_unset=True),
+        actor=user,
     )
 
 
@@ -126,6 +133,32 @@ async def delete_lead(
     _: User = Depends(require_permission("approval.act")),
 ):
     await sales_svc.delete_lead(db, lead_id)
+
+
+# ── Lead activity timeline + comments ────────────────────────────────
+@router.get("/leads/{lead_id}/activities", response_model=list[LeadActivityOut])
+async def list_lead_activities(
+    lead_id: int,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(get_current_user),
+):
+    return await sales_svc.list_lead_activities(db, lead_id)
+
+
+@router.post(
+    "/leads/{lead_id}/comments",
+    response_model=LeadActivityOut,
+    status_code=status.HTTP_201_CREATED,
+)
+async def add_lead_comment(
+    lead_id: int,
+    payload: LeadCommentCreate,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    return await sales_svc.add_lead_comment(
+        db, lead_id, body=payload.body, actor=user
+    )
 
 
 @router.get("/pipeline", response_model=list[PipelineColumn])
