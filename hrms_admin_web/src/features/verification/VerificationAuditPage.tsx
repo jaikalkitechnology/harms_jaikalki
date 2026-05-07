@@ -6,6 +6,10 @@ import {
   CheckCircle2,
   ChevronLeft,
   ChevronRight,
+  ExternalLink,
+  FileText,
+  Image as ImageIcon,
+  PenLine,
   RefreshCcw,
   Search,
   XCircle,
@@ -36,6 +40,56 @@ const TYPES = [
   "other",
 ];
 
+function isImageUrl(u: string): boolean {
+  return /\.(jpe?g|png|gif|webp|heic|bmp)(\?|#|$)/i.test(u);
+}
+function isPdfUrl(u: string): boolean {
+  return /\.pdf(\?|#|$)/i.test(u);
+}
+function looksLikeUrl(v: unknown): v is string {
+  return (
+    typeof v === "string" &&
+    (v.startsWith("http://") || v.startsWith("https://") || v.startsWith("/"))
+  );
+}
+
+interface FileEntry {
+  url: string;
+  label: string;
+  kind: "image" | "pdf" | "link";
+}
+
+function collectFiles(v: any): FileEntry[] {
+  const out: FileEntry[] = [];
+  (v.photos as string[] | null | undefined)?.forEach((u, i) => {
+    if (!u) return;
+    out.push({
+      url: u,
+      label: `Photo ${i + 1}`,
+      kind: isPdfUrl(u) ? "pdf" : "image",
+    });
+  });
+  if (v.signature_url) {
+    out.push({
+      url: v.signature_url,
+      label: "Signature",
+      kind: isImageUrl(v.signature_url) ? "image" : "link",
+    });
+  }
+  if (v.form_data && typeof v.form_data === "object") {
+    for (const [k, val] of Object.entries(v.form_data)) {
+      if (looksLikeUrl(val)) {
+        out.push({
+          url: val,
+          label: k,
+          kind: isImageUrl(val) ? "image" : isPdfUrl(val) ? "pdf" : "link",
+        });
+      }
+    }
+  }
+  return out;
+}
+
 export default function VerificationAuditPage() {
   const qc = useQueryClient();
   const [comments, setComments] = useState<Record<number, string>>({});
@@ -43,6 +97,7 @@ export default function VerificationAuditPage() {
   const [typeFilter, setTypeFilter] = useState("");
   const [fraudOnly, setFraudOnly] = useState(false);
   const [page, setPage] = useState(1);
+  const [lightbox, setLightbox] = useState<FileEntry | null>(null);
 
   const { data: list = [], isLoading } = useQuery({
     queryKey: ["verification-audit-queue", search, typeFilter, fraudOnly],
@@ -188,17 +243,29 @@ export default function VerificationAuditPage() {
                       Findings
                     </div>
                     <dl className="grid grid-cols-2 gap-2">
-                      {Object.entries(v.form_data).map(([k, val]) => (
-                        <div key={k}>
-                          <dt className="text-xs text-brand-brown-light">
-                            {k}
-                          </dt>
-                          <dd>{String(val)}</dd>
-                        </div>
-                      ))}
+                      {Object.entries(v.form_data)
+                        .filter(([, val]) => !looksLikeUrl(val))
+                        .map(([k, val]) => (
+                          <div key={k}>
+                            <dt className="text-xs text-brand-brown-light">
+                              {k}
+                            </dt>
+                            <dd>{String(val)}</dd>
+                          </div>
+                        ))}
                     </dl>
                   </div>
                 )}
+
+                <FilesPanel
+                  files={collectFiles(v)}
+                  reportUrl={
+                    v.status === "completed" || v.status === "audit_pending"
+                      ? verificationApi.reportUrl(v.id)
+                      : null
+                  }
+                  onPreview={setLightbox}
+                />
 
                 {v.remarks && (
                   <div className="text-sm">
@@ -295,6 +362,177 @@ export default function VerificationAuditPage() {
           </Button>
         </div>
       )}
+
+      {lightbox && (
+        <Lightbox file={lightbox} onClose={() => setLightbox(null)} />
+      )}
+    </div>
+  );
+}
+
+function FilesPanel({
+  files,
+  reportUrl,
+  onPreview,
+}: {
+  files: FileEntry[];
+  reportUrl: string | null;
+  onPreview: (f: FileEntry) => void;
+}) {
+  if (files.length === 0 && !reportUrl) {
+    return (
+      <div className="rounded-md border border-brand-brown-50 bg-cream p-3 text-xs text-brand-brown-light">
+        No photos / signature / attachments uploaded by the rep.
+      </div>
+    );
+  }
+  return (
+    <div className="rounded-md border border-brand-brown-50 bg-cream p-3">
+      <div className="flex items-center justify-between mb-2">
+        <div className="text-xs font-semibold uppercase text-brand-gold-dark">
+          Files ({files.length})
+        </div>
+        {reportUrl && (
+          <a
+            href={reportUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center gap-1 text-xs text-brand-gold-dark hover:underline"
+          >
+            <FileText className="size-3" /> Generated report PDF
+          </a>
+        )}
+      </div>
+      {files.length > 0 && (
+        <div className="grid gap-2 sm:grid-cols-3 md:grid-cols-4">
+          {files.map((f, i) => (
+            <FileTile
+              key={`${f.url}-${i}`}
+              file={f}
+              onPreview={() => onPreview(f)}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function FileTile({
+  file,
+  onPreview,
+}: {
+  file: FileEntry;
+  onPreview: () => void;
+}) {
+  const isSignature = file.label.toLowerCase().includes("signature");
+  return (
+    <button
+      type="button"
+      onClick={onPreview}
+      className="group text-left rounded-md border border-brand-brown-50 bg-white overflow-hidden hover:border-brand-gold-dark transition"
+    >
+      <div className="aspect-square bg-brand-brown-50/50 flex items-center justify-center overflow-hidden">
+        {file.kind === "image" ? (
+          <img
+            src={file.url}
+            alt={file.label}
+            loading="lazy"
+            className="w-full h-full object-cover group-hover:scale-105 transition"
+          />
+        ) : file.kind === "pdf" ? (
+          <FileText className="size-10 text-brand-gold-dark" />
+        ) : isSignature ? (
+          <PenLine className="size-10 text-brand-gold-dark" />
+        ) : (
+          <ImageIcon className="size-10 text-brand-gold-dark" />
+        )}
+      </div>
+      <div className="p-2 flex items-center justify-between gap-2">
+        <div className="text-xs font-medium truncate" title={file.label}>
+          {file.label}
+        </div>
+        <a
+          href={file.url}
+          target="_blank"
+          rel="noreferrer"
+          onClick={(e) => e.stopPropagation()}
+          className="text-brand-brown-light hover:text-brand-gold-dark"
+          title="Open in new tab"
+        >
+          <ExternalLink className="size-3" />
+        </a>
+      </div>
+    </button>
+  );
+}
+
+function Lightbox({
+  file,
+  onClose,
+}: {
+  file: FileEntry;
+  onClose: () => void;
+}) {
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4"
+      onClick={onClose}
+    >
+      <div
+        className="max-w-5xl w-full max-h-[90vh] flex flex-col"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between mb-2 text-white">
+          <div className="font-medium">{file.label}</div>
+          <div className="flex items-center gap-3">
+            <a
+              href={file.url}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-1 text-xs hover:underline"
+            >
+              <ExternalLink className="size-3" /> Open in new tab
+            </a>
+            <button
+              onClick={onClose}
+              className="text-white/80 hover:text-white text-2xl leading-none"
+              title="Close"
+            >
+              ×
+            </button>
+          </div>
+        </div>
+        <div className="flex-1 bg-black/40 rounded overflow-auto flex items-center justify-center">
+          {file.kind === "image" ? (
+            <img
+              src={file.url}
+              alt={file.label}
+              className="max-w-full max-h-[80vh] object-contain"
+            />
+          ) : file.kind === "pdf" ? (
+            <iframe
+              src={file.url}
+              title={file.label}
+              className="w-full h-[80vh] bg-white"
+            />
+          ) : (
+            <div className="p-12 text-white/80 text-center">
+              No inline preview for this file type.
+              <br />
+              <a
+                href={file.url}
+                target="_blank"
+                rel="noreferrer"
+                className="text-brand-gold underline"
+              >
+                Open it in a new tab
+              </a>
+              .
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
