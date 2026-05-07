@@ -12,6 +12,7 @@ from app.schemas.sales import (
     LeadCreate,
     LeadOut,
     LeadStageUpdate,
+    LeadUpdate,
     OrderCreate,
     OrderOut,
     OrderStatusUpdate,
@@ -46,15 +47,25 @@ async def _self_employee(db: AsyncSession, user: User):
 @router.get("/leads", response_model=list[LeadOut])
 async def list_leads(
     stage: Optional[str] = None,
+    source: Optional[str] = None,
+    customer_id: Optional[int] = None,
+    assigned_to: Optional[int] = None,
+    search: Optional[str] = None,
     mine: bool = False,
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    assigned_to = None
     if mine:
         emp = await _self_employee(db, user)
         assigned_to = emp.id
-    return await sales_svc.list_leads(db, assigned_to=assigned_to, stage=stage)
+    return await sales_svc.list_leads(
+        db,
+        assigned_to=assigned_to,
+        stage=stage,
+        source=source,
+        customer_id=customer_id,
+        search=search,
+    )
 
 
 @router.post(
@@ -94,6 +105,27 @@ async def update_lead_stage(
     return await sales_svc.update_lead_stage(
         db, lead_id, stage=payload.stage, lost_reason=payload.lost_reason
     )
+
+
+@router.put("/leads/{lead_id}", response_model=LeadOut)
+async def update_lead(
+    lead_id: int,
+    payload: LeadUpdate,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(get_current_user),
+):
+    return await sales_svc.update_lead(
+        db, lead_id, payload=payload.model_dump(exclude_unset=True)
+    )
+
+
+@router.delete("/leads/{lead_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_lead(
+    lead_id: int,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_permission("approval.act")),
+):
+    await sales_svc.delete_lead(db, lead_id)
 
 
 @router.get("/pipeline", response_model=list[PipelineColumn])

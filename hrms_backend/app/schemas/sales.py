@@ -31,6 +31,25 @@ class LeadStageUpdate(BaseModel):
     lost_reason: Optional[str] = None
 
 
+class LeadUpdate(BaseModel):
+    customer_id: Optional[int] = None
+    contact_name: Optional[str] = None
+    contact_phone: Optional[str] = None
+    contact_email: Optional[str] = None
+    source: Optional[str] = Field(
+        default=None,
+        pattern="^(website|referral|cold_call|exhibition|campaign|"
+        "field_visit|partner|other)$",
+    )
+    expected_value: Optional[Decimal] = Field(default=None, ge=0)
+    expected_close_date: Optional[date] = None
+    assigned_to: Optional[int] = None
+    next_action: Optional[str] = None
+    next_action_date: Optional[date] = None
+    notes: Optional[str] = None
+    lost_reason: Optional[str] = None
+
+
 class LeadOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: int

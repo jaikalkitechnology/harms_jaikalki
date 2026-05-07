@@ -76,15 +76,58 @@ async def list_leads(
     *,
     assigned_to: Optional[int] = None,
     stage: Optional[str] = None,
-    limit: int = 200,
+    source: Optional[str] = None,
+    customer_id: Optional[int] = None,
+    search: Optional[str] = None,
+    limit: int = 500,
 ) -> Sequence[Lead]:
+    from sqlalchemy import or_
+
     stmt = select(Lead)
     if assigned_to is not None:
         stmt = stmt.where(Lead.assigned_to == assigned_to)
     if stage:
         stmt = stmt.where(Lead.stage == stage)
+    if source:
+        stmt = stmt.where(Lead.source == source)
+    if customer_id is not None:
+        stmt = stmt.where(Lead.customer_id == customer_id)
+    if search:
+        like = f"%{search.strip()}%"
+        stmt = stmt.where(
+            or_(
+                Lead.contact_name.ilike(like),
+                Lead.contact_email.ilike(like),
+                Lead.contact_phone.ilike(like),
+                Lead.notes.ilike(like),
+            )
+        )
     stmt = stmt.order_by(Lead.created_at.desc()).limit(limit)
     return (await db.execute(stmt)).scalars().all()
+
+
+async def update_lead(
+    db: AsyncSession, lead_id: int, *, payload: dict
+) -> Lead:
+    lead = await get_lead(db, lead_id)
+    allowed = {
+        "customer_id", "contact_name", "contact_phone", "contact_email",
+        "source", "expected_value", "expected_close_date",
+        "assigned_to", "next_action", "next_action_date",
+        "notes", "lost_reason",
+    }
+    for k, v in payload.items():
+        if k in allowed and v is not None:
+            setattr(lead, k, v)
+    await db.commit()
+    await db.refresh(lead)
+    return lead
+
+
+async def delete_lead(db: AsyncSession, lead_id: int) -> None:
+    lead = await get_lead(db, lead_id)
+    await db.delete(lead)
+    await db.commit()
 
 
 async def get_lead(db: AsyncSession, lead_id: int) -> Lead:
