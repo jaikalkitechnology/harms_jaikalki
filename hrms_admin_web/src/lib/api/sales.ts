@@ -78,7 +78,14 @@ export interface SalesOrder {
 }
 
 export const salesApi = {
-  listLeads: async (params?: { mine?: boolean; stage?: string }) => {
+  listLeads: async (params?: {
+    mine?: boolean;
+    stage?: string;
+    source?: string;
+    customer_id?: number;
+    assigned_to?: number;
+    search?: string;
+  }) => {
     const { data } = await apiClient.get<Lead[]>(`${v1}/sales/leads`, {
       params,
     });
@@ -87,6 +94,16 @@ export const salesApi = {
   createLead: async (payload: Record<string, unknown>) => {
     const { data } = await apiClient.post<Lead>(`${v1}/sales/leads`, payload);
     return data;
+  },
+  updateLead: async (leadId: number, payload: Record<string, unknown>) => {
+    const { data } = await apiClient.put<Lead>(
+      `${v1}/sales/leads/${leadId}`,
+      payload,
+    );
+    return data;
+  },
+  deleteLead: async (leadId: number) => {
+    await apiClient.delete(`${v1}/sales/leads/${leadId}`);
   },
   updateStage: async (leadId: number, stage: string, lostReason?: string) => {
     const { data } = await apiClient.patch<Lead>(
