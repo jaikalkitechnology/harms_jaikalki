@@ -143,6 +143,12 @@ const SECTIONS: NavSection[] = [
         permission: "approval.act",
       },
       {
+        label: "Manage Plans",
+        to: "/dwp/admin",
+        icon: ClipboardList,
+        permission: "approval.act",
+      },
+      {
         label: "Payroll",
         to: "/payroll",
         icon: Wallet,

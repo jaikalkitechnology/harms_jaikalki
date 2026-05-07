@@ -15,6 +15,7 @@ import LeaveApprovalsPage from "@/features/leaves/LeaveApprovalsPage";
 import HolidaysPage from "@/features/holidays/HolidaysPage";
 import ApprovalsInboxPage from "@/features/approvals/ApprovalsInboxPage";
 import DwpTeamPage from "@/features/dwp/DwpTeamPage";
+import AdminDwpPage from "@/features/dwp/AdminDwpPage";
 import PayrollRunsPage from "@/features/payroll/PayrollRunsPage";
 import ReimbursementsPage from "@/features/payroll/ReimbursementsPage";
 import JusticeInboxPage from "@/features/justice/JusticeInboxPage";
@@ -96,6 +97,14 @@ export const router = createBrowserRouter([
       { path: "leaves", element: <LeaveApprovalsPage /> },
       { path: "approvals", element: <ApprovalsInboxPage /> },
       { path: "dwp", element: <DwpTeamPage /> },
+      {
+        path: "dwp/admin",
+        element: (
+          <ProtectedRoute requirePermission="approval.act">
+            <AdminDwpPage />
+          </ProtectedRoute>
+        ),
+      },
       {
         path: "payroll",
         element: (

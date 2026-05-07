@@ -6,6 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import ForbiddenError, NotFoundError
+from app.core.permissions import require_permission
 from app.dependencies import get_current_user, get_db
 from app.models import DwpSubmission, DwpTemplate, Employee, User
 from app.schemas.dwp import (
@@ -309,3 +310,145 @@ async def add_comment(
         comment=payload.comment,
         is_kudos=payload.is_kudos,
     )
+
+
+# ── Admin: list / submit / edit / delete plans for any employee ──────
+@router.get("/admin/templates")
+async def admin_list_templates(
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_permission("approval.act")),
+):
+    """Active templates for the admin UI's plan editor."""
+    rows = await dwp_service.list_active_templates(db)
+    return [
+        {
+            "id": t.id,
+            "type": t.type,
+            "department_id": t.department_id,
+            "fields": [
+                {
+                    "key": f.key,
+                    "label": f.label,
+                    "field_type": f.field_type,
+                    "is_required": f.is_required,
+                    "options": f.options,
+                    "placeholder": f.placeholder,
+                    "sort_order": f.sort_order,
+                }
+                for f in (t.fields or [])
+            ],
+        }
+        for t in rows
+    ]
+
+
+class _AdminSubmit(BaseModel if False else object):  # type: ignore[misc]
+    pass  # placeholder; we'll use a Pydantic model below
+
+
+from pydantic import BaseModel as _BM  # noqa: E402
+
+class AdminDwpSubmit(_BM):
+    employee_id: int
+    template_id: int
+    fields: dict
+    total_hours: Optional[float] = None
+    mood_rating: Optional[int] = None
+    on_date: Optional[date] = None
+
+
+class AdminDwpUpdate(_BM):
+    fields: Optional[dict] = None
+    total_hours: Optional[float] = None
+    mood_rating: Optional[int] = None
+
+
+@router.post(
+    "/admin/submit",
+    response_model=DwpSubmissionOut,
+    status_code=status.HTTP_201_CREATED,
+)
+async def admin_submit(
+    body: AdminDwpSubmit,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_permission("approval.act")),
+):
+    tpl = (
+        await db.execute(
+            select(DwpTemplate).where(DwpTemplate.id == body.template_id)
+        )
+    ).scalar_one_or_none()
+    if not tpl:
+        raise NotFoundError("Template not found")
+    from decimal import Decimal as _D
+    sub = await dwp_service.admin_submit(
+        db,
+        employee_id=body.employee_id,
+        template=tpl,
+        fields=body.fields,
+        total_hours=_D(str(body.total_hours)) if body.total_hours is not None else None,
+        mood_rating=body.mood_rating,
+        on_date=body.on_date,
+    )
+    return _serialize_submission(sub)
+
+
+@router.put(
+    "/admin/submissions/{submission_id}",
+    response_model=DwpSubmissionOut,
+)
+async def admin_update_submission(
+    submission_id: int,
+    body: AdminDwpUpdate,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_permission("approval.act")),
+):
+    from decimal import Decimal as _D
+    sub = await dwp_service.update_submission(
+        db,
+        submission_id,
+        fields=body.fields,
+        total_hours=_D(str(body.total_hours)) if body.total_hours is not None else None,
+        mood_rating=body.mood_rating,
+    )
+    return _serialize_submission(sub)
+
+
+@router.delete(
+    "/admin/submissions/{submission_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def admin_delete_submission(
+    submission_id: int,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_permission("approval.act")),
+):
+    await dwp_service.delete_submission(db, submission_id)
+
+
+@router.get("/admin/submissions")
+async def admin_list_submissions(
+    employee_id: Optional[int] = None,
+    type: Optional[str] = None,
+    from_date: Optional[date] = None,
+    to_date: Optional[date] = None,
+    page: int = Query(default=1, ge=1),
+    per_page: int = Query(default=25, ge=1, le=200),
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_permission("approval.act")),
+):
+    rows, total = await dwp_service.admin_list_submissions(
+        db,
+        employee_id=employee_id,
+        type=type,
+        from_date=from_date,
+        to_date=to_date,
+        page=page,
+        per_page=per_page,
+    )
+    return {
+        "items": [_serialize_submission(s) for s in rows],
+        "total": total,
+        "page": page,
+        "per_page": per_page,
+    }

@@ -37,6 +37,30 @@ export interface DwpTeamItem {
   employee_full_name: string;
 }
 
+export interface DwpTemplateField {
+  key: string;
+  label: string;
+  field_type: string;
+  is_required: boolean;
+  options: string[] | null;
+  placeholder: string | null;
+  sort_order: number;
+}
+
+export interface DwpTemplateLite {
+  id: number;
+  type: "morning" | "eod";
+  department_id: number | null;
+  fields: DwpTemplateField[];
+}
+
+export interface AdminDwpListResponse {
+  items: DwpSubmission[];
+  total: number;
+  page: number;
+  per_page: number;
+}
+
 export const dwpApi = {
   async teamToday(date?: string): Promise<DwpTeamItem[]> {
     const { data } = await apiClient.get(`${v1}/dwp/team/today`, {
@@ -60,5 +84,52 @@ export const dwpApi = {
       { comment, is_kudos: isKudos },
     );
     return data;
+  },
+
+  // Admin
+  async adminTemplates(): Promise<DwpTemplateLite[]> {
+    const { data } = await apiClient.get(`${v1}/dwp/admin/templates`);
+    return data;
+  },
+  async adminList(params: {
+    employee_id?: number;
+    type?: "morning" | "eod";
+    from_date?: string;
+    to_date?: string;
+    page?: number;
+    per_page?: number;
+  }): Promise<AdminDwpListResponse> {
+    const { data } = await apiClient.get(`${v1}/dwp/admin/submissions`, {
+      params,
+    });
+    return data;
+  },
+  async adminSubmit(body: {
+    employee_id: number;
+    template_id: number;
+    fields: Record<string, unknown>;
+    total_hours?: number;
+    mood_rating?: number;
+    on_date?: string;
+  }): Promise<DwpSubmission> {
+    const { data } = await apiClient.post(`${v1}/dwp/admin/submit`, body);
+    return data;
+  },
+  async adminUpdate(
+    id: number,
+    body: {
+      fields?: Record<string, unknown>;
+      total_hours?: number;
+      mood_rating?: number;
+    },
+  ): Promise<DwpSubmission> {
+    const { data } = await apiClient.put(
+      `${v1}/dwp/admin/submissions/${id}`,
+      body,
+    );
+    return data;
+  },
+  async adminDelete(id: number): Promise<void> {
+    await apiClient.delete(`${v1}/dwp/admin/submissions/${id}`);
   },
 };
