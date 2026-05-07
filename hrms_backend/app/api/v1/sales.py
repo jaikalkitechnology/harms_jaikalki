@@ -29,6 +29,7 @@ from app.schemas.sales import (
     SalesTargetCreate,
     SalesTargetOut,
     SalesTargetSummary,
+    SalesTargetUpdate,
 )
 from app.services import employee_service as emp_svc
 from app.services import sales_service as sales_svc
@@ -356,10 +357,19 @@ async def my_target(
 @router.get("/targets", response_model=list[SalesTargetOut])
 async def list_targets(
     employee_id: Optional[int] = None,
+    period_type: Optional[str] = None,
+    from_date: Optional[date] = None,
+    to_date: Optional[date] = None,
     db: AsyncSession = Depends(get_db),
     _: User = Depends(get_current_user),
 ):
-    return await sales_svc.list_targets(db, employee_id=employee_id)
+    return await sales_svc.list_targets(
+        db,
+        employee_id=employee_id,
+        period_type=period_type,
+        from_date=from_date,
+        to_date=to_date,
+    )
 
 
 @router.post(
@@ -373,6 +383,36 @@ async def create_target(
     _: User = Depends(require_permission("approval.act")),
 ):
     return await sales_svc.create_target(db, payload=payload.model_dump())
+
+
+@router.put("/targets/{target_id}", response_model=SalesTargetOut)
+async def update_target(
+    target_id: int,
+    payload: SalesTargetUpdate,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_permission("approval.act")),
+):
+    return await sales_svc.update_target(
+        db, target_id, payload=payload.model_dump(exclude_unset=True)
+    )
+
+
+@router.delete("/targets/{target_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_target(
+    target_id: int,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_permission("approval.act")),
+):
+    await sales_svc.delete_target(db, target_id)
+
+
+@router.post("/targets/{target_id}/recompute", response_model=SalesTargetOut)
+async def recompute_target(
+    target_id: int,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(get_current_user),
+):
+    return await sales_svc.recompute_target_achievement(db, target_id)
 
 
 # ─── Promotions ───────────────────────────────────────────────────────

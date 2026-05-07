@@ -70,6 +70,7 @@ export interface SalesTarget {
   achieved_amount: string;
   commission_pct: string;
   notes: string | null;
+  achievement_pct: number;
 }
 
 export interface SalesTargetSummary {
@@ -148,10 +149,15 @@ export const salesApi = {
     const { data } = await apiClient.get<Product[]>(`${v1}/sales/products`);
     return data;
   },
-  listTargets: async (employeeId?: number) => {
+  listTargets: async (params?: {
+    employee_id?: number;
+    period_type?: string;
+    from_date?: string;
+    to_date?: string;
+  }) => {
     const { data } = await apiClient.get<SalesTarget[]>(
       `${v1}/sales/targets`,
-      { params: employeeId ? { employee_id: employeeId } : undefined },
+      { params },
     );
     return data;
   },
@@ -159,6 +165,22 @@ export const salesApi = {
     const { data } = await apiClient.post<SalesTarget>(
       `${v1}/sales/targets`,
       payload,
+    );
+    return data;
+  },
+  updateTarget: async (targetId: number, payload: Record<string, unknown>) => {
+    const { data } = await apiClient.put<SalesTarget>(
+      `${v1}/sales/targets/${targetId}`,
+      payload,
+    );
+    return data;
+  },
+  deleteTarget: async (targetId: number) => {
+    await apiClient.delete(`${v1}/sales/targets/${targetId}`);
+  },
+  recomputeTarget: async (targetId: number) => {
+    const { data } = await apiClient.post<SalesTarget>(
+      `${v1}/sales/targets/${targetId}/recompute`,
     );
     return data;
   },
