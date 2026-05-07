@@ -100,6 +100,11 @@ async def check_in(
     att.notes = notes
     att.status = "wfh" if work_mode == "wfh" else "present"
 
+    # Apply late-grace policy: if check-in is past
+    # (shift_start + late_grace_minutes), mark the day as half_day.
+    from app.services.attendance_policy import apply_late_rule
+    await apply_late_rule(db, att, employee.id)
+
     await db.commit()
     await db.refresh(att)
     return att, geo

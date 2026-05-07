@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import {
   Building,
   CalendarDays,
+  Clock,
   Crosshair,
   KeyRound,
   MapPin,
@@ -45,7 +46,8 @@ type Tab =
   | "company"
   | "preferences"
   | "office"
-  | "leave";
+  | "leave"
+  | "attendance";
 
 export default function SettingsPage() {
   const [tab, setTab] = useState<Tab>("account");
@@ -60,6 +62,7 @@ export default function SettingsPage() {
       ? ([
           { id: "office", label: "Office", icon: MapPin },
           { id: "leave", label: "Leave policy", icon: CalendarDays },
+          { id: "attendance", label: "Attendance", icon: Clock },
         ] as const)
       : []),
     { id: "company", label: "Company", icon: Building },
@@ -96,6 +99,7 @@ export default function SettingsPage() {
       {tab === "preferences" && <PreferencesTab />}
       {tab === "office" && <OfficeTab />}
       {tab === "leave" && <LeavePolicyTab />}
+      {tab === "attendance" && <AttendanceTab />}
       {tab === "company" && <CompanyTab />}
     </div>
   );
@@ -929,5 +933,97 @@ function LeavePolicyTab() {
         </Button>
       </div>
     </div>
+  );
+}
+
+// ── Attendance policy ──────────────────────────────────────────────
+function AttendanceTab() {
+  const qc = useQueryClient();
+  const { data, isLoading } = useQuery({
+    queryKey: ["attendance-policy"],
+    queryFn: superAdminApi.getAttendancePolicy,
+  });
+  const [form, setForm] = useState({
+    late_grace_minutes: 0,
+    default_shift_start: "09:00",
+  });
+
+  useEffect(() => {
+    if (data)
+      setForm({
+        late_grace_minutes: Number(data.late_grace_minutes ?? 0),
+        default_shift_start: String(data.default_shift_start ?? "09:00"),
+      });
+  }, [data]);
+
+  const save = useMutation({
+    mutationFn: () =>
+      superAdminApi.setAttendancePolicy({
+        late_grace_minutes: form.late_grace_minutes,
+        default_shift_start: form.default_shift_start,
+      }),
+    onSuccess: () => {
+      toast.success("Attendance policy saved");
+      qc.invalidateQueries({ queryKey: ["attendance-policy"] });
+    },
+    onError: () => toast.error("Save failed"),
+  });
+
+  if (isLoading) return <LoadingScreen />;
+
+  return (
+    <Card className="max-w-2xl">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Clock className="h-5 w-5" /> Late-arrival rule
+        </CardTitle>
+        <CardDescription>
+          When an employee checks in more than the configured number of
+          minutes after their shift start, the day is automatically
+          marked as <strong>half day</strong>. Set 0 to disable.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <div className="grid sm:grid-cols-2 gap-3">
+          <div>
+            <Label>Grace minutes (late → half day)</Label>
+            <Input
+              type="number"
+              min={0}
+              max={480}
+              value={form.late_grace_minutes}
+              onChange={(e) =>
+                setForm({
+                  ...form,
+                  late_grace_minutes: Number(e.target.value),
+                })
+              }
+            />
+            <div className="text-xs text-brand-brown-light mt-1">
+              Examples: 10 (strict), 30 (typical), 60 (lenient).
+            </div>
+          </div>
+          <div>
+            <Label>Default shift start</Label>
+            <Input
+              type="time"
+              value={form.default_shift_start}
+              onChange={(e) =>
+                setForm({ ...form, default_shift_start: e.target.value })
+              }
+            />
+            <div className="text-xs text-brand-brown-light mt-1">
+              Used when an employee has no assigned shift. Otherwise the
+              employee's actual shift start is honoured.
+            </div>
+          </div>
+        </div>
+        <div>
+          <Button onClick={() => save.mutate()} disabled={save.isPending}>
+            <Save className="h-4 w-4 mr-1" /> Save
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
   );
 }

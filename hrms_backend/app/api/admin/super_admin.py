@@ -1026,3 +1026,29 @@ async def recompute_earned_leaves_endpoint(
         payload={"processed": summary.get("processed", 0)},
     )
     return summary
+
+
+# ── Attendance policy ─────────────────────────────────────────────────
+@router.get("/attendance-policy")
+async def get_attendance_policy_endpoint(
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_super_admin()),
+):
+    from app.services.attendance_policy import get_attendance_policy
+    return await get_attendance_policy(db)
+
+
+@router.put("/attendance-policy")
+async def set_attendance_policy_endpoint(
+    body: dict,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    actor: User = Depends(require_super_admin()),
+):
+    from app.services.attendance_policy import set_attendance_policy
+    data = await set_attendance_policy(db, body, actor=actor)
+    await _record(
+        db, request, actor, "attendance_policy.update",
+        entity_type="system_config", payload=data,
+    )
+    return data
