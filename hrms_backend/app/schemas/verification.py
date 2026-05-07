@@ -38,6 +38,20 @@ class TemplateCreate(BaseModel):
     sla_hours: int = Field(default=48, ge=1, le=720)
 
 
+class TemplateUpdate(BaseModel):
+    name: Optional[str] = None
+    type: Optional[str] = Field(
+        default=None,
+        pattern="^(address|employment|document|business|education|criminal|bank|other)$",
+    )
+    description: Optional[str] = None
+    fields: Optional[List[TemplateField]] = None
+    photo_requirements: Optional[List[PhotoRequirement]] = None
+    signature_required: Optional[bool] = None
+    sla_hours: Optional[int] = Field(default=None, ge=1, le=720)
+    is_active: Optional[bool] = None
+
+
 class TemplateOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: int
@@ -50,6 +64,16 @@ class TemplateOut(BaseModel):
     signature_required: bool
     sla_hours: int
     is_active: bool
+
+
+class VerificationUpdate(BaseModel):
+    subject_name: Optional[str] = None
+    subject_data: Optional[dict] = None
+    address: Optional[str] = None
+    contact_phone: Optional[str] = None
+    requested_by_org: Optional[str] = None
+    assigned_to: Optional[int] = None
+    deadline_at: Optional[datetime] = None
 
 
 # ── Verifications ─────────────────────────────────────────────────────

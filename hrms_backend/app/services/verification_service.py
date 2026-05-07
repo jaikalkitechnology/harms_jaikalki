@@ -70,13 +70,59 @@ async def create_template(
 
 
 async def list_templates(
-    db: AsyncSession, *, active_only: bool = True
+    db: AsyncSession,
+    *,
+    active_only: bool = True,
+    search: Optional[str] = None,
+    type_: Optional[str] = None,
 ) -> Sequence[VerificationTemplate]:
     stmt = select(VerificationTemplate)
     if active_only:
         stmt = stmt.where(VerificationTemplate.is_active.is_(True))
+    if type_:
+        stmt = stmt.where(VerificationTemplate.type == type_)
+    if search:
+        like = f"%{search.strip()}%"
+        from sqlalchemy import or_
+        stmt = stmt.where(
+            or_(
+                VerificationTemplate.code.ilike(like),
+                VerificationTemplate.name.ilike(like),
+                VerificationTemplate.description.ilike(like),
+            )
+        )
     stmt = stmt.order_by(VerificationTemplate.name.asc())
     return (await db.execute(stmt)).scalars().all()
+
+
+async def update_template(
+    db: AsyncSession, template_id: int, *, payload: dict
+) -> VerificationTemplate:
+    template = await get_template(db, template_id)
+    allowed = {
+        "name", "type", "description", "fields", "photo_requirements",
+        "signature_required", "sla_hours", "is_active",
+    }
+    for k, v in payload.items():
+        if k not in allowed or v is None:
+            continue
+        if k == "fields":
+            v = [f.model_dump() if hasattr(f, "model_dump") else dict(f) for f in v]
+            if not v:
+                raise ValidationError("Template must have at least one field")
+        elif k == "photo_requirements" and v is not None:
+            v = [p.model_dump() if hasattr(p, "model_dump") else dict(p) for p in v]
+        setattr(template, k, v)
+    await db.commit()
+    await db.refresh(template)
+    return template
+
+
+async def delete_template(db: AsyncSession, template_id: int) -> None:
+    """Soft-delete: mark inactive so existing jobs stay valid."""
+    template = await get_template(db, template_id)
+    template.is_active = False
+    await db.commit()
 
 
 async def get_template(
@@ -188,8 +234,12 @@ async def list_verifications(
     assigned_to: Optional[int] = None,
     status: Optional[str] = None,
     type_: Optional[str] = None,
+    search: Optional[str] = None,
+    fraud_only: bool = False,
     limit: int = 200,
 ) -> Sequence[Verification]:
+    from sqlalchemy import or_
+
     stmt = select(Verification)
     if assigned_to is not None:
         stmt = stmt.where(Verification.assigned_to == assigned_to)
@@ -197,8 +247,38 @@ async def list_verifications(
         stmt = stmt.where(Verification.status == status)
     if type_:
         stmt = stmt.where(Verification.type == type_)
+    if search:
+        like = f"%{search.strip()}%"
+        stmt = stmt.where(
+            or_(
+                Verification.subject_name.ilike(like),
+                Verification.ticket_number.ilike(like),
+                Verification.contact_phone.ilike(like),
+                Verification.address.ilike(like),
+                Verification.requested_by_org.ilike(like),
+            )
+        )
+    if fraud_only:
+        flagged = select(VerificationFraudFlag.verification_id).distinct()
+        stmt = stmt.where(Verification.id.in_(flagged))
     stmt = stmt.order_by(Verification.created_at.desc()).limit(limit)
     return (await db.execute(stmt)).scalars().all()
+
+
+async def update_verification(
+    db: AsyncSession, vid: int, *, payload: dict
+) -> Verification:
+    v = await get_verification(db, vid)
+    allowed = {
+        "subject_name", "subject_data", "address", "contact_phone",
+        "requested_by_org", "assigned_to", "deadline_at",
+    }
+    for k, val in payload.items():
+        if k in allowed and val is not None:
+            setattr(v, k, val)
+    await db.commit()
+    await db.refresh(v)
+    return v
 
 
 async def get_verification(db: AsyncSession, vid: int) -> Verification:

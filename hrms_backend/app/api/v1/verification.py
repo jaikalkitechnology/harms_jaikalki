@@ -14,10 +14,12 @@ from app.schemas.verification import (
     TatStat,
     TemplateCreate,
     TemplateOut,
+    TemplateUpdate,
     VerificationAuditDecision,
     VerificationCreate,
     VerificationOut,
     VerificationSubmit,
+    VerificationUpdate,
 )
 from app.services import employee_service as emp_svc
 from app.services import verification_service as v_svc
@@ -36,10 +38,18 @@ async def _self_employee(db: AsyncSession, user: User):
 # ─── Templates ────────────────────────────────────────────────────────
 @router.get("/templates", response_model=list[TemplateOut])
 async def list_templates(
+    search: Optional[str] = None,
+    type_: Optional[str] = Query(default=None, alias="type"),
+    include_inactive: bool = False,
     db: AsyncSession = Depends(get_db),
     _: User = Depends(get_current_user),
 ):
-    return await v_svc.list_templates(db)
+    return await v_svc.list_templates(
+        db,
+        active_only=not include_inactive,
+        search=search,
+        type_=type_,
+    )
 
 
 @router.post(
@@ -64,21 +74,51 @@ async def get_template(
     return await v_svc.get_template(db, template_id)
 
 
+@router.put("/templates/{template_id}", response_model=TemplateOut)
+async def update_template(
+    template_id: int,
+    payload: TemplateUpdate,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_permission("admin.users.manage")),
+):
+    return await v_svc.update_template(
+        db, template_id, payload=payload.model_dump(exclude_unset=True)
+    )
+
+
+@router.delete(
+    "/templates/{template_id}", status_code=status.HTTP_204_NO_CONTENT
+)
+async def delete_template(
+    template_id: int,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_permission("admin.users.manage")),
+):
+    await v_svc.delete_template(db, template_id)
+
+
 # ─── Verifications ────────────────────────────────────────────────────
 @router.get("/", response_model=list[VerificationOut])
 async def list_verifications(
     mine: bool = False,
     job_status: Optional[str] = Query(default=None, alias="status"),
     type_: Optional[str] = Query(default=None, alias="type"),
+    search: Optional[str] = None,
+    fraud_only: bool = False,
+    assigned_to: Optional[int] = None,
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    assigned_to = None
     if mine:
         emp = await _self_employee(db, user)
         assigned_to = emp.id
     return await v_svc.list_verifications(
-        db, assigned_to=assigned_to, status=job_status, type_=type_
+        db,
+        assigned_to=assigned_to,
+        status=job_status,
+        type_=type_,
+        search=search,
+        fraud_only=fraud_only,
     )
 
 
@@ -108,10 +148,31 @@ async def my_queue(
 
 @router.get("/audit-queue", response_model=list[VerificationOut])
 async def audit_queue(
+    search: Optional[str] = None,
+    type_: Optional[str] = Query(default=None, alias="type"),
+    fraud_only: bool = False,
     db: AsyncSession = Depends(get_db),
     _: User = Depends(require_permission("approval.act")),
 ):
-    return await v_svc.list_verifications(db, status="audit_pending")
+    return await v_svc.list_verifications(
+        db,
+        status="audit_pending",
+        search=search,
+        type_=type_,
+        fraud_only=fraud_only,
+    )
+
+
+@router.put("/{verification_id}", response_model=VerificationOut)
+async def update_verification(
+    verification_id: int,
+    payload: VerificationUpdate,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_permission("approval.act")),
+):
+    return await v_svc.update_verification(
+        db, verification_id, payload=payload.model_dump(exclude_unset=True)
+    )
 
 
 @router.get("/tat-stats", response_model=TatStat)
