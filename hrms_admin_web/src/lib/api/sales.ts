@@ -25,6 +25,11 @@ export interface Lead {
   next_action_date: string | null;
   notes: string | null;
   lost_reason: string | null;
+  won_approval_status: "pending" | "approved" | "rejected" | null;
+  won_rejection_reason: string | null;
+  won_requested_at: string | null;
+  won_decided_at: string | null;
+  won_decided_by_user_id: number | null;
   created_at: string;
 }
 
@@ -98,10 +103,28 @@ export const salesApi = {
     customer_id?: number;
     assigned_to?: number;
     search?: string;
+    won_status?: "pending" | "approved" | "rejected";
   }) => {
     const { data } = await apiClient.get<Lead[]>(`${v1}/sales/leads`, {
       params,
     });
+    return data;
+  },
+  listPendingWonApprovals: async () => {
+    const { data } = await apiClient.get<Lead[]>(
+      `${v1}/sales/leads/won-approvals`,
+    );
+    return data;
+  },
+  decideWon: async (
+    leadId: number,
+    decision: "approve" | "reject",
+    reason?: string,
+  ) => {
+    const { data } = await apiClient.post<Lead>(
+      `${v1}/sales/leads/${leadId}/won-decision`,
+      { decision, reason },
+    );
     return data;
   },
   createLead: async (payload: Record<string, unknown>) => {

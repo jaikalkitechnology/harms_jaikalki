@@ -70,11 +70,35 @@ class _LeadDetailPageState extends State<LeadDetailPage> {
   }
 
   Future<void> _changeStage(String newStage) async {
-    if (_lead == null || _lead!.stage == newStage) return;
+    if (_lead == null) return;
+    if (_lead!.stage == newStage && newStage != 'won') return;
     String? reason;
     if (newStage == 'lost') {
       reason = await _askReason();
       if (reason == null || reason.trim().isEmpty) return;
+    }
+    if (newStage == 'won' && _lead!.wonApprovalStatus != 'pending') {
+      final ok = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Submit for admin approval?'),
+          content: const Text(
+            'Marking this lead as Won will send it to admin for approval. '
+            'It will count toward your target only after approval.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Submit'),
+            ),
+          ],
+        ),
+      );
+      if (ok != true) return;
     }
     setState(() => _busy = true);
     try {
@@ -165,6 +189,10 @@ class _LeadDetailPageState extends State<LeadDetailPage> {
                 padding: const EdgeInsets.all(16),
                 children: [
                   _Header(lead: lead, onCall: _call),
+                  if (_WonStatusBanner.shouldShow(lead)) ...[
+                    const SizedBox(height: 12),
+                    _WonStatusBanner(lead: lead),
+                  ],
                   const SizedBox(height: 16),
                   _StageStepper(
                     current: lead.stage,
@@ -319,8 +347,88 @@ class _Header extends StatelessWidget {
   }
 }
 
+class _WonStatusBanner extends StatelessWidget {
+  const _WonStatusBanner({required this.lead});
+  final Lead lead;
+
+  static bool shouldShow(Lead lead) =>
+      lead.stage == 'won' || lead.wonApprovalStatus == 'rejected';
+
+  @override
+  Widget build(BuildContext context) {
+    final status = lead.wonApprovalStatus;
+    Color color;
+    IconData icon;
+    String title;
+    String? subtitle;
+
+    if (status == 'pending') {
+      color = AppColors.warning;
+      icon = Icons.hourglass_top;
+      title = 'Pending from admin';
+      subtitle = 'Submitted for approval. It will count toward your target only after approval.';
+    } else if (status == 'rejected') {
+      color = AppColors.error;
+      icon = Icons.cancel;
+      title = 'Rejected by admin';
+      subtitle = lead.wonRejectionReason ??
+          'Admin sent this back to negotiation.';
+    } else {
+      // approved or null/legacy: only show if stage=won.
+      if (lead.stage != 'won') return const SizedBox.shrink();
+      color = AppColors.success;
+      icon = Icons.check_circle;
+      title = 'Won';
+      subtitle = 'Approved — counted toward your target.';
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.10),
+        border: Border.all(color: color.withOpacity(0.4)),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, color: color),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: TextStyle(
+                    color: color,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                if (subtitle != null) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle,
+                    style: TextStyle(
+                      color: AppColors.brandBrownLight,
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _StageStepper extends StatelessWidget {
-  const _StageStepper({required this.current, required this.onChanged});
+  const _StageStepper({
+    required this.current,
+    required this.onChanged,
+  });
   final String current;
   final ValueChanged<String>? onChanged;
 

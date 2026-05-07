@@ -1,7 +1,17 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { MessageSquare, Pencil, Plus, Search, Send, Trash2, X } from "lucide-react";
+import {
+  Check,
+  Hourglass,
+  MessageSquare,
+  Pencil,
+  Plus,
+  Search,
+  Send,
+  Trash2,
+  X,
+} from "lucide-react";
 
 import {
   Card,
@@ -197,6 +207,26 @@ export default function LeadsPage() {
     onError: () => toast.error("Could not delete"),
   });
 
+  const decideWon = useMutation({
+    mutationFn: (args: {
+      id: number;
+      decision: "approve" | "reject";
+      reason?: string;
+    }) => salesApi.decideWon(args.id, args.decision, args.reason),
+    onSuccess: (_d, vars) => {
+      toast.success(
+        vars.decision === "approve" ? "Approved" : "Sent back to negotiation",
+      );
+      qc.invalidateQueries({ queryKey: ["sales-leads"] });
+    },
+    onError: () => toast.error("Could not record decision"),
+  });
+
+  const pendingCount = useMemo(
+    () => leads.filter((l) => l.won_approval_status === "pending").length,
+    [leads],
+  );
+
   const openCreate = () => {
     setEditing(null);
     setDraft(EMPTY_DRAFT);
@@ -243,6 +273,32 @@ export default function LeadsPage() {
           <Plus className="h-4 w-4 mr-1" /> New lead
         </Button>
       </div>
+
+      {pendingCount > 0 && (
+        <Card className="border-warning/40 bg-warning/5">
+          <CardContent className="flex items-center justify-between gap-3 p-4">
+            <div className="flex items-center gap-3">
+              <Hourglass className="h-5 w-5 text-warning" />
+              <div>
+                <div className="font-semibold text-brand-brown-darker">
+                  {pendingCount} won lead{pendingCount === 1 ? "" : "s"} awaiting approval
+                </div>
+                <div className="text-xs text-brand-brown-light">
+                  Approve to count toward the rep's target, or reject to send
+                  back to negotiation.
+                </div>
+              </div>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setStage("won")}
+            >
+              Show pending
+            </Button>
+          </CardContent>
+        </Card>
+      )}
 
       <Card>
         <CardHeader>
@@ -402,6 +458,7 @@ export default function LeadsPage() {
                             </option>
                           ))}
                         </select>
+                        <WonStatusBadge lead={ld} />
                       </td>
                       <td className="px-4 py-3 text-right">
                         ₹{Number(ld.expected_value).toLocaleString("en-IN")}
@@ -419,6 +476,45 @@ export default function LeadsPage() {
                         )}
                       </td>
                       <td className="px-4 py-3 text-right whitespace-nowrap">
+                        {ld.won_approval_status === "pending" && (
+                          <>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="border-success/40 text-success hover:bg-success/10"
+                              title="Approve win"
+                              onClick={() =>
+                                decideWon.mutate({
+                                  id: ld.id,
+                                  decision: "approve",
+                                })
+                              }
+                              disabled={decideWon.isPending}
+                            >
+                              <Check className="h-3 w-3" />
+                            </Button>{" "}
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="border-error/40 text-error hover:bg-error/10"
+                              title="Reject win"
+                              onClick={() => {
+                                const reason = prompt(
+                                  "Reason for rejecting this win?",
+                                );
+                                if (reason === null) return;
+                                decideWon.mutate({
+                                  id: ld.id,
+                                  decision: "reject",
+                                  reason,
+                                });
+                              }}
+                              disabled={decideWon.isPending}
+                            >
+                              <X className="h-3 w-3" />
+                            </Button>{" "}
+                          </>
+                        )}
                         <Button
                           size="sm"
                           variant="outline"
@@ -802,6 +898,33 @@ function ActivityRow({ a }: { a: LeadActivity }) {
       {(isComment || isAssign) && a.body && (
         <div className="text-sm mt-1 whitespace-pre-wrap">{a.body}</div>
       )}
+    </div>
+  );
+}
+
+function WonStatusBadge({ lead }: { lead: Lead }) {
+  if (lead.stage !== "won" && lead.won_approval_status !== "rejected") {
+    return null;
+  }
+  const status = lead.won_approval_status;
+  let label = "";
+  let cls = "";
+  if (status === "pending") {
+    label = "Pending from admin";
+    cls = "bg-warning/15 text-warning border-warning/30";
+  } else if (status === "rejected") {
+    label = "Rejected by admin";
+    cls = "bg-error/15 text-error border-error/30";
+  } else {
+    label = "Won";
+    cls = "bg-success/15 text-success border-success/30";
+  }
+  return (
+    <div
+      className={`mt-1 inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-semibold ${cls}`}
+      title={lead.won_rejection_reason ?? undefined}
+    >
+      {label}
     </div>
   );
 }

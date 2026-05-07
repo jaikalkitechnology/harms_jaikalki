@@ -63,6 +63,26 @@ class Lead(Base, TimestampMixin):
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     lost_reason: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
 
+    # Won-approval workflow: when a sales rep flips a lead to "won",
+    # status starts as "pending" and waits for an admin (approval.act
+    # permission) to approve or reject. Admin transitions are
+    # auto-approved.
+    won_approval_status: Mapped[Optional[str]] = mapped_column(
+        String(16), nullable=True, index=True
+    )
+    won_rejection_reason: Mapped[Optional[str]] = mapped_column(
+        String(500), nullable=True
+    )
+    won_requested_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime, nullable=True
+    )
+    won_decided_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime, nullable=True
+    )
+    won_decided_by_user_id: Mapped[Optional[int]] = mapped_column(
+        Integer, nullable=True
+    )
+
 
 class Opportunity(Base, TimestampMixin):
     __tablename__ = "sales_opportunities"

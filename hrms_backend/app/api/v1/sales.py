@@ -30,6 +30,7 @@ from app.schemas.sales import (
     SalesTargetOut,
     SalesTargetSummary,
     SalesTargetUpdate,
+    WonDecision,
 )
 from app.services import employee_service as emp_svc
 from app.services import sales_service as sales_svc
@@ -54,6 +55,7 @@ async def list_leads(
     customer_id: Optional[int] = None,
     assigned_to: Optional[int] = None,
     search: Optional[str] = None,
+    won_status: Optional[str] = Query(default=None),
     mine: bool = False,
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
@@ -68,6 +70,33 @@ async def list_leads(
         source=source,
         customer_id=customer_id,
         search=search,
+        won_status=won_status,
+    )
+
+
+@router.get("/leads/won-approvals", response_model=list[LeadOut])
+async def list_pending_won_approvals(
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_permission("approval.act")),
+):
+    return await sales_svc.list_pending_won_leads(db)
+
+
+@router.post(
+    "/leads/{lead_id}/won-decision",
+    response_model=LeadOut,
+)
+async def decide_won(
+    lead_id: int,
+    payload: WonDecision,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_permission("approval.act")),
+):
+    return await sales_svc.decide_won(
+        db, lead_id,
+        decision=payload.decision,
+        reason=payload.reason,
+        actor=user,
     )
 
 
