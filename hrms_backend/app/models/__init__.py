@@ -123,6 +123,7 @@ from .super_admin import (
 )
 from .sales import (
     Lead,
+    LeadActivity,
     Opportunity,
     Product,
     PromotionActivity,
@@ -208,6 +209,7 @@ __all__ = [
     "LocationTrack",
     "FieldExpense",
     "Lead",
+    "LeadActivity",
     "Opportunity",
     "Product",
     "Quote",

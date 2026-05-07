@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Pencil, Plus, Search, Trash2, X } from "lucide-react";
+import { MessageSquare, Pencil, Plus, Search, Send, Trash2, X } from "lucide-react";
 
 import {
   Card,
@@ -14,7 +14,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { LoadingScreen } from "@/components/shared/LoadingScreen";
-import { salesApi, type Lead } from "@/lib/api/sales";
+import { salesApi, type Lead, type LeadActivity } from "@/lib/api/sales";
+import { fmtIst } from "@/lib/datetime";
 import { fieldApi } from "@/lib/api/field";
 import { employeesApi, type EmployeeListItem } from "@/lib/api/employees";
 
@@ -91,6 +92,7 @@ export default function LeadsPage() {
   const [editorOpen, setEditorOpen] = useState(false);
   const [editing, setEditing] = useState<Lead | null>(null);
   const [draft, setDraft] = useState<LeadDraft>(EMPTY_DRAFT);
+  const [activityLeadId, setActivityLeadId] = useState<number | null>(null);
 
   const { data: leads = [], isLoading } = useQuery({
     queryKey: ["sales-leads", stage, source, customerId, assignedTo, search],
@@ -420,6 +422,13 @@ export default function LeadsPage() {
                         <Button
                           size="sm"
                           variant="outline"
+                          onClick={() => setActivityLeadId(ld.id)}
+                        >
+                          <MessageSquare className="h-3 w-3" />
+                        </Button>{" "}
+                        <Button
+                          size="sm"
+                          variant="outline"
                           onClick={() => openEdit(ld)}
                         >
                           <Pencil className="h-3 w-3" />
@@ -461,6 +470,15 @@ export default function LeadsPage() {
           }}
           onSubmit={() => (editing ? update.mutate() : create.mutate())}
           submitting={create.isPending || update.isPending}
+        />
+      )}
+
+      {activityLeadId !== null && (
+        <ActivityDrawer
+          leadId={activityLeadId}
+          lead={leads.find((l) => l.id === activityLeadId) ?? null}
+          onClose={() => setActivityLeadId(null)}
+          empById={empById}
         />
       )}
     </div>
@@ -659,3 +677,131 @@ function Editor({
 
 // silence unused warnings on lints that don't notice JSX usage
 void useEffect;
+
+function ActivityDrawer({
+  leadId,
+  lead,
+  onClose,
+  empById,
+}: {
+  leadId: number;
+  lead: Lead | null;
+  onClose: () => void;
+  empById: Map<number, EmployeeListItem>;
+}) {
+  const qc = useQueryClient();
+  const { data: activities = [], isLoading } = useQuery({
+    queryKey: ["lead-activities", leadId],
+    queryFn: () => salesApi.listLeadActivities(leadId),
+  });
+  const [comment, setComment] = useState("");
+  const post = useMutation({
+    mutationFn: () => salesApi.addLeadComment(leadId, comment.trim()),
+    onSuccess: () => {
+      toast.success("Comment posted");
+      setComment("");
+      qc.invalidateQueries({ queryKey: ["lead-activities", leadId] });
+    },
+    onError: () => toast.error("Could not post"),
+  });
+
+  const owner = lead?.assigned_to ? empById.get(lead.assigned_to) : null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex justify-end bg-black/40">
+      <button
+        type="button"
+        aria-label="Close"
+        onClick={onClose}
+        className="absolute inset-0"
+      />
+      <aside className="relative w-full max-w-md bg-card border-l border-brand-brown-100 shadow-xl flex flex-col">
+        <div className="flex items-center justify-between p-4 border-b border-brand-brown-100">
+          <div>
+            <div className="font-display text-lg">
+              {lead?.contact_name ?? `Lead #${leadId}`}
+            </div>
+            <div className="text-xs text-brand-brown-light">
+              Stage: {lead?.stage} · Owner:{" "}
+              {owner ? `${owner.first_name} ${owner.last_name}` : "—"}
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            className="h-8 w-8 grid place-items-center rounded-lg hover:bg-brand-brown-50"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-4 space-y-3">
+          {isLoading && (
+            <div className="text-sm text-brand-brown-light">Loading…</div>
+          )}
+          {!isLoading && activities.length === 0 && (
+            <div className="text-sm text-brand-brown-light italic">
+              No activity yet. Comment to start the conversation.
+            </div>
+          )}
+          {activities.map((a) => (
+            <ActivityRow key={a.id} a={a} />
+          ))}
+        </div>
+
+        <div className="border-t border-brand-brown-100 p-3 space-y-2">
+          <textarea
+            rows={3}
+            placeholder="Comment for the team — visible on mobile too"
+            className="w-full border border-brand-brown-50 rounded p-2 text-sm bg-card"
+            value={comment}
+            onChange={(e) => setComment(e.target.value)}
+          />
+          <div className="flex justify-end">
+            <Button
+              disabled={!comment.trim() || post.isPending}
+              onClick={() => post.mutate()}
+            >
+              <Send className="h-4 w-4 mr-1" /> Post
+            </Button>
+          </div>
+        </div>
+      </aside>
+    </div>
+  );
+}
+
+function ActivityRow({ a }: { a: LeadActivity }) {
+  const isStage = a.activity_type === "stage_change";
+  const isAssign = a.activity_type === "assignment";
+  const isComment = a.activity_type === "comment";
+  const tint = isStage
+    ? "bg-info/10 border-l-4 border-info"
+    : isAssign
+    ? "bg-brand-gold/10 border-l-4 border-brand-gold-dark"
+    : "bg-brand-brown-50";
+  return (
+    <div className={`rounded-lg p-3 ${tint}`}>
+      <div className="flex items-start justify-between gap-2">
+        <div className="text-xs font-mono uppercase tracking-wider text-brand-brown-light">
+          {a.actor_label ?? "system"}
+        </div>
+        <div className="text-[10px] text-brand-brown-light">
+          {fmtIst(a.created_at)}
+        </div>
+      </div>
+      {isStage && (
+        <div className="text-sm mt-1 font-medium">
+          {a.from_stage ?? "—"} → {a.to_stage ?? "—"}
+          {a.body && (
+            <span className="block text-xs text-brand-brown-light italic mt-0.5">
+              {a.body}
+            </span>
+          )}
+        </div>
+      )}
+      {(isComment || isAssign) && a.body && (
+        <div className="text-sm mt-1 whitespace-pre-wrap">{a.body}</div>
+      )}
+    </div>
+  );
+}

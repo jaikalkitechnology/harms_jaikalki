@@ -107,9 +107,12 @@ async def list_leads(
 
 
 async def update_lead(
-    db: AsyncSession, lead_id: int, *, payload: dict
+    db: AsyncSession, lead_id: int, *, payload: dict, actor=None,
 ) -> Lead:
+    from app.models import LeadActivity
+
     lead = await get_lead(db, lead_id)
+    prev_assignee = lead.assigned_to
     allowed = {
         "customer_id", "contact_name", "contact_phone", "contact_email",
         "source", "expected_value", "expected_close_date",
@@ -119,6 +122,18 @@ async def update_lead(
     for k, v in payload.items():
         if k in allowed and v is not None:
             setattr(lead, k, v)
+    # Auto-log assignment changes for the activity timeline.
+    if "assigned_to" in payload and prev_assignee != lead.assigned_to:
+        db.add(
+            LeadActivity(
+                lead_id=lead.id,
+                actor_user_id=actor.id if actor else None,
+                actor_label=getattr(actor, "full_name", None) if actor else None,
+                activity_type="assignment",
+                body=f"Assigned to employee #{lead.assigned_to}"
+                if lead.assigned_to else "Unassigned",
+            )
+        )
     await db.commit()
     await db.refresh(lead)
     return lead
@@ -128,6 +143,39 @@ async def delete_lead(db: AsyncSession, lead_id: int) -> None:
     lead = await get_lead(db, lead_id)
     await db.delete(lead)
     await db.commit()
+
+
+# ── Lead activity (timeline) ──────────────────────────────────────────
+async def list_lead_activities(db: AsyncSession, lead_id: int):
+    from app.models import LeadActivity
+
+    rows = (
+        await db.execute(
+            select(LeadActivity)
+            .where(LeadActivity.lead_id == lead_id)
+            .order_by(LeadActivity.created_at.desc())
+        )
+    ).scalars().all()
+    return list(rows)
+
+
+async def add_lead_comment(
+    db: AsyncSession, lead_id: int, *, body: str, actor,
+):
+    from app.models import LeadActivity
+
+    await get_lead(db, lead_id)  # 404 if missing
+    row = LeadActivity(
+        lead_id=lead_id,
+        actor_user_id=actor.id,
+        actor_label=getattr(actor, "full_name", None),
+        activity_type="comment",
+        body=body,
+    )
+    db.add(row)
+    await db.commit()
+    await db.refresh(row)
+    return row
 
 
 async def get_lead(db: AsyncSession, lead_id: int) -> Lead:
@@ -145,16 +193,31 @@ async def update_lead_stage(
     *,
     stage: str,
     lost_reason: Optional[str] = None,
+    actor=None,
 ) -> Lead:
+    from app.models import LeadActivity
+
     lead = await get_lead(db, lead_id)
     if lead.stage == stage:
         return lead
     if stage == "lost" and not lost_reason:
         raise ValidationError("lost_reason is required when marking a lead as lost")
+    prev = lead.stage
     lead.stage = stage
     lead.score = _STAGE_SCORE.get(stage, lead.score)
     if stage == "lost":
         lead.lost_reason = lost_reason
+    db.add(
+        LeadActivity(
+            lead_id=lead.id,
+            actor_user_id=actor.id if actor else None,
+            actor_label=getattr(actor, "full_name", None) if actor else None,
+            activity_type="stage_change",
+            from_stage=prev,
+            to_stage=stage,
+            body=lost_reason if stage == "lost" else None,
+        )
+    )
     await db.commit()
     await db.refresh(lead)
     return lead

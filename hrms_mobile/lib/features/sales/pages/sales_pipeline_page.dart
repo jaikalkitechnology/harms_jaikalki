@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../core/di/injection.dart';
 import '../../../core/theme/app_colors.dart';
@@ -85,6 +86,11 @@ class _SalesPipelinePageState extends State<SalesPipelinePage> {
       appBar: AppBar(
         title: const Text('Sales Pipeline'),
         actions: [
+          IconButton(
+            tooltip: 'My leads',
+            icon: const Icon(Icons.list_alt),
+            onPressed: () => context.push('/sales/leads'),
+          ),
           IconButton(
             icon: const Icon(Icons.refresh),
             onPressed: _refresh,

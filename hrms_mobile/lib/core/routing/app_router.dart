@@ -37,6 +37,9 @@ import '../../features/polish/pages/book_room_page.dart';
 import '../../features/polish/pages/jobs_page.dart';
 import '../../features/polish/pages/my_assets_page.dart';
 import '../../features/reports/pages/director_dashboard_page.dart';
+import '../../features/sales/pages/lead_detail_page.dart';
+import '../../features/sales/pages/my_leads_page.dart';
+import '../../features/sales/pages/new_lead_page.dart';
 import '../../features/sales/pages/sales_pipeline_page.dart';
 import '../../features/sales/pages/sales_targets_page.dart';
 import '../../features/trainer/pages/sessions_page.dart';
@@ -79,6 +82,8 @@ class AppRoutes {
   static const fieldLiveMap = '/field/live-map';
   static const salesPipeline = '/sales/pipeline';
   static const salesTargets = '/sales/targets';
+  static const myLeads = '/sales/leads';
+  static const newLead = '/sales/leads/new';
   static const verificationQueue = '/verification';
   static const lmsHome = '/lms';
   static const lmsBadges = '/lms/badges';
@@ -239,6 +244,20 @@ GoRouter buildRouter(AuthBloc authBloc) {
       GoRoute(
         path: AppRoutes.salesTargets,
         builder: (_, __) => const SalesTargetsPage(),
+      ),
+      GoRoute(
+        path: AppRoutes.myLeads,
+        builder: (_, __) => const MyLeadsPage(),
+      ),
+      GoRoute(
+        path: AppRoutes.newLead,
+        builder: (_, __) => const NewLeadPage(),
+      ),
+      GoRoute(
+        path: '/sales/leads/:id',
+        builder: (_, state) => LeadDetailPage(
+          leadId: int.parse(state.pathParameters['id']!),
+        ),
       ),
       GoRoute(
         path: AppRoutes.verificationQueue,

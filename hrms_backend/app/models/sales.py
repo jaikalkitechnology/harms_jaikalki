@@ -242,3 +242,34 @@ class PromotionActivity(Base, TimestampMixin):
     leads_collected: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     photos: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+
+# ── Lead activity (comments + auto stage transitions) ────────────────
+class LeadActivity(Base, TimestampMixin):
+    """Append-only timeline entries on a lead — comments from anyone
+    with view access, plus auto-logged stage transitions written by
+    update_lead_stage()."""
+
+    __tablename__ = "sales_lead_activities"
+    __table_args__ = mysql_table_args
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    lead_id: Mapped[int] = mapped_column(
+        ForeignKey("sales_leads.id", ondelete="CASCADE"),
+        nullable=False, index=True,
+    )
+    actor_user_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    actor_label: Mapped[Optional[str]] = mapped_column(String(160), nullable=True)
+    activity_type: Mapped[str] = mapped_column(
+        Enum(
+            "comment", "stage_change", "assignment", "system",
+            name="lead_activity_type",
+        ),
+        default="comment",
+        nullable=False,
+    )
+    body: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    from_stage: Mapped[Optional[str]] = mapped_column(String(24), nullable=True)
+    to_stage: Mapped[Optional[str]] = mapped_column(String(24), nullable=True)
