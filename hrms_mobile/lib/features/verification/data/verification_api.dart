@@ -1,4 +1,7 @@
+import 'dart:io';
+
 import 'package:dio/dio.dart';
+import 'package:http_parser/http_parser.dart';
 
 import 'verification_models.dart';
 
@@ -27,6 +30,43 @@ class VerificationApi {
       '$_v1/verification/$id/start',
     );
     return VerificationJob.fromJson(res.data!);
+  }
+
+  /// Upload a verification photo / signature / document. Returns the
+  /// public URL the backend stored it at, ready to be put into
+  /// `form_data`, the `photos[]` list, or `signature_url`.
+  Future<String> uploadFile({
+    required File file,
+    required String kind, // photo | signature | document
+    String? fieldKey,
+  }) async {
+    final ext = file.path.split('.').last.toLowerCase();
+    final mime = switch (ext) {
+      'jpg' || 'jpeg' => MediaType('image', 'jpeg'),
+      'png' => MediaType('image', 'png'),
+      'webp' => MediaType('image', 'webp'),
+      'heic' => MediaType('image', 'heic'),
+      'pdf' => MediaType('application', 'pdf'),
+      _ => MediaType('application', 'octet-stream'),
+    };
+    final form = FormData.fromMap({
+      'kind': kind,
+      if (fieldKey != null) 'field_key': fieldKey,
+      'file': await MultipartFile.fromFile(
+        file.path,
+        filename: file.path.split('/').last,
+        contentType: mime,
+      ),
+    });
+    final res = await _dio.post<Map<String, dynamic>>(
+      '$_v1/verification/upload',
+      data: form,
+    );
+    final url = res.data?['url'];
+    if (url is! String || url.isEmpty) {
+      throw StateError('Upload succeeded but server returned no URL');
+    }
+    return url;
   }
 
   Future<VerificationJob> submit({
