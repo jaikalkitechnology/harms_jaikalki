@@ -118,6 +118,7 @@ export default function AttendancePage() {
   const present = records.filter((r) => r.status === "present").length;
   const wfh = records.filter((r) => r.status === "wfh").length;
   const halfDay = records.filter((r) => r.status === "half_day").length;
+  const onLeave = records.filter((r) => r.status === "leave").length;
   const absent = records.filter((r) => r.status === "absent").length;
 
   const isLoading =
@@ -247,6 +248,7 @@ export default function AttendancePage() {
             <Stat label="Present" value={present} accent="success" />
             <Stat label="WFH" value={wfh} accent="info" />
             <Stat label="Half day" value={halfDay} accent="warning" />
+            <Stat label="On leave" value={onLeave} accent="gold" />
             <Stat label="Absent" value={absent} accent="error" />
           </div>
         </CardContent>
@@ -346,6 +348,15 @@ export default function AttendancePage() {
   );
 }
 
+type StatAccent = "success" | "info" | "warning" | "error" | "gold";
+const STAT_TINT: Record<StatAccent, string> = {
+  success: "bg-success/15 text-success",
+  info: "bg-info/15 text-info",
+  warning: "bg-warning/15 text-warning",
+  error: "bg-error/15 text-error",
+  gold: "bg-brand-gold/15 text-brand-gold-dark",
+};
+
 function Stat({
   label,
   value,
@@ -353,16 +364,10 @@ function Stat({
 }: {
   label: string;
   value: number;
-  accent: "success" | "info" | "warning" | "error";
+  accent: StatAccent;
 }) {
-  const map: Record<typeof accent, string> = {
-    success: "bg-success/15 text-success",
-    info: "bg-info/15 text-info",
-    warning: "bg-warning/15 text-warning",
-    error: "bg-error/15 text-error",
-  };
   return (
-    <div className={`px-4 py-2 rounded-xl ${map[accent]}`}>
+    <div className={`px-4 py-2 rounded-xl ${STAT_TINT[accent]}`}>
       <div className="text-[10px] font-mono uppercase tracking-[0.2em]">
         {label}
       </div>
