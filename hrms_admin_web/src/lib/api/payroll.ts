@@ -94,6 +94,21 @@ export const payrollApi = {
     );
     return data;
   },
+  async listReimbursements(params?: {
+    status?: "pending" | "approved" | "rejected" | "paid";
+    employee_id?: number;
+    category?: string;
+    from_date?: string;
+    to_date?: string;
+    search?: string;
+    limit?: number;
+    offset?: number;
+  }): Promise<Reimbursement[]> {
+    const { data } = await apiClient.get(`${v1}/payroll/reimbursements`, {
+      params,
+    });
+    return data;
+  },
   async approveReimbursement(id: number): Promise<Reimbursement> {
     const { data } = await apiClient.post(
       `${v1}/payroll/reimbursements/${id}/approve`,

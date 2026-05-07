@@ -78,9 +78,14 @@ export interface TatStat {
 }
 
 export const verificationApi = {
-  templates: async () => {
+  templates: async (params?: {
+    search?: string;
+    type?: string;
+    include_inactive?: boolean;
+  }) => {
     const { data } = await apiClient.get<VerificationTemplate[]>(
       `${v1}/verification/templates`,
+      { params },
     );
     return data;
   },
@@ -91,7 +96,24 @@ export const verificationApi = {
     );
     return data;
   },
-  list: async (params?: { mine?: boolean; status?: string; type?: string }) => {
+  updateTemplate: async (id: number, payload: Record<string, unknown>) => {
+    const { data } = await apiClient.put<VerificationTemplate>(
+      `${v1}/verification/templates/${id}`,
+      payload,
+    );
+    return data;
+  },
+  deleteTemplate: async (id: number) => {
+    await apiClient.delete(`${v1}/verification/templates/${id}`);
+  },
+  list: async (params?: {
+    mine?: boolean;
+    status?: string;
+    type?: string;
+    search?: string;
+    fraud_only?: boolean;
+    assigned_to?: number;
+  }) => {
     const { data } = await apiClient.get<Verification[]>(
       `${v1}/verification/`,
       { params },
@@ -105,9 +127,21 @@ export const verificationApi = {
     );
     return data;
   },
-  auditQueue: async () => {
+  update: async (id: number, payload: Record<string, unknown>) => {
+    const { data } = await apiClient.put<Verification>(
+      `${v1}/verification/${id}`,
+      payload,
+    );
+    return data;
+  },
+  auditQueue: async (params?: {
+    search?: string;
+    type?: string;
+    fraud_only?: boolean;
+  }) => {
     const { data } = await apiClient.get<Verification[]>(
       `${v1}/verification/audit-queue`,
+      { params },
     );
     return data;
   },

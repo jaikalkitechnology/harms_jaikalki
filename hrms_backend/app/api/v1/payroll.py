@@ -266,6 +266,54 @@ async def pending_reimbursements(
     return (await db.execute(stmt)).scalars().all()
 
 
+@router.get("/reimbursements", response_model=list[ReimbursementOut])
+async def list_reimbursements(
+    rb_status: Optional[str] = Query(default=None, alias="status"),
+    employee_id: Optional[int] = None,
+    category: Optional[str] = None,
+    from_date: Optional[date] = None,
+    to_date: Optional[date] = None,
+    search: Optional[str] = None,
+    limit: int = Query(default=100, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_permission("approval.act")),
+):
+    """Admin list of reimbursements across every status (pending /
+    approved / rejected / paid). Approved-but-not-paid claims are added
+    to net pay in the next payroll run; once paid, status flips to
+    `paid` and the row links to that run via paid_in_run_id."""
+    from sqlalchemy import or_
+
+    visible = await emp_svc.visible_employee_ids(db, user)
+    stmt = select(Reimbursement)
+    if visible is not None:
+        if not visible:
+            return []
+        stmt = stmt.where(Reimbursement.employee_id.in_(visible))
+    if rb_status:
+        stmt = stmt.where(Reimbursement.status == rb_status)
+    if employee_id is not None:
+        stmt = stmt.where(Reimbursement.employee_id == employee_id)
+    if category:
+        stmt = stmt.where(Reimbursement.category == category)
+    if from_date is not None:
+        stmt = stmt.where(Reimbursement.bill_date >= from_date)
+    if to_date is not None:
+        stmt = stmt.where(Reimbursement.bill_date <= to_date)
+    if search:
+        like = f"%{search.strip()}%"
+        stmt = stmt.where(
+            or_(
+                Reimbursement.description.ilike(like),
+                Reimbursement.category.ilike(like),
+                Reimbursement.rejection_reason.ilike(like),
+            )
+        )
+    stmt = stmt.order_by(Reimbursement.created_at.desc()).limit(limit).offset(offset)
+    return (await db.execute(stmt)).scalars().all()
+
+
 @router.post(
     "/reimbursements/{reimbursement_id}/approve",
     response_model=ReimbursementOut,

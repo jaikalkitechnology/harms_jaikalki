@@ -1,7 +1,15 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { CheckCircle2, RefreshCcw, XCircle, AlertTriangle } from "lucide-react";
+import {
+  AlertTriangle,
+  CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
+  RefreshCcw,
+  Search,
+  XCircle,
+} from "lucide-react";
 
 import {
   Card,
@@ -12,18 +20,43 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { LoadingScreen } from "@/components/shared/LoadingScreen";
 import { verificationApi } from "@/lib/api/verification";
 import { fmtIst } from "@/lib/datetime";
 
+const PAGE_SIZE = 6;
+const TYPES = [
+  "address",
+  "employment",
+  "document",
+  "business",
+  "education",
+  "criminal",
+  "bank",
+  "other",
+];
+
 export default function VerificationAuditPage() {
   const qc = useQueryClient();
   const [comments, setComments] = useState<Record<number, string>>({});
+  const [search, setSearch] = useState("");
+  const [typeFilter, setTypeFilter] = useState("");
+  const [fraudOnly, setFraudOnly] = useState(false);
+  const [page, setPage] = useState(1);
 
   const { data: list = [], isLoading } = useQuery({
-    queryKey: ["verification-audit-queue"],
-    queryFn: verificationApi.auditQueue,
+    queryKey: ["verification-audit-queue", search, typeFilter, fraudOnly],
+    queryFn: () =>
+      verificationApi.auditQueue({
+        search: search || undefined,
+        type: typeFilter || undefined,
+        fraud_only: fraudOnly || undefined,
+      }),
   });
+
+  const pageCount = Math.max(1, Math.ceil(list.length / PAGE_SIZE));
+  const pageRows = list.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   const decide = useMutation({
     mutationFn: ({
@@ -54,15 +87,60 @@ export default function VerificationAuditPage() {
         </p>
       </div>
 
-      {list.length === 0 ? (
+      <Card>
+        <CardContent className="grid gap-3 p-4 md:grid-cols-4">
+          <div className="md:col-span-2 relative">
+            <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-brand-brown-light" />
+            <Input
+              placeholder="Search ticket / subject / phone / address…"
+              value={search}
+              onChange={(e) => {
+                setSearch(e.target.value);
+                setPage(1);
+              }}
+              className="pl-9"
+            />
+          </div>
+          <select
+            value={typeFilter}
+            onChange={(e) => {
+              setTypeFilter(e.target.value);
+              setPage(1);
+            }}
+            className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+          >
+            <option value="">All types</option>
+            {TYPES.map((t) => (
+              <option key={t} value={t}>
+                {t}
+              </option>
+            ))}
+          </select>
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={fraudOnly}
+              onChange={(e) => {
+                setFraudOnly(e.target.checked);
+                setPage(1);
+              }}
+            />
+            Fraud-flagged only
+          </label>
+        </CardContent>
+      </Card>
+
+      {pageRows.length === 0 ? (
         <Card>
           <CardContent className="py-12 text-center text-brand-brown-light">
-            Nothing to audit. Newly submitted verifications appear here.
+            {list.length === 0
+              ? "Nothing to audit. Newly submitted verifications appear here."
+              : "No results match these filters."}
           </CardContent>
         </Card>
       ) : (
         <div className="space-y-4">
-          {list.map((v) => (
+          {pageRows.map((v) => (
             <Card key={v.id}>
               <CardHeader className="flex flex-row items-start justify-between gap-4">
                 <div>
@@ -192,6 +270,30 @@ export default function VerificationAuditPage() {
               </CardContent>
             </Card>
           ))}
+        </div>
+      )}
+
+      {pageCount > 1 && (
+        <div className="flex items-center justify-end gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={page <= 1}
+            onClick={() => setPage(page - 1)}
+          >
+            <ChevronLeft className="size-4" />
+          </Button>
+          <div className="text-sm text-brand-brown-light">
+            Page {page} of {pageCount}
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={page >= pageCount}
+            onClick={() => setPage(page + 1)}
+          >
+            <ChevronRight className="size-4" />
+          </Button>
         </div>
       )}
     </div>
