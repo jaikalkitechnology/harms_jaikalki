@@ -342,3 +342,138 @@ async def add_comment(
     await db.commit()
     await db.refresh(obj)
     return obj
+
+
+# ── Admin operations ──────────────────────────────────────────────────
+async def admin_submit(
+    db: AsyncSession,
+    *,
+    employee_id: int,
+    template: DwpTemplate,
+    fields: dict,
+    total_hours=None,
+    mood_rating=None,
+    on_date=None,
+) -> DwpSubmission:
+    """Same as submit() but uses the supplied employee_id directly. Used
+    by admin endpoints that file plans on behalf of someone else."""
+    from app.models import Employee as _Emp
+    emp = (
+        await db.execute(select(_Emp).where(_Emp.id == employee_id))
+    ).scalar_one_or_none()
+    if not emp:
+        raise NotFoundError("Employee not found")
+    return await submit(
+        db, emp,
+        template=template,
+        fields=fields,
+        total_hours=total_hours,
+        mood_rating=mood_rating,
+        on_date=on_date,
+    )
+
+
+async def update_submission(
+    db: AsyncSession,
+    submission_id: int,
+    *,
+    fields: Optional[dict] = None,
+    total_hours=None,
+    mood_rating=None,
+) -> DwpSubmission:
+    sub = (
+        await db.execute(
+            select(DwpSubmission).where(DwpSubmission.id == submission_id)
+        )
+    ).scalar_one_or_none()
+    if not sub:
+        raise NotFoundError("Submission not found")
+    if total_hours is not None:
+        sub.total_hours = total_hours
+    if mood_rating is not None:
+        sub.mood_rating = mood_rating
+    if fields is not None:
+        # Replace the field rows.
+        existing = (
+            await db.execute(
+                select(DwpSubmissionField).where(
+                    DwpSubmissionField.submission_id == sub.id
+                )
+            )
+        ).scalars().all()
+        for r in existing:
+            await db.delete(r)
+        await db.flush()
+        for key, raw in fields.items():
+            value, file_url = _serialize_value(raw)
+            db.add(
+                DwpSubmissionField(
+                    submission_id=sub.id,
+                    field_key=key,
+                    value=value,
+                    file_url=file_url,
+                )
+            )
+    await db.commit()
+    await db.refresh(sub)
+    return sub
+
+
+async def delete_submission(db: AsyncSession, submission_id: int) -> None:
+    sub = (
+        await db.execute(
+            select(DwpSubmission).where(DwpSubmission.id == submission_id)
+        )
+    ).scalar_one_or_none()
+    if not sub:
+        raise NotFoundError("Submission not found")
+    await db.delete(sub)
+    await db.commit()
+
+
+async def admin_list_submissions(
+    db: AsyncSession,
+    *,
+    employee_id=None,
+    type=None,
+    from_date=None,
+    to_date=None,
+    page: int = 1,
+    per_page: int = 25,
+) -> tuple[list[DwpSubmission], int]:
+    page = max(1, page)
+    per_page = max(1, min(200, per_page))
+    base = select(DwpSubmission)
+    if employee_id is not None:
+        base = base.where(DwpSubmission.employee_id == employee_id)
+    if type:
+        base = base.where(DwpSubmission.type == type)
+    if from_date:
+        base = base.where(DwpSubmission.date >= from_date)
+    if to_date:
+        base = base.where(DwpSubmission.date <= to_date)
+
+    from sqlalchemy import func as _f
+    total = (
+        await db.execute(
+            select(_f.count()).select_from(base.subquery())
+        )
+    ).scalar() or 0
+
+    rows = (
+        await db.execute(
+            base.order_by(DwpSubmission.date.desc(), DwpSubmission.id.desc())
+            .offset((page - 1) * per_page)
+            .limit(per_page)
+        )
+    ).scalars().all()
+    return list(rows), total
+
+
+async def list_active_templates(db: AsyncSession) -> list[DwpTemplate]:
+    rows = (
+        await db.execute(
+            select(DwpTemplate).where(DwpTemplate.is_active.is_(True)).order_by(DwpTemplate.id)
+        )
+    ).scalars().all()
+    return list(rows)
