@@ -14,6 +14,7 @@ from app.schemas.attendance import (
     AttendanceCheckOut,
     AttendanceOut,
     AttendanceSummary,
+    AttendanceUpdate,
     RegularizationCreate,
     RegularizationDecision,
     RegularizationOut,
@@ -211,4 +212,87 @@ async def reject_regularization(
 ):
     return await att_svc.reject_regularization(
         db, reg_id, approver=user, decision_comment=payload.decision_comment
+    )
+
+
+# ── Admin: edit a single record ─────────────────────────────────────
+@router.put("/{attendance_id}", response_model=AttendanceOut)
+async def update_attendance(
+    attendance_id: int,
+    payload: AttendanceUpdate,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_permission("attendance.view.all")),
+):
+    from app.models import Attendance as AttModel
+
+    att = (
+        await db.execute(select(AttModel).where(AttModel.id == attendance_id))
+    ).scalar_one_or_none()
+    if not att:
+        from app.core.exceptions import NotFoundError
+        raise NotFoundError("Attendance record not found")
+    data = payload.model_dump(exclude_unset=True)
+    for k, v in data.items():
+        setattr(att, k, v)
+    if att.check_in and att.check_out:
+        att.total_minutes = int(
+            (att.check_out - att.check_in).total_seconds() // 60
+        )
+    await db.commit()
+    await db.refresh(att)
+    return att
+
+
+# ── Admin: report CSV export ────────────────────────────────────────
+@router.get("/report.csv")
+async def attendance_report_csv(
+    from_date: date,
+    to_date: date,
+    employee_id: Optional[int] = None,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_permission("attendance.view.all")),
+):
+    import csv as _csv
+    import io as _io
+    from fastapi.responses import StreamingResponse
+
+    from app.models import Employee as EmpModel
+
+    stmt = (
+        select(Attendance)
+        .where(Attendance.date >= from_date)
+        .where(Attendance.date <= to_date)
+        .order_by(Attendance.date.desc(), Attendance.employee_id)
+    )
+    if employee_id:
+        stmt = stmt.where(Attendance.employee_id == employee_id)
+    rows = (await db.execute(stmt)).scalars().all()
+    emps = (await db.execute(select(EmpModel))).scalars().all()
+    by_id = {e.id: e for e in emps}
+
+    buf = _io.StringIO()
+    w = _csv.writer(buf)
+    w.writerow([
+        "date", "employee_code", "name", "status", "work_mode",
+        "check_in", "check_out", "minutes", "notes",
+    ])
+    for r in rows:
+        e = by_id.get(r.employee_id)
+        w.writerow([
+            r.date.isoformat(),
+            e.employee_code if e else "",
+            f"{e.first_name} {e.last_name}" if e else "",
+            r.status,
+            r.work_mode,
+            r.check_in.isoformat() if r.check_in else "",
+            r.check_out.isoformat() if r.check_out else "",
+            r.total_minutes,
+            (r.notes or "").replace("\n", " "),
+        ])
+    buf.seek(0)
+    fname = f"attendance-{from_date}-{to_date}.csv"
+    return StreamingResponse(
+        iter([buf.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{fname}"'},
     )

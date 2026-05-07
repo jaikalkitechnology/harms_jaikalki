@@ -282,6 +282,16 @@ export const superAdminApi = {
   }> =>
     (await apiClient.post(`${P}/leave-policy/recompute-earned-leaves`)).data,
 
+  // Attendance policy
+  getAttendancePolicy: async (): Promise<{
+    late_grace_minutes: number;
+    default_shift_start: string;
+  }> => (await apiClient.get(`${P}/attendance-policy`)).data,
+  setAttendancePolicy: async (body: {
+    late_grace_minutes?: number;
+    default_shift_start?: string;
+  }) => (await apiClient.put(`${P}/attendance-policy`, body)).data,
+
   // Office geo-fence
   getOfficeLocation: async (): Promise<{
     lat: number;

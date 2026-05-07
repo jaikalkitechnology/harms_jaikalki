@@ -30,6 +30,19 @@ class AttendanceCheckOut(BaseModel):
     lng: Optional[float] = Field(default=None, ge=-180, le=180)
 
 
+class AttendanceUpdate(BaseModel):
+    status: Optional[str] = Field(
+        default=None,
+        pattern="^(present|absent|half_day|wfh|leave|holiday)$",
+    )
+    check_in: Optional[datetime] = None
+    check_out: Optional[datetime] = None
+    work_mode: Optional[str] = Field(
+        default=None, pattern="^(office|wfh|hybrid|field)$"
+    )
+    notes: Optional[str] = None
+
+
 class AttendanceOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: int

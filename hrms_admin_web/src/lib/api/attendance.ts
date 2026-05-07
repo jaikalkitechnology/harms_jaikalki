@@ -48,6 +48,31 @@ export const attendanceApi = {
     const { data } = await apiClient.get(`${v1}/attendance/report`, { params });
     return data;
   },
+  async update(
+    id: number,
+    body: Partial<{
+      status: AttendanceRecord["status"];
+      check_in: string | null;
+      check_out: string | null;
+      work_mode: string;
+      notes: string | null;
+    }>,
+  ): Promise<AttendanceRecord> {
+    const { data } = await apiClient.put(`${v1}/attendance/${id}`, body);
+    return data;
+  },
+  exportCsvUrl(params: {
+    from_date: string;
+    to_date: string;
+    employee_id?: number;
+  }): string {
+    const q = new URLSearchParams({
+      from_date: params.from_date,
+      to_date: params.to_date,
+    });
+    if (params.employee_id) q.set("employee_id", String(params.employee_id));
+    return `${v1}/attendance/report.csv?${q.toString()}`;
+  },
   async pendingRegularizations(): Promise<RegularizationRequest[]> {
     const { data } = await apiClient.get(`${v1}/attendance/regularize/pending`);
     return data;
