@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 
 import 'app.dart';
 import 'core/di/injection.dart';
+import 'core/location/location_sharing_service.dart';
 import 'core/push/push_notifications_service.dart';
 
 Future<void> main() async {
@@ -12,5 +13,8 @@ Future<void> main() async {
   // Boot Firebase + push notifications. Failures don't block the UI;
   // the service falls back to in-app + email until Firebase is reachable.
   await PushNotificationsService.instance.initialize();
+  // Resume background location sharing if the user had it on.
+  // Failure is silent — the toggle stays off until they re-enable.
+  await LocationSharingService.instance.hydrate();
   runApp(const JaikalkiApp());
 }

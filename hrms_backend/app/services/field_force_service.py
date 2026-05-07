@@ -395,8 +395,13 @@ async def live_map(
             return []
         stmt = stmt.where(LocationTrack.employee_id.in_(employee_ids))
     rows = (await db.execute(stmt)).all()
+
+    now = datetime.utcnow()
     out: list[dict] = []
     for track, emp, fe in rows:
+        # Treat the rep as "online" if we received a ping in the last
+        # 5 minutes — anything older is considered stale.
+        ago_seconds = max(0, int((now - track.timestamp).total_seconds()))
         out.append(
             {
                 "employee_id": emp.id,
@@ -408,6 +413,8 @@ async def live_map(
                 "battery_pct": track.battery_pct,
                 "current_status": fe.current_status if fe else "idle",
                 "last_visit_customer": None,
+                "is_online": ago_seconds <= 5 * 60,
+                "last_seen_minutes": ago_seconds // 60,
             }
         )
     return out
