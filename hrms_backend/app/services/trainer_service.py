@@ -192,6 +192,7 @@ async def list_sessions(
     employee_id: Optional[int] = None,
     status: Optional[str] = None,
     upcoming_only: bool = False,
+    search: Optional[str] = None,
 ) -> Sequence[TrainingSession]:
     stmt = select(TrainingSession)
     if trainer_id is not None:
@@ -205,7 +206,17 @@ async def list_sessions(
             SessionParticipant.employee_id == employee_id
         )
         stmt = stmt.where(TrainingSession.id.in_(sub))
-    stmt = stmt.order_by(TrainingSession.scheduled_start.asc())
+    if search:
+        like = f"%{search.strip()}%"
+        stmt = stmt.where(
+            or_(
+                TrainingSession.code.ilike(like),
+                TrainingSession.title.ilike(like),
+                TrainingSession.description.ilike(like),
+                TrainingSession.location.ilike(like),
+            )
+        )
+    stmt = stmt.order_by(TrainingSession.scheduled_start.desc())
     return (await db.execute(stmt)).scalars().all()
 
 
@@ -219,6 +230,27 @@ async def get_session(
     ).scalar_one_or_none()
     if not s:
         raise NotFoundError("Session not found")
+    return s
+
+
+async def update_session(
+    db: AsyncSession, session_id: int, *, payload: dict
+) -> TrainingSession:
+    s = await get_session(db, session_id)
+    if s.status in ("completed", "cancelled"):
+        raise ValidationError(
+            f"Cannot edit a {s.status} session"
+        )
+    allowed = {
+        "title", "description", "trainer_id", "course_id", "department_id",
+        "session_type", "scheduled_start", "scheduled_end", "timezone",
+        "location", "meeting_url", "capacity",
+    }
+    for k, v in payload.items():
+        if k in allowed and v is not None:
+            setattr(s, k, v)
+    await db.commit()
+    await db.refresh(s)
     return s
 
 

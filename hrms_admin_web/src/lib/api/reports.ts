@@ -1,4 +1,5 @@
 import { apiClient } from "./client";
+import { API_BASE_URL } from "@/lib/constants";
 
 const v1 = "/api/v1";
 
@@ -94,6 +95,10 @@ export interface SavedReport {
   schedule_recipients: string[] | null;
   last_run_at: string | null;
   is_shared: boolean;
+  file_url: string | null;
+  file_name: string | null;
+  file_size: number | null;
+  file_mime: string | null;
   created_by: number | null;
 }
 
@@ -130,9 +135,10 @@ export const reportsApi = {
     );
     return data;
   },
-  listSaved: async () => {
+  listSaved: async (params?: { search?: string; report_type?: string }) => {
     const { data } = await apiClient.get<SavedReport[]>(
       `${v1}/reports/saved`,
+      { params },
     );
     return data;
   },
@@ -143,7 +149,26 @@ export const reportsApi = {
     );
     return data;
   },
+  updateSaved: async (id: number, payload: Record<string, unknown>) => {
+    const { data } = await apiClient.put<SavedReport>(
+      `${v1}/reports/saved/${id}`,
+      payload,
+    );
+    return data;
+  },
+  uploadSavedFile: async (id: number, file: File) => {
+    const form = new FormData();
+    form.append("file", file);
+    const { data } = await apiClient.post<SavedReport>(
+      `${v1}/reports/saved/${id}/file`,
+      form,
+      { headers: { "Content-Type": "multipart/form-data" } },
+    );
+    return data;
+  },
   deleteSaved: async (id: number) => {
     await apiClient.delete(`${v1}/reports/saved/${id}`);
   },
+  savedFileUrl: (url: string) =>
+    url.startsWith("http") ? url : `${API_BASE_URL}${url}`,
 };

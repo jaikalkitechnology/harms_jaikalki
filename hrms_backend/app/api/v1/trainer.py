@@ -19,6 +19,7 @@ from app.schemas.trainer import (
     TrainingSessionCreate,
     TrainingSessionOut,
     TrainingSessionStatusUpdate,
+    TrainingSessionUpdate,
 )
 from app.services import employee_service as emp_svc
 from app.services import trainer_service as t_svc
@@ -131,6 +132,7 @@ async def list_sessions(
     trainer_id: Optional[int] = None,
     upcoming_only: bool = False,
     session_status: Optional[str] = Query(default=None, alias="status"),
+    search: Optional[str] = None,
     db: AsyncSession = Depends(get_db),
     _: User = Depends(get_current_user),
 ):
@@ -139,8 +141,22 @@ async def list_sessions(
         trainer_id=trainer_id,
         upcoming_only=upcoming_only,
         status=session_status,
+        search=search,
     )
     return [_session_to_out(s) for s in sessions]
+
+
+@router.put("/sessions/{session_id}", response_model=TrainingSessionOut)
+async def update_session(
+    session_id: int,
+    payload: TrainingSessionUpdate,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_permission("admin.users.manage")),
+):
+    s = await t_svc.update_session(
+        db, session_id, payload=payload.model_dump(exclude_unset=True)
+    )
+    return _session_to_out(s)
 
 
 @router.post(

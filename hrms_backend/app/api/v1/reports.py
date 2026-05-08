@@ -1,14 +1,15 @@
 from datetime import date
 from typing import Optional
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, File, Form, Query, UploadFile, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.exceptions import NotFoundError
+from app.core.exceptions import NotFoundError, ValidationError
 from app.core.permissions import require_permission
 from app.dependencies import get_current_user, get_db
 from app.models import User
+from app.services.storage import upload_fileobj
 from app.schemas.reports import (
     AttendanceStats,
     AttritionStats,
@@ -21,6 +22,7 @@ from app.schemas.reports import (
     SalesStats,
     SavedReportCreate,
     SavedReportOut,
+    SavedReportUpdate,
     TrainingStats,
     VerificationStats,
 )
@@ -132,12 +134,29 @@ async def director_dashboard(
 
 
 # ─── Saved reports ───────────────────────────────────────────────────
+ALLOWED_REPORT_MIME = {
+    "application/pdf",
+    "application/zip",
+    "application/x-zip-compressed",
+    "application/vnd.ms-excel",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    "text/csv",
+    "image/jpeg",
+    "image/png",
+}
+MAX_REPORT_BYTES = 50 * 1024 * 1024  # 50 MB
+
+
 @router.get("/saved", response_model=list[SavedReportOut])
 async def list_saved(
+    search: Optional[str] = None,
+    report_type: Optional[str] = None,
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    return await reports.list_saved_reports(db, user_id=user.id)
+    return await reports.list_saved_reports(
+        db, user_id=user.id, search=search, report_type=report_type
+    )
 
 
 @router.post(
@@ -152,6 +171,54 @@ async def create_saved(
 ):
     return await reports.create_saved_report(
         db, payload=payload.model_dump(), created_by=user.id
+    )
+
+
+@router.put("/saved/{report_id}", response_model=SavedReportOut)
+async def update_saved(
+    report_id: int,
+    payload: SavedReportUpdate,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    return await reports.update_saved_report(
+        db,
+        report_id,
+        user_id=user.id,
+        payload=payload.model_dump(exclude_unset=True),
+    )
+
+
+@router.post("/saved/{report_id}/file", response_model=SavedReportOut)
+async def upload_report_file(
+    report_id: int,
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Attach a generated artefact (PDF / ZIP / XLSX / CSV / image) to a
+    saved report. Replaces any prior attachment."""
+    if file.content_type and file.content_type.lower() not in ALLOWED_REPORT_MIME:
+        raise ValidationError(f"Unsupported content type: {file.content_type}")
+    contents = await file.read()
+    if len(contents) > MAX_REPORT_BYTES:
+        raise ValidationError("File too large (max 50 MB)")
+
+    import io
+    _, url = upload_fileobj(
+        io.BytesIO(contents),
+        key_prefix=f"reports/{user.id}",
+        filename=file.filename or "report.bin",
+        content_type=file.content_type,
+    )
+    return await reports.attach_saved_report_file(
+        db,
+        report_id,
+        user_id=user.id,
+        file_url=url,
+        file_name=file.filename or "report",
+        file_size=len(contents),
+        file_mime=file.content_type,
     )
 
 

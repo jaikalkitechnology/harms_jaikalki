@@ -93,6 +93,7 @@ export const trainerApi = {
     trainer_id?: number;
     upcoming_only?: boolean;
     status?: string;
+    search?: string;
   }) => {
     const { data } = await apiClient.get<TrainingSession[]>(
       `${v1}/trainer/sessions`,
@@ -103,6 +104,13 @@ export const trainerApi = {
   createSession: async (payload: Record<string, unknown>) => {
     const { data } = await apiClient.post<TrainingSession>(
       `${v1}/trainer/sessions`,
+      payload,
+    );
+    return data;
+  },
+  updateSession: async (id: number, payload: Record<string, unknown>) => {
+    const { data } = await apiClient.put<TrainingSession>(
+      `${v1}/trainer/sessions/${id}`,
       payload,
     );
     return data;

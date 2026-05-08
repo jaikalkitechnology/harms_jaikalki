@@ -120,6 +120,20 @@ class SavedReportCreate(BaseModel):
     is_shared: bool = False
 
 
+class SavedReportUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    report_type: Optional[str] = Field(
+        default=None,
+        pattern="^(headcount|attrition|attendance|payroll_cost|compliance|"
+        "sales|performance|verification|training|custom)$",
+    )
+    filters: Optional[dict] = None
+    schedule_cron: Optional[str] = None
+    schedule_recipients: Optional[List[str]] = None
+    is_shared: Optional[bool] = None
+
+
 class SavedReportOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: int
@@ -132,4 +146,8 @@ class SavedReportOut(BaseModel):
     schedule_recipients: Optional[list] = None
     last_run_at: Optional[datetime]
     is_shared: bool
+    file_url: Optional[str] = None
+    file_name: Optional[str] = None
+    file_size: Optional[int] = None
+    file_mime: Optional[str] = None
     created_by: Optional[int]
