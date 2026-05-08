@@ -240,6 +240,29 @@ class EmployeeCreate(EmployeeBase):
     user_email: Optional[EmailStr] = None
 
 
+class CredentialCreate(BaseModel):
+    """Admin creates a mobile-app login for an existing employee."""
+    email: EmailStr
+    password: str = Field(min_length=8, max_length=128)
+    role_code: Optional[str] = Field(default=None, max_length=32)
+
+
+class CredentialPasswordReset(BaseModel):
+    """Admin resets the password on an employee's existing user account."""
+    new_password: str = Field(min_length=8, max_length=128)
+
+
+class CredentialActiveUpdate(BaseModel):
+    is_active: bool
+
+
+class CredentialOut(BaseModel):
+    user_id: int
+    email: str
+    is_active: bool
+    has_account: bool = True
+
+
 class EmployeeUpdate(BaseModel):
     first_name: Optional[str] = None
     last_name: Optional[str] = None

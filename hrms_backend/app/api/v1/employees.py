@@ -8,6 +8,10 @@ from app.core.permissions import require_permission
 from app.dependencies import get_current_user, get_db
 from app.models import Employee, User
 from app.schemas.employee import (
+    CredentialActiveUpdate,
+    CredentialCreate,
+    CredentialOut,
+    CredentialPasswordReset,
     EmployeeCreate,
     EmployeeListItem,
     EmployeeOut,
@@ -18,6 +22,7 @@ from app.schemas.employee import (
     ProbationExtendRequest,
     ProbationOut,
 )
+from sqlalchemy import select
 from app.services import employee_service as svc
 
 router = APIRouter(prefix="/employees", tags=["employees"])
@@ -129,6 +134,91 @@ async def update_employee(
 ) -> Employee:
     emp = await svc.get_employee(db, employee_id)
     return await svc.update_employee(db, emp, payload)
+
+
+# ── Credential management (mobile app login) ─────────────────────────
+def _credential_to_out(user: Optional[User]) -> CredentialOut:
+    if not user:
+        return CredentialOut(user_id=0, email="", is_active=False, has_account=False)
+    return CredentialOut(
+        user_id=user.id,
+        email=user.email,
+        is_active=user.is_active,
+        has_account=True,
+    )
+
+
+@router.get("/{employee_id}/credential", response_model=CredentialOut)
+async def get_credential(
+    employee_id: int,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_permission("employee.update")),
+):
+    emp = await svc.get_employee(db, employee_id)
+    if emp.user_id is None:
+        return _credential_to_out(None)
+    user = (
+        await db.execute(select(User).where(User.id == emp.user_id))
+    ).scalar_one_or_none()
+    return _credential_to_out(user)
+
+
+@router.post(
+    "/{employee_id}/credential",
+    response_model=CredentialOut,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_credential(
+    employee_id: int,
+    payload: CredentialCreate,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_permission("employee.update")),
+):
+    """Create a mobile-app login for an existing employee. Admin must
+    supply the initial password — the rep can change it from the app."""
+    emp = await svc.get_employee(db, employee_id)
+    user = await svc.create_user_account_for(
+        db,
+        employee=emp,
+        email=payload.email,
+        initial_password=payload.password,
+        role_code=payload.role_code,
+    )
+    return _credential_to_out(user)
+
+
+@router.post(
+    "/{employee_id}/credential/password",
+    response_model=CredentialOut,
+)
+async def reset_credential_password(
+    employee_id: int,
+    payload: CredentialPasswordReset,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_permission("employee.update")),
+):
+    emp = await svc.get_employee(db, employee_id)
+    user = await svc.reset_employee_password(
+        db, employee=emp, new_password=payload.new_password
+    )
+    return _credential_to_out(user)
+
+
+@router.post(
+    "/{employee_id}/credential/active",
+    response_model=CredentialOut,
+)
+async def set_credential_active(
+    employee_id: int,
+    payload: CredentialActiveUpdate,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_permission("employee.update")),
+):
+    emp = await svc.get_employee(db, employee_id)
+    user = await svc.set_account_active(
+        db, employee=emp, is_active=payload.is_active
+    )
+    return _credential_to_out(user)
 
 
 @router.put("/{employee_id}/manager", response_model=EmployeeOut)
