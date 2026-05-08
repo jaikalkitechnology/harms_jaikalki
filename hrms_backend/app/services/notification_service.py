@@ -200,6 +200,84 @@ async def mark_all_read(db: AsyncSession, *, user_id: int) -> int:
     return len(rows)
 
 
+async def broadcast(
+    db: AsyncSession,
+    *,
+    audience: str,
+    title: str,
+    body: Optional[str] = None,
+    data: Optional[dict] = None,
+    type: str = "broadcast",
+    send_push: bool = True,
+    user_ids: Optional[Sequence[int]] = None,
+    role_codes: Optional[Sequence[str]] = None,
+    department_id: Optional[int] = None,
+) -> dict:
+    """Fan out a notification to many users.
+
+    audience:
+      - "all": every user with a linked employee
+      - "role": users whose role matches role_codes
+      - "department": users whose linked employee is in department_id
+      - "users": explicit user_ids list
+    """
+    from sqlalchemy import distinct
+    from app.models import Employee, UserRole, Role
+
+    target_ids: list[int] = []
+    if audience == "users":
+        target_ids = list(user_ids or [])
+    elif audience == "all":
+        rows = (
+            await db.execute(
+                select(distinct(Employee.user_id))
+                .where(Employee.user_id.is_not(None))
+            )
+        ).scalars().all()
+        target_ids = list(rows)
+    elif audience == "role":
+        if not role_codes:
+            return {"queued": 0, "sent": 0}
+        rows = (
+            await db.execute(
+                select(distinct(UserRole.user_id))
+                .join(Role, Role.id == UserRole.role_id)
+                .where(Role.code.in_(list(role_codes)))
+            )
+        ).scalars().all()
+        target_ids = list(rows)
+    elif audience == "department":
+        if department_id is None:
+            return {"queued": 0, "sent": 0}
+        rows = (
+            await db.execute(
+                select(distinct(Employee.user_id))
+                .where(Employee.department_id == department_id)
+                .where(Employee.user_id.is_not(None))
+            )
+        ).scalars().all()
+        target_ids = list(rows)
+    else:
+        return {"queued": 0, "sent": 0}
+
+    sent = 0
+    for uid in target_ids:
+        try:
+            await notify(
+                db,
+                user_id=uid,
+                type=type,
+                title=title,
+                body=body,
+                data=data,
+                send_push=send_push,
+            )
+            sent += 1
+        except Exception:
+            logger.exception("broadcast: failed for user %s", uid)
+    return {"queued": len(target_ids), "sent": sent}
+
+
 # ─── Device tokens ───────────────────────────────────────────────────
 async def register_device_token(
     db: AsyncSession,

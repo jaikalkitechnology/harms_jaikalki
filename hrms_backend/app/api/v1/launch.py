@@ -7,6 +7,7 @@ from fastapi import (
     APIRouter,
     Depends,
     File,
+    Form,
     Query,
     Request,
     UploadFile,
@@ -21,9 +22,11 @@ from app.dependencies import get_current_user, get_db
 from app.models import User
 from app.schemas.launch import (
     AuditLogOut,
+    BroadcastResult,
     BulkImportResult,
     DeviceTokenOut,
     DeviceTokenRegister,
+    NotificationBroadcast,
     NotificationOut,
     ResignationCreate,
     ResignationDecision,
@@ -101,6 +104,33 @@ async def read_all_notifications(
 ):
     n = await notification_service.mark_all_read(db, user_id=user.id)
     return {"marked": n}
+
+
+@router.post(
+    "/notifications/broadcast",
+    response_model=BroadcastResult,
+    tags=["notifications"],
+)
+async def broadcast_notification(
+    payload: NotificationBroadcast,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_permission("admin.users.manage")),
+):
+    """Admin-initiated fan-out. audience can be all / role / department /
+    users. send_push=True (default) also fires FCM to active device
+    tokens for each recipient."""
+    return await notification_service.broadcast(
+        db,
+        audience=payload.audience,
+        title=payload.title,
+        body=payload.body,
+        type=payload.type,
+        data=payload.data,
+        send_push=payload.send_push,
+        user_ids=payload.user_ids,
+        role_codes=payload.role_codes,
+        department_id=payload.department_id,
+    )
 
 
 @router.get(
@@ -287,6 +317,106 @@ async def pending_resignations(
     _: User = Depends(require_permission("approval.act")),
 ):
     return await resignation_service.list_pending(db)
+
+
+@router.get(
+    "/resignations",
+    response_model=list[ResignationOut],
+    tags=["resignations"],
+)
+async def list_resignations(
+    resignation_status: Optional[str] = Query(default=None, alias="status"),
+    employee_id: Optional[int] = None,
+    search: Optional[str] = None,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_permission("approval.act")),
+):
+    return await resignation_service.list_resignations(
+        db,
+        status=resignation_status,
+        employee_id=employee_id,
+        search=search,
+    )
+
+
+_RESIGNATION_DOC_KINDS = {
+    "resignation_letter",
+    "noc",
+    "experience_letter",
+    "settlement_sheet",
+    "asset_handover",
+    "other",
+}
+_RESIGNATION_DOC_MIME = {
+    "application/pdf",
+    "image/jpeg",
+    "image/png",
+    "image/webp",
+    "application/zip",
+    "application/vnd.ms-excel",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+}
+
+
+@router.post(
+    "/resignations/{resignation_id}/documents",
+    response_model=ResignationOut,
+    tags=["resignations"],
+)
+async def upload_resignation_document(
+    resignation_id: int,
+    file: UploadFile = File(...),
+    kind: str = Form("other"),
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_permission("approval.act")),
+):
+    """Attach a PDF / image / spreadsheet to a resignation. Kinds:
+    resignation_letter, noc, experience_letter, settlement_sheet,
+    asset_handover, other."""
+    from app.core.exceptions import ValidationError
+    from app.services.storage import upload_fileobj
+
+    if kind not in _RESIGNATION_DOC_KINDS:
+        raise ValidationError(f"kind must be one of: {sorted(_RESIGNATION_DOC_KINDS)}")
+    if file.content_type and file.content_type.lower() not in _RESIGNATION_DOC_MIME:
+        raise ValidationError(f"Unsupported content type: {file.content_type}")
+    contents = await file.read()
+    if len(contents) > 25 * 1024 * 1024:
+        raise ValidationError("File too large (max 25 MB)")
+
+    import io
+    _, url = upload_fileobj(
+        io.BytesIO(contents),
+        key_prefix=f"resignations/{resignation_id}/{kind}",
+        filename=file.filename or f"{kind}.bin",
+        content_type=file.content_type,
+    )
+    return await resignation_service.attach_document(
+        db,
+        resignation_id,
+        url=url,
+        name=file.filename or f"{kind}.bin",
+        mime=file.content_type,
+        size=len(contents),
+        kind=kind,
+        uploaded_by=user.id,
+    )
+
+
+@router.delete(
+    "/resignations/{resignation_id}/documents/{doc_index}",
+    response_model=ResignationOut,
+    tags=["resignations"],
+)
+async def remove_resignation_document(
+    resignation_id: int,
+    doc_index: int,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_permission("approval.act")),
+):
+    return await resignation_service.remove_document(
+        db, resignation_id, index=doc_index
+    )
 
 
 @router.post(
