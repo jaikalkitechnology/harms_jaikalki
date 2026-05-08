@@ -60,7 +60,10 @@ class PolishApi {
   Future<List<JobPosting>> publishedJobs() async {
     final res = await _dio.get<List<dynamic>>(
       '$_v1/polish/jobs',
-      queryParameters: {'status': 'published'},
+      queryParameters: {
+        'status': 'published',
+        'published_to_app': true,
+      },
     );
     return (res.data ?? const [])
         .map((e) => JobPosting.fromJson(e as Map<String, dynamic>))

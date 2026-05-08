@@ -52,7 +52,10 @@ async def list_assets(
     status: Optional[str] = None,
     assigned_to: Optional[int] = None,
     category: Optional[str] = None,
+    search: Optional[str] = None,
 ) -> Sequence[Asset]:
+    from sqlalchemy import or_
+
     stmt = select(Asset)
     if status:
         stmt = stmt.where(Asset.status == status)
@@ -60,6 +63,16 @@ async def list_assets(
         stmt = stmt.where(Asset.assigned_to == assigned_to)
     if category:
         stmt = stmt.where(Asset.category == category)
+    if search:
+        like = f"%{search.strip()}%"
+        stmt = stmt.where(
+            or_(
+                Asset.asset_tag.ilike(like),
+                Asset.name.ilike(like),
+                Asset.serial_number.ilike(like),
+                Asset.notes.ilike(like),
+            )
+        )
     stmt = stmt.order_by(Asset.created_at.desc())
     return (await db.execute(stmt)).scalars().all()
 
@@ -71,6 +84,22 @@ async def get_asset(db: AsyncSession, asset_id: int) -> Asset:
     if not a:
         raise NotFoundError("Asset not found")
     return a
+
+
+async def update_asset(
+    db: AsyncSession, asset_id: int, *, payload: dict
+) -> Asset:
+    asset = await get_asset(db, asset_id)
+    allowed = {
+        "name", "category", "serial_number", "purchase_date",
+        "purchase_cost", "warranty_until", "condition", "notes",
+    }
+    for k, v in payload.items():
+        if k in allowed and v is not None:
+            setattr(asset, k, v)
+    await db.commit()
+    await db.refresh(asset)
+    return asset
 
 
 async def assign_asset(
@@ -380,12 +409,45 @@ async def list_postings(
     db: AsyncSession,
     *,
     status: Optional[str] = None,
+    search: Optional[str] = None,
+    published_to_app: Optional[bool] = None,
 ) -> Sequence[JobPosting]:
+    from sqlalchemy import or_
+
     stmt = select(JobPosting)
     if status:
         stmt = stmt.where(JobPosting.status == status)
+    if published_to_app is not None:
+        stmt = stmt.where(JobPosting.published_to_app == published_to_app)
+    if search:
+        like = f"%{search.strip()}%"
+        stmt = stmt.where(
+            or_(
+                JobPosting.code.ilike(like),
+                JobPosting.title.ilike(like),
+                JobPosting.location.ilike(like),
+                JobPosting.description.ilike(like),
+            )
+        )
     stmt = stmt.order_by(JobPosting.posted_at.desc())
     return (await db.execute(stmt)).scalars().all()
+
+
+async def update_posting(
+    db: AsyncSession, posting_id: int, *, payload: dict
+) -> JobPosting:
+    p = await get_posting(db, posting_id)
+    allowed = {
+        "title", "department_id", "location", "employment_type",
+        "description", "requirements", "referral_bonus", "is_internal_only",
+        "published_to_app", "closes_on",
+    }
+    for k, v in payload.items():
+        if k in allowed and v is not None:
+            setattr(p, k, v)
+    await db.commit()
+    await db.refresh(p)
+    return p
 
 
 async def get_posting(db: AsyncSession, posting_id: int) -> JobPosting:

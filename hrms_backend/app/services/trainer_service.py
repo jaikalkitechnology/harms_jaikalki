@@ -75,6 +75,8 @@ async def list_trainers(
             or_(
                 TrainerProfile.full_name.ilike(like),
                 TrainerProfile.headline.ilike(like),
+                TrainerProfile.bio.ilike(like),
+                TrainerProfile.contact_email.ilike(like),
             )
         )
     stmt = stmt.order_by(
@@ -102,6 +104,30 @@ async def get_trainer(
     if not t:
         raise NotFoundError("Trainer not found")
     return t
+
+
+async def update_trainer(
+    db: AsyncSession, trainer_id: int, *, payload: dict
+) -> TrainerProfile:
+    t = await get_trainer(db, trainer_id)
+    allowed = {
+        "full_name", "headline", "bio", "contact_email", "contact_phone",
+        "profile_photo_url", "languages", "specializations",
+        "years_experience", "hourly_rate", "is_active",
+    }
+    for k, v in payload.items():
+        if k in allowed and v is not None:
+            setattr(t, k, v)
+    await db.commit()
+    await db.refresh(t)
+    return t
+
+
+async def delete_trainer(db: AsyncSession, trainer_id: int) -> None:
+    """Soft-delete: mark inactive so existing sessions stay valid."""
+    t = await get_trainer(db, trainer_id)
+    t.is_active = False
+    await db.commit()
 
 
 # ── Training sessions ───────────────────────────────────────────────

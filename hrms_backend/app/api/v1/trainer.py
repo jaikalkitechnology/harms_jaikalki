@@ -15,6 +15,7 @@ from app.schemas.trainer import (
     TrainerAnalytics,
     TrainerProfileCreate,
     TrainerProfileOut,
+    TrainerProfileUpdate,
     TrainingSessionCreate,
     TrainingSessionOut,
     TrainingSessionStatusUpdate,
@@ -44,6 +45,7 @@ async def list_trainers(
     specialization: Optional[str] = None,
     is_external: Optional[bool] = None,
     search: Optional[str] = None,
+    include_inactive: bool = False,
     db: AsyncSession = Depends(get_db),
     _: User = Depends(get_current_user),
 ):
@@ -52,6 +54,7 @@ async def list_trainers(
         specialization=specialization,
         is_external=is_external,
         search=search,
+        active_only=not include_inactive,
     )
 
 
@@ -75,6 +78,29 @@ async def get_trainer(
     _: User = Depends(get_current_user),
 ):
     return await t_svc.get_trainer(db, trainer_id)
+
+
+@router.put("/trainers/{trainer_id}", response_model=TrainerProfileOut)
+async def update_trainer(
+    trainer_id: int,
+    payload: TrainerProfileUpdate,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_permission("admin.users.manage")),
+):
+    return await t_svc.update_trainer(
+        db, trainer_id, payload=payload.model_dump(exclude_unset=True)
+    )
+
+
+@router.delete(
+    "/trainers/{trainer_id}", status_code=status.HTTP_204_NO_CONTENT
+)
+async def delete_trainer(
+    trainer_id: int,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_permission("admin.users.manage")),
+):
+    await t_svc.delete_trainer(db, trainer_id)
 
 
 @router.get(

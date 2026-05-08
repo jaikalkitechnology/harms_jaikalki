@@ -68,6 +68,7 @@ export interface JobPosting {
   requirements: string | null;
   referral_bonus: string | null;
   is_internal_only: boolean;
+  published_to_app: boolean;
   posted_at: string;
   closes_on: string | null;
   status: string;
@@ -88,7 +89,11 @@ export interface JobApplication {
 }
 
 export const polishApi = {
-  listAssets: async (params?: { status?: string }) => {
+  listAssets: async (params?: {
+    status?: string;
+    category?: string;
+    search?: string;
+  }) => {
     const { data } = await apiClient.get<Asset[]>(`${v1}/polish/assets`, {
       params,
     });
@@ -97,6 +102,13 @@ export const polishApi = {
   createAsset: async (payload: Record<string, unknown>) => {
     const { data } = await apiClient.post<Asset>(
       `${v1}/polish/assets`,
+      payload,
+    );
+    return data;
+  },
+  updateAsset: async (id: number, payload: Record<string, unknown>) => {
+    const { data } = await apiClient.put<Asset>(
+      `${v1}/polish/assets/${id}`,
       payload,
     );
     return data;
@@ -156,7 +168,11 @@ export const polishApi = {
     );
     return data;
   },
-  listPostings: async (params?: { status?: string }) => {
+  listPostings: async (params?: {
+    status?: string;
+    search?: string;
+    published_to_app?: boolean;
+  }) => {
     const { data } = await apiClient.get<JobPosting[]>(`${v1}/polish/jobs`, {
       params,
     });
@@ -165,6 +181,13 @@ export const polishApi = {
   createPosting: async (payload: Record<string, unknown>) => {
     const { data } = await apiClient.post<JobPosting>(
       `${v1}/polish/jobs`,
+      payload,
+    );
+    return data;
+  },
+  updatePosting: async (id: number, payload: Record<string, unknown>) => {
+    const { data } = await apiClient.put<JobPosting>(
+      `${v1}/polish/jobs/${id}`,
       payload,
     );
     return data;

@@ -20,6 +20,20 @@ class TrainerProfileCreate(BaseModel):
     hourly_rate: Optional[Decimal] = None
 
 
+class TrainerProfileUpdate(BaseModel):
+    full_name: Optional[str] = None
+    bio: Optional[str] = None
+    headline: Optional[str] = None
+    contact_email: Optional[str] = None
+    contact_phone: Optional[str] = None
+    profile_photo_url: Optional[str] = None
+    languages: Optional[List[str]] = None
+    specializations: Optional[List[str]] = None
+    years_experience: Optional[int] = Field(default=None, ge=0, le=80)
+    hourly_rate: Optional[Decimal] = None
+    is_active: Optional[bool] = None
+
+
 class TrainerProfileOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: int

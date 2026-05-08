@@ -13,12 +13,14 @@ from app.schemas.polish import (
     AssetCreate,
     AssetOut,
     AssetReturnRequest,
+    AssetUpdate,
     JobApplicationCreate,
     JobApplicationOut,
     JobApplicationStatusUpdate,
     JobPostingCreate,
     JobPostingOut,
     JobPostingStatusUpdate,
+    JobPostingUpdate,
     MeetingRoomCreate,
     MeetingRoomOut,
     RoomBookingCreate,
@@ -45,11 +47,24 @@ async def _self_employee(db: AsyncSession, user: User):
 async def list_assets(
     asset_status: Optional[str] = Query(default=None, alias="status"),
     category: Optional[str] = None,
+    search: Optional[str] = None,
     db: AsyncSession = Depends(get_db),
     _: User = Depends(require_permission("admin.users.view")),
 ):
     return await polish.list_assets(
-        db, status=asset_status, category=category
+        db, status=asset_status, category=category, search=search
+    )
+
+
+@router.put("/assets/{asset_id}", response_model=AssetOut)
+async def update_asset(
+    asset_id: int,
+    payload: AssetUpdate,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_permission("admin.users.manage")),
+):
+    return await polish.update_asset(
+        db, asset_id, payload=payload.model_dump(exclude_unset=True)
     )
 
 
@@ -255,10 +270,29 @@ async def cancel_booking(
 @router.get("/jobs", response_model=list[JobPostingOut])
 async def list_postings(
     posting_status: Optional[str] = Query(default=None, alias="status"),
+    search: Optional[str] = None,
+    published_to_app: Optional[bool] = None,
     db: AsyncSession = Depends(get_db),
     _: User = Depends(get_current_user),
 ):
-    return await polish.list_postings(db, status=posting_status)
+    return await polish.list_postings(
+        db,
+        status=posting_status,
+        search=search,
+        published_to_app=published_to_app,
+    )
+
+
+@router.put("/jobs/{posting_id}", response_model=JobPostingOut)
+async def update_posting(
+    posting_id: int,
+    payload: JobPostingUpdate,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_permission("admin.users.manage")),
+):
+    return await polish.update_posting(
+        db, posting_id, payload=payload.model_dump(exclude_unset=True)
+    )
 
 
 @router.post(

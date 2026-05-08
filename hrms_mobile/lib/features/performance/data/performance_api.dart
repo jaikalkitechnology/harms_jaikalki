@@ -8,13 +8,6 @@ class PerformanceApi {
 
   static const _v1 = '/api/v1';
 
-  Future<List<Cycle>> cycles() async {
-    final res = await _dio.get<List<dynamic>>('$_v1/performance/cycles');
-    return (res.data ?? const [])
-        .map((e) => Cycle.fromJson(e as Map<String, dynamic>))
-        .toList();
-  }
-
   Future<List<Goal>> myGoals({int? cycleId}) async {
     final res = await _dio.get<List<dynamic>>(
       '$_v1/performance/goals/me',

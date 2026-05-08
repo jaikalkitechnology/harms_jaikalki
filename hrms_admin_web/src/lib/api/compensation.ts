@@ -30,6 +30,34 @@ export const compensationApi = {
     );
     return data;
   },
+  listAll: async (params?: {
+    employee_id?: number;
+    status?: string;
+    reason?: string;
+    from_date?: string;
+    to_date?: string;
+  }) => {
+    const { data } = await apiClient.get<SalaryRevision[]>(
+      `${v1}/compensation/revisions`,
+      { params },
+    );
+    return data;
+  },
+  update: async (
+    id: number,
+    payload: {
+      new_ctc_annual?: number;
+      effective_date?: string;
+      reason?: string;
+      notes?: string;
+    },
+  ) => {
+    const { data } = await apiClient.put<SalaryRevision>(
+      `${v1}/compensation/revisions/${id}`,
+      payload,
+    );
+    return data;
+  },
   forEmployee: async (employeeId: number) => {
     const { data } = await apiClient.get<SalaryRevision[]>(
       `${v1}/compensation/revisions/employee/${employeeId}`,

@@ -1,4 +1,7 @@
-from fastapi import APIRouter, Depends, status
+from datetime import date
+from typing import Optional
+
+from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.permissions import require_permission
@@ -8,6 +11,7 @@ from app.schemas.compensation import (
     SalaryRevisionOut,
     SalaryRevisionPropose,
     SalaryRevisionRejectBody,
+    SalaryRevisionUpdate,
 )
 from app.services import compensation_service as svc
 
@@ -46,6 +50,41 @@ async def list_pending(
     _: User = Depends(require_permission("payroll.run")),
 ):
     return await svc.list_pending_approval(db)
+
+
+@router.get(
+    "/revisions",
+    response_model=list[SalaryRevisionOut],
+)
+async def list_revisions(
+    employee_id: Optional[int] = None,
+    revision_status: Optional[str] = Query(default=None, alias="status"),
+    reason: Optional[str] = None,
+    from_date: Optional[date] = None,
+    to_date: Optional[date] = None,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_permission("payroll.run")),
+):
+    return await svc.list_revisions(
+        db,
+        employee_id=employee_id,
+        status=revision_status,
+        reason=reason,
+        from_date=from_date,
+        to_date=to_date,
+    )
+
+
+@router.put("/revisions/{revision_id}", response_model=SalaryRevisionOut)
+async def update_revision(
+    revision_id: int,
+    payload: SalaryRevisionUpdate,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_permission("payroll.run")),
+):
+    return await svc.update_revision(
+        db, revision_id, payload=payload.model_dump(exclude_unset=True)
+    )
 
 
 @router.get(

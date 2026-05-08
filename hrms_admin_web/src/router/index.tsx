@@ -39,7 +39,6 @@ import CertificateVerifyPage from "@/features/exam/CertificateVerifyPage";
 import CertificatesPage from "@/features/exam/CertificatesPage";
 import TrainersPage from "@/features/trainer/TrainersPage";
 import SessionsPage from "@/features/trainer/SessionsPage";
-import CyclesPage from "@/features/performance/CyclesPage";
 import DirectorDashboardPage from "@/features/reports/DirectorDashboardPage";
 import SavedReportsPage from "@/features/reports/SavedReportsPage";
 import ExportReportPage from "@/features/reports/ExportReportPage";
@@ -143,7 +142,6 @@ export const router = createBrowserRouter([
       { path: "exams/certificates", element: <CertificatesPage /> },
       { path: "trainers", element: <TrainersPage /> },
       { path: "trainers/sessions", element: <SessionsPage /> },
-      { path: "performance/cycles", element: <CyclesPage /> },
       { path: "reports/dashboard", element: <DirectorDashboardPage /> },
       { path: "reports/saved", element: <SavedReportsPage /> },
       {
