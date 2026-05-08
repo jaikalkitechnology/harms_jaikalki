@@ -167,6 +167,10 @@ class Resignation(Base, TimestampMixin):
     exit_interview_notes: Mapped[Optional[str]] = mapped_column(
         Text, nullable=True
     )
+    # Attached documents — array of {url, name, mime, size, kind, uploaded_at}.
+    # kind: "resignation_letter" | "noc" | "experience_letter" |
+    # "settlement_sheet" | "asset_handover" | "other".
+    documents: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
 
 
 # ─── Password reset OTP ──────────────────────────────────────────────

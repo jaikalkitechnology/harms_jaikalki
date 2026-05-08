@@ -231,3 +231,94 @@ async def list_pending(db: AsyncSession) -> Sequence[Resignation]:
             .order_by(Resignation.requested_at.asc())
         )
     ).scalars().all()
+
+
+async def list_resignations(
+    db: AsyncSession,
+    *,
+    status: Optional[str] = None,
+    employee_id: Optional[int] = None,
+    search: Optional[str] = None,
+    from_date=None,
+    to_date=None,
+) -> Sequence[Resignation]:
+    from sqlalchemy import or_
+
+    stmt = select(Resignation)
+    if status:
+        stmt = stmt.where(Resignation.status == status)
+    if employee_id is not None:
+        stmt = stmt.where(Resignation.employee_id == employee_id)
+    if search:
+        like = f"%{search.strip()}%"
+        stmt = stmt.where(
+            or_(
+                Resignation.reason.ilike(like),
+                Resignation.manager_comment.ilike(like),
+                Resignation.exit_interview_notes.ilike(like),
+            )
+        )
+    if from_date is not None:
+        stmt = stmt.where(Resignation.requested_at >= from_date)
+    if to_date is not None:
+        stmt = stmt.where(Resignation.requested_at <= to_date)
+    stmt = stmt.order_by(Resignation.requested_at.desc())
+    return (await db.execute(stmt)).scalars().all()
+
+
+async def get_resignation(
+    db: AsyncSession, resignation_id: int
+) -> Resignation:
+    res = (
+        await db.execute(
+            select(Resignation).where(Resignation.id == resignation_id)
+        )
+    ).scalar_one_or_none()
+    if not res:
+        from app.core.exceptions import NotFoundError
+
+        raise NotFoundError("Resignation not found")
+    return res
+
+
+async def attach_document(
+    db: AsyncSession,
+    resignation_id: int,
+    *,
+    url: str,
+    name: str,
+    mime: Optional[str],
+    size: int,
+    kind: str = "other",
+    uploaded_by: Optional[int] = None,
+) -> Resignation:
+    res = await get_resignation(db, resignation_id)
+    docs = list(res.documents or [])
+    docs.append(
+        {
+            "url": url,
+            "name": name,
+            "mime": mime,
+            "size": size,
+            "kind": kind,
+            "uploaded_by": uploaded_by,
+            "uploaded_at": _now().isoformat(),
+        }
+    )
+    res.documents = docs
+    await db.commit()
+    await db.refresh(res)
+    return res
+
+
+async def remove_document(
+    db: AsyncSession, resignation_id: int, *, index: int
+) -> Resignation:
+    res = await get_resignation(db, resignation_id)
+    docs = list(res.documents or [])
+    if 0 <= index < len(docs):
+        docs.pop(index)
+        res.documents = docs
+        await db.commit()
+        await db.refresh(res)
+    return res

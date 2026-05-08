@@ -15,6 +15,16 @@ export interface NotificationItem {
   created_at: string;
 }
 
+export interface ResignationDocument {
+  url: string;
+  name: string;
+  mime: string | null;
+  size: number;
+  kind: string;
+  uploaded_by: number | null;
+  uploaded_at: string;
+}
+
 export interface Resignation {
   id: number;
   employee_id: number;
@@ -32,6 +42,7 @@ export interface Resignation {
   final_settlement_amount: number | null;
   final_settled_at: string | null;
   exit_interview_notes: string | null;
+  documents: ResignationDocument[] | null;
 }
 
 export interface AuditLogItem {
@@ -78,6 +89,22 @@ export const launchApi = {
     );
     return data;
   },
+  broadcast: async (payload: {
+    audience: "all" | "role" | "department" | "users";
+    title: string;
+    body?: string | null;
+    type?: string;
+    send_push?: boolean;
+    user_ids?: number[];
+    role_codes?: string[];
+    department_id?: number;
+  }) => {
+    const { data } = await apiClient.post<{ queued: number; sent: number }>(
+      `${v1}/notifications/broadcast`,
+      payload,
+    );
+    return data;
+  },
   markAllRead: async () => {
     const { data } = await apiClient.post<{ marked: number }>(
       `${v1}/notifications/me/read-all`,
@@ -88,6 +115,38 @@ export const launchApi = {
   pendingResignations: async () => {
     const { data } = await apiClient.get<Resignation[]>(
       `${v1}/resignations/pending`,
+    );
+    return data;
+  },
+  listResignations: async (params?: {
+    status?: string;
+    employee_id?: number;
+    search?: string;
+  }) => {
+    const { data } = await apiClient.get<Resignation[]>(
+      `${v1}/resignations`,
+      { params },
+    );
+    return data;
+  },
+  uploadResignationDocument: async (
+    id: number,
+    file: File,
+    kind: string,
+  ) => {
+    const form = new FormData();
+    form.append("file", file);
+    form.append("kind", kind);
+    const { data } = await apiClient.post<Resignation>(
+      `${v1}/resignations/${id}/documents`,
+      form,
+      { headers: { "Content-Type": "multipart/form-data" } },
+    );
+    return data;
+  },
+  removeResignationDocument: async (id: number, docIndex: number) => {
+    const { data } = await apiClient.delete<Resignation>(
+      `${v1}/resignations/${id}/documents/${docIndex}`,
     );
     return data;
   },

@@ -23,6 +23,26 @@ class UnreadCount(BaseModel):
     unread: int
 
 
+class NotificationBroadcast(BaseModel):
+    """Admin-initiated push to many users."""
+
+    audience: str = Field(pattern="^(all|role|department|users)$")
+    title: str = Field(min_length=1, max_length=200)
+    body: Optional[str] = Field(default=None, max_length=2000)
+    type: str = Field(default="broadcast", max_length=64)
+    data: Optional[dict] = None
+    send_push: bool = True
+    # audience-specific knobs
+    user_ids: Optional[List[int]] = None
+    role_codes: Optional[List[str]] = None
+    department_id: Optional[int] = None
+
+
+class BroadcastResult(BaseModel):
+    queued: int
+    sent: int
+
+
 class DeviceTokenRegister(BaseModel):
     platform: str = Field(pattern="^(android|ios|web)$")
     token: str
@@ -94,6 +114,7 @@ class ResignationOut(BaseModel):
     final_settlement_amount: Optional[int]
     final_settled_at: Optional[datetime]
     exit_interview_notes: Optional[str]
+    documents: Optional[list] = None
 
 
 # ─── Bulk import ─────────────────────────────────────────────────────
