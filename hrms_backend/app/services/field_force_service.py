@@ -56,18 +56,33 @@ async def list_customers(
     db: AsyncSession,
     *,
     territory: Optional[str] = None,
+    type_: Optional[str] = None,
     search: Optional[str] = None,
     is_active: Optional[bool] = True,
     limit: int = 200,
 ) -> Sequence[Customer]:
+    from sqlalchemy import or_
+
     stmt = select(Customer)
     if territory:
         stmt = stmt.where(Customer.territory == territory)
+    if type_:
+        stmt = stmt.where(Customer.type == type_)
     if is_active is not None:
         stmt = stmt.where(Customer.is_active == is_active)
     if search:
         like = f"%{search.strip()}%"
-        stmt = stmt.where(Customer.name.ilike(like))
+        stmt = stmt.where(
+            or_(
+                Customer.name.ilike(like),
+                Customer.city.ilike(like),
+                Customer.address.ilike(like),
+                Customer.gst.ilike(like),
+                Customer.pan.ilike(like),
+                Customer.industry.ilike(like),
+                Customer.territory.ilike(like),
+            )
+        )
     stmt = stmt.order_by(Customer.name.asc()).limit(limit)
     return (await db.execute(stmt)).scalars().all()
 

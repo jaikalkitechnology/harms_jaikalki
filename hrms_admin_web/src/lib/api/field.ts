@@ -85,7 +85,12 @@ export interface TeamPerformanceEntry {
 }
 
 export const fieldApi = {
-  listCustomers: async (params?: { search?: string; territory?: string }) => {
+  listCustomers: async (params?: {
+    search?: string;
+    territory?: string;
+    type?: Customer["type"];
+    is_active?: boolean;
+  }) => {
     const { data } = await apiClient.get<Customer[]>(`${v1}/field/customers`, {
       params,
     });
