@@ -24,7 +24,6 @@ import {
   BadgeCheck as BadgeCheckIcon,
   Mic,
   CalendarDays,
-  Goal as GoalIcon,
   Coins,
   FileText,
   Gavel,
