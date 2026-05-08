@@ -36,6 +36,7 @@ import LeaderboardPage from "@/features/lms/LeaderboardPage";
 import QuestionBankPage from "@/features/exam/QuestionBankPage";
 import ExamsPage from "@/features/exam/ExamsPage";
 import CertificateVerifyPage from "@/features/exam/CertificateVerifyPage";
+import CertificatesPage from "@/features/exam/CertificatesPage";
 import TrainersPage from "@/features/trainer/TrainersPage";
 import SessionsPage from "@/features/trainer/SessionsPage";
 import CyclesPage from "@/features/performance/CyclesPage";
@@ -139,6 +140,7 @@ export const router = createBrowserRouter([
       { path: "exams/questions", element: <QuestionBankPage /> },
       { path: "exams", element: <ExamsPage /> },
       { path: "exams/verify", element: <CertificateVerifyPage /> },
+      { path: "exams/certificates", element: <CertificatesPage /> },
       { path: "trainers", element: <TrainersPage /> },
       { path: "trainers/sessions", element: <SessionsPage /> },
       { path: "performance/cycles", element: <CyclesPage /> },

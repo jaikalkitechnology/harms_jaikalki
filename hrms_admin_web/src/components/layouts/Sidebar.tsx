@@ -248,6 +248,11 @@ const SECTIONS: NavSection[] = [
         icon: Award,
       },
       {
+        label: "Certificates",
+        to: "/exams/certificates",
+        icon: Award,
+      },
+      {
         label: "Verify Certificate",
         to: "/exams/verify",
         icon: BadgeCheckIcon,

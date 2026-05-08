@@ -242,6 +242,29 @@ class CertificateOut(BaseModel):
     score_percentage: Optional[Decimal]
     pdf_url: Optional[str]
     is_revoked: bool
+    revoked_reason: Optional[str] = None
+
+
+class CertificateCreate(BaseModel):
+    employee_id: int
+    title: str = Field(min_length=2, max_length=200)
+    course_id: Optional[int] = None
+    exam_attempt_id: Optional[int] = None
+    issued_date: Optional[date] = None
+    expiry_date: Optional[date] = None
+    score_percentage: Optional[Decimal] = Field(default=None, ge=0, le=100)
+
+
+class CertificateUpdate(BaseModel):
+    title: Optional[str] = Field(default=None, min_length=2, max_length=200)
+    issued_date: Optional[date] = None
+    expiry_date: Optional[date] = None
+    score_percentage: Optional[Decimal] = Field(default=None, ge=0, le=100)
+    course_id: Optional[int] = None
+
+
+class CertificateRevoke(BaseModel):
+    reason: str = Field(min_length=2, max_length=255)
 
 
 class CertificateVerifyResponse(BaseModel):

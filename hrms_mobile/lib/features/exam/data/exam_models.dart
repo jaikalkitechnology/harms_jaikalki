@@ -160,6 +160,8 @@ class CertificateOut extends Equatable {
     required this.issuedDate,
     this.expiryDate,
     this.scorePercentage,
+    this.isRevoked = false,
+    this.revokedReason,
   });
 
   final int id;
@@ -168,6 +170,8 @@ class CertificateOut extends Equatable {
   final String issuedDate;
   final String? expiryDate;
   final double? scorePercentage;
+  final bool isRevoked;
+  final String? revokedReason;
 
   factory CertificateOut.fromJson(Map<String, dynamic> j) => CertificateOut(
         id: j['id'] as int,
@@ -178,8 +182,10 @@ class CertificateOut extends Equatable {
         scorePercentage: j['score_percentage'] != null
             ? double.tryParse(j['score_percentage'].toString())
             : null,
+        isRevoked: j['is_revoked'] as bool? ?? false,
+        revokedReason: j['revoked_reason'] as String?,
       );
 
   @override
-  List<Object?> get props => [id];
+  List<Object?> get props => [id, isRevoked];
 }

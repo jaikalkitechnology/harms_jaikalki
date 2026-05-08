@@ -1,4 +1,5 @@
-"""Certificate PDF renderer with QR verification code."""
+"""Certificate PDF renderer — elegant landscape layout with gold border,
+watermark, signature line, and QR verification code."""
 from __future__ import annotations
 
 import io
@@ -8,7 +9,8 @@ import qrcode
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4, landscape
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
-from reportlab.lib.units import cm
+from reportlab.lib.units import cm, mm
+from reportlab.pdfgen.canvas import Canvas
 from reportlab.platypus import (
     Image,
     Paragraph,
@@ -23,9 +25,12 @@ from app.models import Certificate, Employee
 
 
 BRAND_BROWN = colors.HexColor("#3D2817")
+BRAND_BROWN_DARK = colors.HexColor("#2D1810")
 BRAND_GOLD = colors.HexColor("#F4B71F")
 BRAND_GOLD_DARK = colors.HexColor("#C8941A")
-BRAND_CREAM = colors.HexColor("#FBF6E9")
+BRAND_GOLD_LIGHT = colors.HexColor("#FFE08A")
+BRAND_CREAM = colors.HexColor("#FDF8EE")
+INK_GREY = colors.HexColor("#5C3D24")
 
 
 def _generate_qr_image(verify_url: str) -> Image:
@@ -41,7 +46,73 @@ def _generate_qr_image(verify_url: str) -> Image:
     buf = io.BytesIO()
     img.save(buf, format="PNG")
     buf.seek(0)
-    return Image(buf, width=3 * cm, height=3 * cm)
+    return Image(buf, width=2.6 * cm, height=2.6 * cm)
+
+
+def _draw_decorations(canvas: Canvas, doc) -> None:
+    """Page decorations drawn underneath the flowables: cream wash, double
+    gold border, corner ornaments, and a soft brand watermark."""
+    width, height = landscape(A4)
+
+    # Cream background fill
+    canvas.saveState()
+    canvas.setFillColor(BRAND_CREAM)
+    canvas.rect(0, 0, width, height, stroke=0, fill=1)
+
+    # Outer thin gold rule
+    canvas.setStrokeColor(BRAND_GOLD_DARK)
+    canvas.setLineWidth(1)
+    canvas.rect(10 * mm, 10 * mm, width - 20 * mm, height - 20 * mm, stroke=1, fill=0)
+
+    # Inner thicker gold rule
+    canvas.setStrokeColor(BRAND_GOLD)
+    canvas.setLineWidth(3)
+    canvas.rect(15 * mm, 15 * mm, width - 30 * mm, height - 30 * mm, stroke=1, fill=0)
+
+    # Innermost hairline brown border
+    canvas.setStrokeColor(BRAND_BROWN)
+    canvas.setLineWidth(0.4)
+    canvas.rect(18 * mm, 18 * mm, width - 36 * mm, height - 36 * mm, stroke=1, fill=0)
+
+    # Corner ornaments — small diamonds
+    for cx, cy in (
+        (18 * mm, 18 * mm),
+        (width - 18 * mm, 18 * mm),
+        (18 * mm, height - 18 * mm),
+        (width - 18 * mm, height - 18 * mm),
+    ):
+        canvas.setFillColor(BRAND_GOLD_DARK)
+        canvas.setStrokeColor(BRAND_BROWN)
+        canvas.setLineWidth(0.5)
+        path = canvas.beginPath()
+        path.moveTo(cx, cy + 4 * mm)
+        path.lineTo(cx + 4 * mm, cy)
+        path.lineTo(cx, cy - 4 * mm)
+        path.lineTo(cx - 4 * mm, cy)
+        path.close()
+        canvas.drawPath(path, stroke=1, fill=1)
+
+    # Faint watermark "JAIKALKI" rotated
+    canvas.saveState()
+    canvas.translate(width / 2, height / 2)
+    canvas.rotate(20)
+    canvas.setFillColor(colors.Color(0.78, 0.66, 0.42, alpha=0.08))
+    canvas.setFont("Helvetica-Bold", 90)
+    canvas.drawCentredString(0, -25, "JAIKALKI")
+    canvas.restoreState()
+
+    # Top ribbon — gold band with small medal
+    ribbon_y = height - 26 * mm
+    canvas.setFillColor(BRAND_GOLD)
+    canvas.rect(width / 2 - 30 * mm, ribbon_y, 60 * mm, 6 * mm, stroke=0, fill=1)
+    # Medal circle
+    canvas.setFillColor(BRAND_GOLD_DARK)
+    canvas.circle(width / 2, ribbon_y + 3 * mm, 6 * mm, stroke=0, fill=1)
+    canvas.setFillColor(BRAND_CREAM)
+    canvas.setFont("Helvetica-Bold", 9)
+    canvas.drawCentredString(width / 2, ribbon_y + 1.4 * mm, "JKT")
+
+    canvas.restoreState()
 
 
 def render_certificate(
@@ -59,59 +130,82 @@ def render_certificate(
     doc = SimpleDocTemplate(
         buf,
         pagesize=landscape(A4),
-        leftMargin=2.5 * cm,
-        rightMargin=2.5 * cm,
-        topMargin=2 * cm,
-        bottomMargin=2 * cm,
+        leftMargin=3.2 * cm,
+        rightMargin=3.2 * cm,
+        topMargin=3.5 * cm,
+        bottomMargin=2.5 * cm,
         title=f"Certificate {certificate.certificate_number}",
+        author="Jaikalki Technology Pvt Ltd",
     )
     styles = getSampleStyleSheet()
+
     h_brand = ParagraphStyle(
         "h_brand",
         parent=styles["Heading1"],
-        textColor=BRAND_BROWN,
-        fontSize=24,
+        textColor=BRAND_BROWN_DARK,
+        fontSize=22,
+        leading=26,
         alignment=1,
-        spaceAfter=4,
+        spaceAfter=2,
     )
     sub_brand = ParagraphStyle(
         "sub_brand",
         parent=styles["BodyText"],
         textColor=BRAND_GOLD_DARK,
-        fontSize=12,
+        fontSize=10,
         alignment=1,
+        spaceAfter=10,
     )
     cert_title = ParagraphStyle(
         "cert_title",
         parent=styles["Heading2"],
         textColor=BRAND_GOLD_DARK,
-        fontSize=28,
+        fontSize=30,
+        leading=36,
         alignment=1,
-        spaceBefore=18,
-        spaceAfter=18,
+        spaceBefore=12,
+        spaceAfter=4,
+    )
+    cert_subtitle = ParagraphStyle(
+        "cert_subtitle",
+        parent=styles["BodyText"],
+        textColor=INK_GREY,
+        fontSize=11,
+        alignment=1,
+        spaceAfter=20,
     )
     awarded_to = ParagraphStyle(
         "awarded",
         parent=styles["BodyText"],
-        textColor=BRAND_BROWN,
+        textColor=INK_GREY,
         fontSize=14,
         alignment=1,
+        spaceAfter=6,
     )
     name_style = ParagraphStyle(
         "name",
         parent=styles["Heading2"],
-        textColor=BRAND_BROWN,
-        fontSize=26,
+        textColor=BRAND_BROWN_DARK,
+        fontSize=32,
+        leading=38,
         alignment=1,
-        spaceAfter=12,
+        spaceAfter=4,
+    )
+    emp_code_style = ParagraphStyle(
+        "empc",
+        parent=styles["BodyText"],
+        textColor=INK_GREY,
+        fontSize=10,
+        alignment=1,
+        spaceAfter=14,
     )
     body = ParagraphStyle(
         "body",
         parent=styles["BodyText"],
         textColor=BRAND_BROWN,
-        fontSize=12,
+        fontSize=13,
         alignment=1,
-        leading=18,
+        leading=20,
     )
     small = ParagraphStyle(
         "small",
@@ -125,22 +219,27 @@ def render_certificate(
     story.append(Paragraph("JAIKALKI TECHNOLOGY PVT LTD", h_brand))
     story.append(
         Paragraph(
-            "Learning &amp; Certification · Established to empower people",
+            "Learning &amp; Certification · est. to empower people",
             sub_brand,
         )
     )
-    story.append(Paragraph("CERTIFICATE OF ACHIEVEMENT", cert_title))
+    story.append(Paragraph("Certificate of Achievement", cert_title))
+    story.append(
+        Paragraph(
+            "presented in recognition of dedication, learning, and excellence",
+            cert_subtitle,
+        )
+    )
 
-    story.append(Paragraph("This certifies that", awarded_to))
+    story.append(Paragraph("This is to certify that", awarded_to))
     full_name = f"{employee.first_name} {employee.last_name}".strip()
     story.append(Paragraph(f"<b>{full_name}</b>", name_style))
     story.append(
         Paragraph(
-            f"Employee Code <b>{employee.employee_code}</b>",
-            ParagraphStyle("emp", parent=body, fontSize=10),
+            f"Employee Code &nbsp;<b>{employee.employee_code}</b>",
+            emp_code_style,
         )
     )
-    story.append(Spacer(1, 0.3 * cm))
     score = (
         f" with a score of <b>{certificate.score_percentage}%</b>"
         if certificate.score_percentage is not None
@@ -153,14 +252,47 @@ def render_certificate(
         )
     )
 
-    story.append(Spacer(1, 0.6 * cm))
+    story.append(Spacer(1, 0.8 * cm))
 
-    # Footer band: certificate number + dates + QR
+    # Signature row + QR
+    sig_line = Paragraph(
+        '<para align="center">'
+        '<font color="#3D2817">_________________________</font><br/>'
+        '<font size="9" color="#5C3D24">Authorized Signatory</font>'
+        '</para>',
+        body,
+    )
+    seal = Paragraph(
+        '<para align="center">'
+        '<font size="9" color="#5C3D24">Issued by</font><br/>'
+        '<font color="#C8941A" size="11"><b>Jaikalki HR &amp; Learning</b></font>'
+        '</para>',
+        body,
+    )
+    qr_img = _generate_qr_image(verify_url)
+    sig_row = Table(
+        [[sig_line, seal, qr_img]],
+        colWidths=[8 * cm, 8 * cm, 4 * cm],
+    )
+    sig_row.setStyle(
+        TableStyle(
+            [
+                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                ("LEFTPADDING", (0, 0), (-1, -1), 4),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 4),
+            ]
+        )
+    )
+    story.append(sig_row)
+
+    story.append(Spacer(1, 0.5 * cm))
+
+    # Footer band: certificate number + dates
     footer_data = [
         [
             Paragraph(
                 f"<b>Certificate No.</b><br/>{certificate.certificate_number}",
-                ParagraphStyle("cn", parent=body, fontSize=10, alignment=0),
+                ParagraphStyle("cn", parent=body, fontSize=10, alignment=1),
             ),
             Paragraph(
                 f"<b>Issued</b><br/>{certificate.issued_date.strftime('%d %B %Y')}",
@@ -171,34 +303,41 @@ def render_certificate(
                 f"{certificate.expiry_date.strftime('%d %B %Y') if certificate.expiry_date else 'No expiry'}",
                 ParagraphStyle("d2", parent=body, fontSize=10, alignment=1),
             ),
-            _generate_qr_image(verify_url),
         ]
     ]
-    footer = Table(
-        footer_data,
-        colWidths=[7 * cm, 5 * cm, 5 * cm, 4 * cm],
-    )
+    footer = Table(footer_data, colWidths=[7 * cm, 6 * cm, 6 * cm])
     footer.setStyle(
         TableStyle(
             [
                 ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-                ("BACKGROUND", (0, 0), (-1, -1), BRAND_CREAM),
-                ("BOX", (0, 0), (-1, -1), 1, BRAND_BROWN),
+                ("BACKGROUND", (0, 0), (-1, -1), colors.Color(1, 1, 1, alpha=0.6)),
+                ("BOX", (0, 0), (-1, -1), 0.5, BRAND_GOLD_DARK),
                 ("LEFTPADDING", (0, 0), (-1, -1), 12),
                 ("RIGHTPADDING", (0, 0), (-1, -1), 12),
-                ("TOPPADDING", (0, 0), (-1, -1), 10),
-                ("BOTTOMPADDING", (0, 0), (-1, -1), 10),
+                ("TOPPADDING", (0, 0), (-1, -1), 8),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
             ]
         )
     )
     story.append(footer)
-    story.append(Spacer(1, 0.4 * cm))
+    story.append(Spacer(1, 0.3 * cm))
     story.append(
         Paragraph(
-            f"Verify this certificate at {verify_url}",
+            f"Scan the QR code or visit {verify_url} to verify this certificate.",
             small,
         )
     )
 
-    doc.build(story)
+    if certificate.is_revoked:
+        story.append(Spacer(1, 0.3 * cm))
+        story.append(
+            Paragraph(
+                "<b><font color='#C53030'>REVOKED — this certificate is no longer valid.</font></b>",
+                small,
+            )
+        )
+
+    doc.build(
+        story, onFirstPage=_draw_decorations, onLaterPages=_draw_decorations
+    )
     return buf.getvalue()
