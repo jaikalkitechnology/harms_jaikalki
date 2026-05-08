@@ -234,6 +234,56 @@ async def list_today_visitors(
     ).scalars().all()
 
 
+async def list_visitors(
+    db: AsyncSession,
+    *,
+    status: Optional[str] = None,
+    host_employee_id: Optional[int] = None,
+    search: Optional[str] = None,
+    from_date=None,
+    to_date=None,
+) -> Sequence[Visitor]:
+    from sqlalchemy import or_
+
+    stmt = select(Visitor)
+    if status:
+        stmt = stmt.where(Visitor.status == status)
+    if host_employee_id is not None:
+        stmt = stmt.where(Visitor.host_employee_id == host_employee_id)
+    if from_date is not None:
+        stmt = stmt.where(
+            Visitor.expected_at >= datetime.combine(from_date, datetime.min.time())
+        )
+    if to_date is not None:
+        stmt = stmt.where(
+            Visitor.expected_at <= datetime.combine(to_date, datetime.max.time())
+        )
+    if search:
+        like = f"%{search.strip()}%"
+        stmt = stmt.where(
+            or_(
+                Visitor.full_name.ilike(like),
+                Visitor.contact_phone.ilike(like),
+                Visitor.contact_email.ilike(like),
+                Visitor.company.ilike(like),
+                Visitor.purpose.ilike(like),
+            )
+        )
+    stmt = stmt.order_by(Visitor.expected_at.desc())
+    return (await db.execute(stmt)).scalars().all()
+
+
+async def get_visitor_by_token(
+    db: AsyncSession, qr_token: str
+) -> Visitor:
+    visitor = (
+        await db.execute(select(Visitor).where(Visitor.qr_token == qr_token))
+    ).scalar_one_or_none()
+    if not visitor:
+        raise NotFoundError("Invalid QR code")
+    return visitor
+
+
 async def visitor_check_in(
     db: AsyncSession,
     *,

@@ -160,3 +160,55 @@ class JobApplication extends Equatable {
   @override
   List<Object?> get props => [id, status];
 }
+
+
+class Visitor extends Equatable {
+  const Visitor({
+    required this.id,
+    required this.fullName,
+    required this.purpose,
+    required this.hostEmployeeId,
+    required this.expectedAt,
+    required this.qrToken,
+    required this.status,
+    this.contactPhone,
+    this.contactEmail,
+    this.company,
+    this.checkedInAt,
+    this.checkedOutAt,
+    this.badgeNumber,
+  });
+
+  final int id;
+  final String fullName;
+  final String? contactPhone;
+  final String? contactEmail;
+  final String? company;
+  final String purpose;
+  final int hostEmployeeId;
+  final String expectedAt;
+  final String qrToken;
+  final String? checkedInAt;
+  final String? checkedOutAt;
+  final String? badgeNumber;
+  final String status;
+
+  factory Visitor.fromJson(Map<String, dynamic> j) => Visitor(
+        id: j['id'] as int,
+        fullName: j['full_name'] as String,
+        contactPhone: j['contact_phone'] as String?,
+        contactEmail: j['contact_email'] as String?,
+        company: j['company'] as String?,
+        purpose: j['purpose'] as String,
+        hostEmployeeId: j['host_employee_id'] as int,
+        expectedAt: j['expected_at'] as String,
+        qrToken: j['qr_token'] as String,
+        checkedInAt: j['checked_in_at'] as String?,
+        checkedOutAt: j['checked_out_at'] as String?,
+        badgeNumber: j['badge_number'] as String?,
+        status: j['status'] as String,
+      );
+
+  @override
+  List<Object?> get props => [id, status];
+}
