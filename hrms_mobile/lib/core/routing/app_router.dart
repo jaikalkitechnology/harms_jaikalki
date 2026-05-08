@@ -14,6 +14,7 @@ import '../../features/employees/pages/employee_detail_page.dart';
 import '../../features/employees/pages/employees_list_page.dart';
 import '../../features/exam/pages/exam_list_page.dart';
 import '../../features/exam/pages/exam_taking_page.dart';
+import '../../features/exam/pages/my_certificates_page.dart';
 import '../../features/field/pages/field_home_page.dart';
 import '../../features/field/pages/field_live_map_page.dart';
 import '../../features/field/pages/field_visit_page.dart';
@@ -88,6 +89,7 @@ class AppRoutes {
   static const lmsHome = '/lms';
   static const lmsBadges = '/lms/badges';
   static const exams = '/exams';
+  static const myCertificates = '/exams/me/certificates';
   static const trainers = '/trainers';
   static const trainerSessions = '/trainers/sessions';
   static const myGoals = '/performance/goals';
@@ -292,6 +294,10 @@ GoRouter buildRouter(AuthBloc authBloc) {
         builder: (_, state) => ExamTakingPage(
           examId: int.parse(state.pathParameters['id']!),
         ),
+      ),
+      GoRoute(
+        path: AppRoutes.myCertificates,
+        builder: (_, __) => const MyCertificatesPage(),
       ),
       GoRoute(
         path: AppRoutes.trainers,

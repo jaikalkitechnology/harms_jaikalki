@@ -515,6 +515,111 @@ async def list_my_certificates(
     ).scalars().all()
 
 
+# Admin CRUD for certificates
+async def list_certificates(
+    db: AsyncSession,
+    *,
+    employee_id: Optional[int] = None,
+    course_id: Optional[int] = None,
+    is_revoked: Optional[bool] = None,
+    search: Optional[str] = None,
+    from_date: Optional[date] = None,
+    to_date: Optional[date] = None,
+    limit: int = 200,
+    offset: int = 0,
+) -> Sequence[Certificate]:
+    from sqlalchemy import or_
+
+    stmt = select(Certificate)
+    if employee_id is not None:
+        stmt = stmt.where(Certificate.employee_id == employee_id)
+    if course_id is not None:
+        stmt = stmt.where(Certificate.course_id == course_id)
+    if is_revoked is not None:
+        stmt = stmt.where(Certificate.is_revoked == is_revoked)
+    if from_date is not None:
+        stmt = stmt.where(Certificate.issued_date >= from_date)
+    if to_date is not None:
+        stmt = stmt.where(Certificate.issued_date <= to_date)
+    if search:
+        like = f"%{search.strip()}%"
+        stmt = stmt.where(
+            or_(
+                Certificate.certificate_number.ilike(like),
+                Certificate.title.ilike(like),
+            )
+        )
+    stmt = (
+        stmt.order_by(Certificate.issued_date.desc(), Certificate.id.desc())
+        .limit(limit)
+        .offset(offset)
+    )
+    return (await db.execute(stmt)).scalars().all()
+
+
+async def admin_issue_certificate(
+    db: AsyncSession, *, payload: dict
+) -> Certificate:
+    """Admin-driven certificate issuance (no exam attempt required)."""
+    emp = (
+        await db.execute(
+            select(Employee).where(Employee.id == payload["employee_id"])
+        )
+    ).scalar_one_or_none()
+    if not emp:
+        raise NotFoundError("Employee not found")
+
+    cert = Certificate(
+        certificate_number=_new_certificate_number(),
+        employee_id=emp.id,
+        course_id=payload.get("course_id"),
+        exam_attempt_id=payload.get("exam_attempt_id"),
+        title=payload["title"],
+        issued_date=payload.get("issued_date") or _today(),
+        expiry_date=payload.get("expiry_date"),
+        score_percentage=payload.get("score_percentage"),
+    )
+    db.add(cert)
+    await db.commit()
+    await db.refresh(cert)
+    return cert
+
+
+async def update_certificate(
+    db: AsyncSession, certificate_id: int, *, payload: dict
+) -> Certificate:
+    cert = await get_certificate(db, certificate_id)
+    allowed = {"title", "issued_date", "expiry_date", "score_percentage", "course_id"}
+    for k, v in payload.items():
+        if k in allowed and v is not None:
+            setattr(cert, k, v)
+    await db.commit()
+    await db.refresh(cert)
+    return cert
+
+
+async def revoke_certificate(
+    db: AsyncSession, certificate_id: int, *, reason: str
+) -> Certificate:
+    cert = await get_certificate(db, certificate_id)
+    cert.is_revoked = True
+    cert.revoked_reason = reason
+    await db.commit()
+    await db.refresh(cert)
+    return cert
+
+
+async def restore_certificate(
+    db: AsyncSession, certificate_id: int
+) -> Certificate:
+    cert = await get_certificate(db, certificate_id)
+    cert.is_revoked = False
+    cert.revoked_reason = None
+    await db.commit()
+    await db.refresh(cert)
+    return cert
+
+
 async def verify_certificate(
     db: AsyncSession, certificate_number: str
 ) -> dict:

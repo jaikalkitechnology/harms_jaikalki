@@ -52,6 +52,21 @@ export interface CertificateVerifyResponse {
   revoked_reason: string | null;
 }
 
+export interface Certificate {
+  id: number;
+  certificate_number: string;
+  employee_id: number;
+  course_id: number | null;
+  exam_attempt_id: number | null;
+  title: string;
+  issued_date: string;
+  expiry_date: string | null;
+  score_percentage: string | null;
+  pdf_url: string | null;
+  is_revoked: boolean;
+  revoked_reason: string | null;
+}
+
 export const examApi = {
   listQuestions: async (params?: {
     department_id?: number;
@@ -137,6 +152,73 @@ export const examApi = {
   verify: async (certificateNumber: string) => {
     const { data } = await apiClient.get<CertificateVerifyResponse>(
       `${v1}/exams/certificates/verify/${encodeURIComponent(certificateNumber)}`,
+    );
+    return data;
+  },
+  listCertificates: async (params?: {
+    employee_id?: number;
+    course_id?: number;
+    is_revoked?: boolean;
+    search?: string;
+    from_date?: string;
+    to_date?: string;
+    limit?: number;
+    offset?: number;
+  }) => {
+    const { data } = await apiClient.get<Certificate[]>(
+      `${v1}/exams/certificates`,
+      { params },
+    );
+    return data;
+  },
+  issueCertificate: async (payload: {
+    employee_id: number;
+    title: string;
+    course_id?: number | null;
+    exam_attempt_id?: number | null;
+    issued_date?: string;
+    expiry_date?: string | null;
+    score_percentage?: number | null;
+  }) => {
+    const { data } = await apiClient.post<Certificate>(
+      `${v1}/exams/certificates`,
+      payload,
+    );
+    return data;
+  },
+  updateCertificate: async (
+    id: number,
+    payload: {
+      title?: string;
+      issued_date?: string;
+      expiry_date?: string | null;
+      score_percentage?: number | null;
+      course_id?: number | null;
+    },
+  ) => {
+    const { data } = await apiClient.put<Certificate>(
+      `${v1}/exams/certificates/${id}`,
+      payload,
+    );
+    return data;
+  },
+  revokeCertificate: async (id: number, reason: string) => {
+    const { data } = await apiClient.post<Certificate>(
+      `${v1}/exams/certificates/${id}/revoke`,
+      { reason },
+    );
+    return data;
+  },
+  restoreCertificate: async (id: number) => {
+    const { data } = await apiClient.post<Certificate>(
+      `${v1}/exams/certificates/${id}/restore`,
+    );
+    return data;
+  },
+  certificatePdfUrl: (id: number) => `${v1}/exams/certificates/${id}/pdf`,
+  myCertificates: async () => {
+    const { data } = await apiClient.get<Certificate[]>(
+      `${v1}/exams/me/certificates`,
     );
     return data;
   },
