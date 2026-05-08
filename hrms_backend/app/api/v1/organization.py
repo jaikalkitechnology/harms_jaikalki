@@ -10,14 +10,19 @@ from app.schemas.attendance import ShiftOut
 from app.schemas.employee import (
     CategoryOut,
     DepartmentCreate,
+    DepartmentModulesOut,
+    DepartmentModulesUpdate,
     DepartmentOut,
     DepartmentUpdate,
     DesignationCreate,
     DesignationOut,
     DesignationUpdate,
+    MyEnabledModulesOut,
     ShiftCreate,
     ShiftUpdate,
 )
+from app.services import employee_service as emp_svc
+from app.services import module_registry
 
 router = APIRouter(tags=["organization"])
 
@@ -93,6 +98,83 @@ async def delete_department(
         raise NotFoundError("Department not found")
     await db.delete(obj)
     await db.commit()
+
+
+# ── Department → mobile modules mapping ───────────────────────────────
+@router.get(
+    "/departments/{dept_id}/modules",
+    response_model=DepartmentModulesOut,
+)
+async def get_department_modules(
+    dept_id: int,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_permission("admin.users.view")),
+):
+    obj = (
+        await db.execute(select(Department).where(Department.id == dept_id))
+    ).scalar_one_or_none()
+    if not obj:
+        raise NotFoundError("Department not found")
+    return DepartmentModulesOut(
+        department_id=obj.id,
+        enabled_modules=obj.enabled_modules,
+        available_modules=module_registry.MODULE_KEYS,
+    )
+
+
+@router.put(
+    "/departments/{dept_id}/modules",
+    response_model=DepartmentModulesOut,
+)
+async def set_department_modules(
+    dept_id: int,
+    payload: DepartmentModulesUpdate,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_permission("admin.users.manage")),
+):
+    obj = (
+        await db.execute(select(Department).where(Department.id == dept_id))
+    ).scalar_one_or_none()
+    if not obj:
+        raise NotFoundError("Department not found")
+    if payload.enabled_modules is None:
+        obj.enabled_modules = None
+    else:
+        obj.enabled_modules = module_registry.normalize(payload.enabled_modules)
+    await db.commit()
+    await db.refresh(obj)
+    return DepartmentModulesOut(
+        department_id=obj.id,
+        enabled_modules=obj.enabled_modules,
+        available_modules=module_registry.MODULE_KEYS,
+    )
+
+
+@router.get("/me/enabled-modules", response_model=MyEnabledModulesOut)
+async def my_enabled_modules(
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Mobile reads this on app start to decide which More-menu tiles
+    to render. Falls back to "all modules visible" when the employee has
+    no department or the department has no whitelist."""
+    emp = await emp_svc.get_self_employee(db, user)
+    if not emp or emp.department_id is None:
+        return MyEnabledModulesOut(
+            department_id=None,
+            enabled=module_registry.effective_modules(None),
+        )
+    dept = (
+        await db.execute(
+            select(Department).where(Department.id == emp.department_id)
+        )
+    ).scalar_one_or_none()
+    enabled = module_registry.effective_modules(
+        dept.enabled_modules if dept else None
+    )
+    return MyEnabledModulesOut(
+        department_id=emp.department_id, enabled=enabled
+    )
 
 
 # ── Designations ──────────────────────────────────────────────────────

@@ -1,65 +1,104 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/di/injection.dart';
+import '../../core/modules/enabled_modules_service.dart';
 import '../../core/routing/app_router.dart';
 import '../../core/theme/app_colors.dart';
 import '../../l10n/app_l10n.dart';
 
-class MoreMenuPage extends StatelessWidget {
+class MoreMenuPage extends StatefulWidget {
   const MoreMenuPage({super.key});
+
+  @override
+  State<MoreMenuPage> createState() => _MoreMenuPageState();
+}
+
+class _MoreMenuPageState extends State<MoreMenuPage> {
+  late final EnabledModulesService _modules;
+
+  @override
+  void initState() {
+    super.initState();
+    _modules = sl<EnabledModulesService>();
+    _modules.addListener(_onModulesChanged);
+    // Background refresh in case admin updated the mapping recently.
+    _modules.refresh();
+  }
+
+  @override
+  void dispose() {
+    _modules.removeListener(_onModulesChanged);
+    super.dispose();
+  }
+
+  void _onModulesChanged() {
+    if (mounted) setState(() {});
+  }
 
   @override
   Widget build(BuildContext context) {
     final l = AppL10n.of(context);
 
-    final sections = <_MoreSection>[
+    final allSections = <_MoreSection>[
       _MoreSection('Work', [
-        _MoreItem(l.attendance, Icons.fingerprint_outlined, AppRoutes.attendance),
-        _MoreItem(l.leaves, Icons.beach_access_outlined, AppRoutes.leaves),
-        _MoreItem('Daily plan', Icons.checklist_outlined, AppRoutes.dwp),
-        _MoreItem(l.approvals, Icons.inbox_outlined, AppRoutes.approvalsInbox),
-        _MoreItem('Field plan', Icons.map_outlined, AppRoutes.fieldHome),
-        _MoreItem('Live team map', Icons.location_on_outlined, AppRoutes.fieldLiveMap),
+        _MoreItem('attendance', l.attendance, Icons.fingerprint_outlined, AppRoutes.attendance),
+        _MoreItem('leaves', l.leaves, Icons.beach_access_outlined, AppRoutes.leaves),
+        _MoreItem('dwp', 'Daily plan', Icons.checklist_outlined, AppRoutes.dwp),
+        _MoreItem('approvals', l.approvals, Icons.inbox_outlined, AppRoutes.approvalsInbox),
+        _MoreItem('field_plan', 'Field plan', Icons.map_outlined, AppRoutes.fieldHome),
+        _MoreItem('live_team_map', 'Live team map', Icons.location_on_outlined, AppRoutes.fieldLiveMap),
       ]),
       _MoreSection('Sales', [
-        _MoreItem('Pipeline', Icons.trending_up_outlined, AppRoutes.salesPipeline),
-        _MoreItem('My target', Icons.flag_outlined, AppRoutes.salesTargets),
+        _MoreItem('sales_pipeline', 'Pipeline', Icons.trending_up_outlined, AppRoutes.salesPipeline),
+        _MoreItem('sales_targets', 'My target', Icons.flag_outlined, AppRoutes.salesTargets),
       ]),
       _MoreSection('Operations', [
-        _MoreItem('Verifications', Icons.fact_check_outlined, AppRoutes.verificationQueue),
-        _MoreItem('Visitors', Icons.qr_code_2_outlined, AppRoutes.visitors),
-        _MoreItem('Book a room', Icons.meeting_room_outlined, AppRoutes.bookRoom),
-        _MoreItem('My assets', Icons.devices_outlined, AppRoutes.myAssets),
+        _MoreItem('verifications', 'Verifications', Icons.fact_check_outlined, AppRoutes.verificationQueue),
+        _MoreItem('visitors', 'Visitors', Icons.qr_code_2_outlined, AppRoutes.visitors),
+        _MoreItem('book_room', 'Book a room', Icons.meeting_room_outlined, AppRoutes.bookRoom),
+        _MoreItem('my_assets', 'My assets', Icons.devices_outlined, AppRoutes.myAssets),
       ]),
       _MoreSection('Learning', [
-        _MoreItem('Courses', Icons.school_outlined, AppRoutes.lmsHome),
-        _MoreItem('Badges', Icons.emoji_events_outlined, AppRoutes.lmsBadges),
-        _MoreItem('Exams', Icons.quiz_outlined, AppRoutes.exams),
-        _MoreItem('Certificates', Icons.workspace_premium_outlined, AppRoutes.myCertificates),
-        _MoreItem('Trainers', Icons.mic_external_on_outlined, AppRoutes.trainers),
-        _MoreItem('Sessions', Icons.calendar_today_outlined, AppRoutes.trainerSessions),
+        _MoreItem('lms', 'Courses', Icons.school_outlined, AppRoutes.lmsHome),
+        _MoreItem('badges', 'Badges', Icons.emoji_events_outlined, AppRoutes.lmsBadges),
+        _MoreItem('exams', 'Exams', Icons.quiz_outlined, AppRoutes.exams),
+        _MoreItem('certificates', 'Certificates', Icons.workspace_premium_outlined, AppRoutes.myCertificates),
+        _MoreItem('trainers', 'Trainers', Icons.mic_external_on_outlined, AppRoutes.trainers),
+        _MoreItem('sessions', 'Sessions', Icons.calendar_today_outlined, AppRoutes.trainerSessions),
       ]),
       _MoreSection('Performance', [
-        _MoreItem('My goals', Icons.flag_outlined, AppRoutes.myGoals),
-        _MoreItem('360 feedback', Icons.rate_review_outlined, AppRoutes.feedbackInbox),
-        _MoreItem('Director dashboard', Icons.dashboard_outlined, AppRoutes.directorDashboard),
+        _MoreItem('my_goals', 'My goals', Icons.flag_outlined, AppRoutes.myGoals),
+        _MoreItem('feedback_360', '360 feedback', Icons.rate_review_outlined, AppRoutes.feedbackInbox),
+        _MoreItem('director_dashboard', 'Director dashboard', Icons.dashboard_outlined, AppRoutes.directorDashboard),
       ]),
       _MoreSection('People', [
-        _MoreItem(l.employees, Icons.groups_outlined, AppRoutes.employees),
-        _MoreItem('Internal jobs', Icons.work_outline, AppRoutes.browseJobs),
-        _MoreItem('Resignation', Icons.exit_to_app_outlined, AppRoutes.resignation),
-        _MoreItem('Justice Portal', Icons.shield_outlined, AppRoutes.justice),
+        _MoreItem('employees', l.employees, Icons.groups_outlined, AppRoutes.employees),
+        _MoreItem('internal_jobs', 'Internal jobs', Icons.work_outline, AppRoutes.browseJobs),
+        _MoreItem('resignation', 'Resignation', Icons.exit_to_app_outlined, AppRoutes.resignation),
+        _MoreItem('justice', 'Justice Portal', Icons.shield_outlined, AppRoutes.justice),
       ]),
       _MoreSection('Money', [
-        _MoreItem('Payroll', Icons.account_balance_wallet_outlined, AppRoutes.payroll),
-        _MoreItem('Intern expenses', Icons.flight_takeoff_outlined, AppRoutes.internExpenses),
+        _MoreItem('payroll', 'Payroll', Icons.account_balance_wallet_outlined, AppRoutes.payroll),
+        _MoreItem('intern_expenses', 'Intern expenses', Icons.flight_takeoff_outlined, AppRoutes.internExpenses),
       ]),
       _MoreSection('Account', [
-        _MoreItem('Notifications', Icons.notifications_outlined, AppRoutes.notifications),
-        _MoreItem('Enable 2FA', Icons.security_outlined, AppRoutes.mfaSetup),
-        _MoreItem(l.settings, Icons.settings_outlined, AppRoutes.settings),
+        _MoreItem('notifications', 'Notifications', Icons.notifications_outlined, AppRoutes.notifications),
+        _MoreItem('mfa_setup', 'Enable 2FA', Icons.security_outlined, AppRoutes.mfaSetup),
+        _MoreItem('settings', l.settings, Icons.settings_outlined, AppRoutes.settings),
       ]),
     ];
+
+    // Apply the per-department whitelist. `EnabledModulesService.isEnabled`
+    // returns true when no whitelist exists yet (offline / first launch),
+    // so we never accidentally hide everything.
+    final sections = <_MoreSection>[];
+    for (final s in allSections) {
+      final visible = s.items.where((i) => _modules.isEnabled(i.key)).toList();
+      if (visible.isNotEmpty) {
+        sections.add(_MoreSection(s.title, visible));
+      }
+    }
 
     return Scaffold(
       appBar: AppBar(title: Text(l.more)),
@@ -67,6 +106,18 @@ class MoreMenuPage extends StatelessWidget {
         padding: const EdgeInsets.fromLTRB(12, 8, 12, 24),
         children: [
           for (final s in sections) _SectionBlock(section: s),
+          if (sections.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 64),
+              child: Center(
+                child: Text(
+                  'No modules enabled for your department yet.\n'
+                  'Please contact your admin.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: AppColors.brandBrownLight),
+                ),
+              ),
+            ),
         ],
       ),
     );
@@ -74,10 +125,11 @@ class MoreMenuPage extends StatelessWidget {
 }
 
 class _MoreItem {
+  final String key;
   final String label;
   final IconData icon;
   final String route;
-  _MoreItem(this.label, this.icon, this.route);
+  _MoreItem(this.key, this.label, this.icon, this.route);
 }
 
 class _MoreSection {
@@ -109,9 +161,6 @@ class _SectionBlock extends StatelessWidget {
         ),
         LayoutBuilder(
           builder: (context, constraints) {
-            // Adaptive column count: 4 on tablets, 3 on phones, 2 on
-            // really narrow screens — keeps tiles big enough to fit the
-            // icon + 2-line label without overflowing.
             final width = constraints.maxWidth;
             final cols = width >= 720 ? 4 : (width >= 360 ? 3 : 2);
             return GridView.count(

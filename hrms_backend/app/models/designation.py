@@ -1,6 +1,6 @@
-from typing import List
+from typing import List, Optional
 
-from sqlalchemy import ForeignKey, Integer, String, Text
+from sqlalchemy import ForeignKey, Integer, JSON, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .base import Base, TimestampMixin, mysql_table_args
@@ -17,6 +17,12 @@ class Department(Base, TimestampMixin):
     head_id: Mapped[int | None] = mapped_column(
         ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
+    # Optional whitelist of mobile-app module keys that members of this
+    # department can see in the More menu. NULL means "no department-level
+    # restriction → show everything the role allows". Empty list means
+    # "show only the always-on default modules". See
+    # app/services/module_registry.py for the canonical key list.
+    enabled_modules: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
 
     designations: Mapped[List["Designation"]] = relationship(
         back_populates="department", cascade="all, delete-orphan", lazy="selectin"

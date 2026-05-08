@@ -89,6 +89,7 @@ _PENDING_COLUMNS: list[tuple[str, str, str, str | None]] = [
         "BOOLEAN NOT NULL DEFAULT FALSE",
         None,
     ),
+    ("departments", "enabled_modules", "JSON NULL", None),
 ]
 
 
