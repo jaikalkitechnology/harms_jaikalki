@@ -163,7 +163,8 @@ export const examApi = {
   },
   verify: async (certificateNumber: string) => {
     const { data } = await apiClient.get<CertificateVerifyResponse>(
-      `${v1}/exams/certificates/verify/${encodeURIComponent(certificateNumber)}`,
+      `${v1}/exams/certificates/verify`,
+      { params: { number: certificateNumber.trim() } },
     );
     return data;
   },

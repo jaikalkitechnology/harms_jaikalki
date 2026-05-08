@@ -488,7 +488,22 @@ async def my_certificates(
 
 
 @router.get(
-    "/certificates/verify/{certificate_number}",
+    "/certificates/verify",
+    response_model=CertificateVerifyResponse,
+)
+async def verify_certificate_query(
+    number: str = Query(..., min_length=1),
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(get_current_user),
+):
+    """Query-param variant. Use this when the certificate number contains
+    slashes (e.g. JKT/CERT/2026/XYZ) so encodeURIComponent doesn't break
+    routing."""
+    return await exam_svc.verify_certificate(db, number)
+
+
+@router.get(
+    "/certificates/verify/{certificate_number:path}",
     response_model=CertificateVerifyResponse,
 )
 async def verify_certificate(
