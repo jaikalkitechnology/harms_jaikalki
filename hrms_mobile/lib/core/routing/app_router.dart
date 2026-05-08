@@ -20,6 +20,7 @@ import '../../features/visitors/pages/visitor_pass_page.dart';
 import '../../features/visitors/pages/visitor_register_page.dart';
 import '../../features/visitors/pages/visitor_scan_page.dart';
 import '../../features/visitors/pages/visitors_home_page.dart';
+import '../../features/launch/pages/resignation_page.dart';
 import '../../features/field/pages/field_home_page.dart';
 import '../../features/field/pages/field_live_map_page.dart';
 import '../../features/field/pages/field_visit_page.dart';
@@ -99,6 +100,7 @@ class AppRoutes {
   static const visitorRegister = '/visitors/new';
   static const visitorScan = '/visitors/scan';
   static const visitorPass = '/visitors/pass';
+  static const resignation = '/resignation';
   static const trainers = '/trainers';
   static const trainerSessions = '/trainers/sessions';
   static const myGoals = '/performance/goals';
@@ -311,6 +313,10 @@ GoRouter buildRouter(AuthBloc authBloc) {
       GoRoute(
         path: AppRoutes.visitors,
         builder: (_, __) => const VisitorsHomePage(),
+      ),
+      GoRoute(
+        path: AppRoutes.resignation,
+        builder: (_, __) => const ResignationPage(),
       ),
       GoRoute(
         path: AppRoutes.visitorRegister,

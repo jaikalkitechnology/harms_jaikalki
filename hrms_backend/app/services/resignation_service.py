@@ -45,6 +45,14 @@ async def submit(
     if proposed_last_working_day <= today:
         raise ValidationError("proposed_last_working_day must be in the future")
 
+    # Gate: admin must unlock resignation submission for this employee
+    # before the mobile app accepts a request.
+    if not getattr(employee, "resignation_unlocked", False):
+        raise ValidationError(
+            "Resignation submission is locked. Please contact HR / admin to "
+            "enable resignation requests for your account."
+        )
+
     existing = (
         await db.execute(
             select(Resignation)
@@ -69,9 +77,24 @@ async def submit(
         ndc_checklist=DEFAULT_NDC.copy(),
     )
     db.add(res)
+    # Auto-lock again so the same employee can't submit a second time
+    # without a fresh admin unlock.
+    employee.resignation_unlocked = False
     await db.commit()
     await db.refresh(res)
     return res
+
+
+async def set_resignation_unlock(
+    db: AsyncSession,
+    *,
+    employee: Employee,
+    unlocked: bool,
+) -> Employee:
+    employee.resignation_unlocked = bool(unlocked)
+    await db.commit()
+    await db.refresh(employee)
+    return employee
 
 
 async def manager_decision(

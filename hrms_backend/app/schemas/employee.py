@@ -326,6 +326,7 @@ class EmployeeOut(BaseModel):
     work_mode: str
     status: str
     is_on_probation: bool
+    resignation_unlocked: bool = False
     created_at: datetime
 
 

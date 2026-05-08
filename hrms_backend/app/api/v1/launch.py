@@ -19,7 +19,8 @@ from starlette.responses import StreamingResponse
 from app.core.exceptions import NotFoundError
 from app.core.permissions import require_permission
 from app.dependencies import get_current_user, get_db
-from app.models import User
+from sqlalchemy import select
+from app.models import Resignation, User
 from app.schemas.launch import (
     AuditLogOut,
     BroadcastResult,
@@ -305,6 +306,60 @@ async def my_resignations(
 ):
     emp = await _self_employee(db, user)
     return await resignation_service.list_for_employee(db, emp.id)
+
+
+@router.get(
+    "/resignations/me/unlock-status",
+    tags=["resignations"],
+)
+async def my_unlock_status(
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Mobile-side check: is the current employee allowed to submit a
+    resignation right now?"""
+    emp = await _self_employee(db, user)
+    has_open = (
+        await db.execute(
+            select(Resignation)
+            .where(Resignation.employee_id == emp.id)
+            .where(
+                Resignation.status.notin_(
+                    ["rejected", "settled", "cancelled"]
+                )
+            )
+        )
+    ).scalar_one_or_none()
+    return {
+        "unlocked": bool(getattr(emp, "resignation_unlocked", False)),
+        "has_open_request": has_open is not None,
+    }
+
+
+@router.post(
+    "/resignations/employees/{employee_id}/unlock",
+    tags=["resignations"],
+)
+async def admin_set_resignation_unlock(
+    employee_id: int,
+    payload: dict,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_permission("approval.act")),
+):
+    """Admin-only switch. Pass {"unlocked": true|false}. The flag also
+    auto-resets to false right after the employee submits, so this is
+    a one-shot per request."""
+    from app.services import employee_service as emp_svc
+
+    emp = await emp_svc.get_employee(db, employee_id)
+    unlocked = bool(payload.get("unlocked", True))
+    emp = await resignation_service.set_resignation_unlock(
+        db, employee=emp, unlocked=unlocked
+    )
+    return {
+        "employee_id": emp.id,
+        "resignation_unlocked": emp.resignation_unlocked,
+    }
 
 
 @router.get(
