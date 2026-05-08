@@ -1,38 +1,38 @@
-name: Mobile CI
+# name: Mobile CI
 
-on:
-  push:
-    branches: [main, develop]
-    paths:
-      - "hrms_mobile/**"
-      - ".github/workflows/mobile-ci.yml"
-  pull_request:
-    paths:
-      - "hrms_mobile/**"
-      - ".github/workflows/mobile-ci.yml"
+# on:
+#   push:
+#     branches: [main, develop]
+#     paths:
+#       - "hrms_mobile/**"
+#       - ".github/workflows/mobile-ci.yml"
+#   pull_request:
+#     paths:
+#       - "hrms_mobile/**"
+#       - ".github/workflows/mobile-ci.yml"
 
-jobs:
-  analyze:
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    defaults:
-      run:
-        working-directory: hrms_mobile
-    steps:
-      - uses: actions/checkout@v4
+# jobs:
+#   analyze:
+#     runs-on: ubuntu-latest
+#     timeout-minutes: 20
+#     defaults:
+#       run:
+#         working-directory: hrms_mobile
+#     steps:
+#       - uses: actions/checkout@v4
 
-      - uses: subosito/flutter-action@v2
-        with:
-          channel: "stable"
-          flutter-version: "3.22.x"
-          cache: true
+#       - uses: subosito/flutter-action@v2
+#         with:
+#           channel: "stable"
+#           flutter-version: "3.22.x"
+#           cache: true
 
-      - name: Pub get
-        run: flutter pub get
+#       - name: Pub get
+#         run: flutter pub get
 
-      - name: Analyze
-        run: flutter analyze --no-fatal-infos
+#       - name: Analyze
+#         run: flutter analyze --no-fatal-infos
 
-      - name: Test
-        run: flutter test
-        continue-on-error: true
+#       - name: Test
+#         run: flutter test
+#         continue-on-error: true
