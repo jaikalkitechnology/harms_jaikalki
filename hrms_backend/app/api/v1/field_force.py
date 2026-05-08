@@ -45,11 +45,17 @@ async def _self_employee(db: AsyncSession, user: User):
 async def list_customers(
     territory: Optional[str] = None,
     search: Optional[str] = None,
+    type_: Optional[str] = Query(default=None, alias="type"),
+    is_active: Optional[bool] = None,
     db: AsyncSession = Depends(get_db),
     _: User = Depends(get_current_user),
 ):
     return await ff_svc.list_customers(
-        db, territory=territory, search=search
+        db,
+        territory=territory,
+        type_=type_,
+        search=search,
+        is_active=is_active,
     )
 
 
