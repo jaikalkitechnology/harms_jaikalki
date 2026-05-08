@@ -1,4 +1,5 @@
 import { apiClient } from "./client";
+import { API_BASE_URL } from "@/lib/constants";
 
 const v1 = "/api/v1";
 
@@ -230,7 +231,8 @@ export const examApi = {
     );
     return data;
   },
-  certificatePdfUrl: (id: number) => `${v1}/exams/certificates/${id}/pdf`,
+  certificatePdfUrl: (id: number) =>
+    `${API_BASE_URL}${v1}/exams/certificates/${id}/pdf`,
   myCertificates: async () => {
     const { data } = await apiClient.get<Certificate[]>(
       `${v1}/exams/me/certificates`,
