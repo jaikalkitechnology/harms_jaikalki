@@ -28,6 +28,7 @@ class DepartmentOut(BaseModel):
     name: str
     description: Optional[str] = None
     head_id: Optional[int] = None
+    enabled_modules: Optional[List[str]] = None
 
 
 class DesignationOut(BaseModel):
@@ -49,6 +50,28 @@ class DepartmentUpdate(BaseModel):
     name: Optional[str] = Field(default=None, min_length=1, max_length=96)
     description: Optional[str] = None
     head_id: Optional[int] = None
+    # Pass [] to lock down to always-on only; pass None / omit to keep
+    # the existing value untouched.
+    enabled_modules: Optional[List[str]] = None
+
+
+class DepartmentModulesUpdate(BaseModel):
+    """Dedicated payload for the per-department module mapping endpoint.
+    Pass an explicit list (possibly empty). Sending null clears the
+    whitelist so the department falls back to "all modules visible"."""
+
+    enabled_modules: Optional[List[str]]
+
+
+class DepartmentModulesOut(BaseModel):
+    department_id: int
+    enabled_modules: Optional[List[str]] = None
+    available_modules: List[str]
+
+
+class MyEnabledModulesOut(BaseModel):
+    department_id: Optional[int] = None
+    enabled: List[str]
 
 
 class DesignationCreate(BaseModel):

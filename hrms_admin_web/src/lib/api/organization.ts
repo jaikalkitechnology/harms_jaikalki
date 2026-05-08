@@ -8,6 +8,13 @@ export interface Department {
   name: string;
   description: string | null;
   head_id: number | null;
+  enabled_modules: string[] | null;
+}
+
+export interface DepartmentModules {
+  department_id: number;
+  enabled_modules: string[] | null;
+  available_modules: string[];
 }
 
 export interface Designation {
@@ -47,6 +54,17 @@ export const organizationApi = {
   deleteDepartment: async (id: number): Promise<void> => {
     await apiClient.delete(`${v1}/departments/${id}`);
   },
+  getDepartmentModules: async (id: number): Promise<DepartmentModules> =>
+    (await apiClient.get(`${v1}/departments/${id}/modules`)).data,
+  setDepartmentModules: async (
+    id: number,
+    enabled_modules: string[] | null,
+  ): Promise<DepartmentModules> =>
+    (
+      await apiClient.put(`${v1}/departments/${id}/modules`, {
+        enabled_modules,
+      })
+    ).data,
 
   // Designations
   listDesignations: async (): Promise<Designation[]> =>

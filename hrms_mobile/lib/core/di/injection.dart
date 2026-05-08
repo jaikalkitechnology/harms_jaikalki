@@ -28,6 +28,7 @@ import '../../features/sales/data/sales_api.dart';
 import '../../features/settings/cubit/settings_cubit.dart';
 import '../../features/trainer/data/trainer_api.dart';
 import '../../features/verification/data/verification_api.dart';
+import '../modules/enabled_modules_service.dart';
 import '../network/dio_client.dart';
 import '../storage/secure_storage.dart';
 
@@ -86,4 +87,10 @@ Future<void> setupDependencies() async {
   sl.registerLazySingleton<ReportsApi>(() => ReportsApi(sl()));
   sl.registerLazySingleton<PolishApi>(() => PolishApi(sl()));
   sl.registerLazySingleton<LaunchApi>(() => LaunchApi(sl()));
+
+  // Per-department mobile module whitelist (caches the More-menu gating
+  // decision in SharedPreferences and refreshes from the API on launch).
+  sl.registerSingleton<EnabledModulesService>(
+    EnabledModulesService(sl<Dio>(), sl<SharedPreferences>()),
+  );
 }
