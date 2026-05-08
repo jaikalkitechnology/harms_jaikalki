@@ -397,6 +397,92 @@ async def expiring_probations(
     return rows
 
 
+# ── Credential management ────────────────────────────────────────────
+async def create_user_account_for(
+    db: AsyncSession,
+    *,
+    employee: Employee,
+    email: str,
+    initial_password: str,
+    role_code: Optional[str] = None,
+) -> User:
+    """Create a mobile-app User account linked to an existing employee.
+    Idempotent on the employee side: refuses if employee already has a
+    linked user."""
+    if employee.user_id is not None:
+        raise ConflictError("Employee already has a linked user account")
+    existing = (
+        await db.execute(select(User).where(User.email == email))
+    ).scalar_one_or_none()
+    if existing:
+        raise ConflictError("A user with that email already exists")
+    if not initial_password or len(initial_password) < 8:
+        raise ValidationError("Password must be at least 8 characters")
+
+    user = User(
+        email=email,
+        full_name=f"{employee.first_name} {employee.last_name}",
+        password_hash=hash_password(initial_password),
+        is_active=True,
+        is_admin_portal=False,
+    )
+    db.add(user)
+    await db.flush()
+    code = role_code or RoleEnum.EMPLOYEE.value
+    role = (
+        await db.execute(select(Role).where(Role.code == code))
+    ).scalar_one_or_none()
+    if role:
+        db.add(UserRole(user_id=user.id, role_id=role.id))
+    employee.user_id = user.id
+    await db.commit()
+    await db.refresh(user)
+    return user
+
+
+async def reset_employee_password(
+    db: AsyncSession,
+    *,
+    employee: Employee,
+    new_password: str,
+) -> User:
+    """Admin-initiated password reset: hashes the provided password and
+    activates the account if it was disabled."""
+    if employee.user_id is None:
+        raise ValidationError("Employee has no linked user account")
+    if not new_password or len(new_password) < 8:
+        raise ValidationError("Password must be at least 8 characters")
+    user = (
+        await db.execute(select(User).where(User.id == employee.user_id))
+    ).scalar_one_or_none()
+    if not user:
+        raise NotFoundError("Linked user account not found")
+    user.password_hash = hash_password(new_password)
+    user.is_active = True
+    await db.commit()
+    await db.refresh(user)
+    return user
+
+
+async def set_account_active(
+    db: AsyncSession,
+    *,
+    employee: Employee,
+    is_active: bool,
+) -> User:
+    if employee.user_id is None:
+        raise ValidationError("Employee has no linked user account")
+    user = (
+        await db.execute(select(User).where(User.id == employee.user_id))
+    ).scalar_one_or_none()
+    if not user:
+        raise NotFoundError("Linked user account not found")
+    user.is_active = is_active
+    await db.commit()
+    await db.refresh(user)
+    return user
+
+
 # ── Org chart ─────────────────────────────────────────────────────────
 async def org_chart(db: AsyncSession) -> list[dict]:
     """Build the full org chart as a forest of nodes."""
