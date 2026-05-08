@@ -26,14 +26,40 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { LoadingScreen } from "@/components/shared/LoadingScreen";
-import { examApi, type Certificate } from "@/lib/api/exam";
+import {
+  examApi,
+  type Certificate,
+  type CertificateType,
+} from "@/lib/api/exam";
 import { employeesApi } from "@/lib/api/employees";
 
 const PAGE_SIZE = 12;
 
+const CERT_TYPES: { value: CertificateType; label: string; hint: string }[] = [
+  { value: "achievement", label: "Achievement", hint: "for completing a course / passing an exam" },
+  { value: "appreciation", label: "Appreciation", hint: "for outstanding contribution / service" },
+  { value: "completion", label: "Completion", hint: "for finishing a programme" },
+  { value: "participation", label: "Participation", hint: "for attending an event / training" },
+  { value: "excellence", label: "Excellence", hint: "for exemplary performance" },
+  { value: "training", label: "Training", hint: "for completing a training module" },
+  { value: "custom", label: "Custom", hint: "title shown verbatim as the heading" },
+];
+
+const TYPE_COLOR: Record<CertificateType, string> = {
+  achievement: "bg-success/15 text-success",
+  appreciation: "bg-brand-gold/15 text-brand-gold-dark",
+  completion: "bg-info/15 text-info",
+  participation: "bg-brand-brown-50 text-brand-brown-darker",
+  excellence: "bg-warning/15 text-warning",
+  training: "bg-info/25 text-info",
+  custom: "bg-brand-brown-50 text-brand-brown-darker",
+};
+
 interface IssueDraft {
   employee_id: number | "";
   title: string;
+  certificate_type: CertificateType;
+  body_text: string;
   issued_date: string;
   expiry_date: string;
   score_percentage: string;
@@ -41,6 +67,8 @@ interface IssueDraft {
 
 interface EditDraft {
   title: string;
+  certificate_type: CertificateType;
+  body_text: string;
   issued_date: string;
   expiry_date: string;
   score_percentage: string;
@@ -51,6 +79,8 @@ const todayStr = new Date().toISOString().slice(0, 10);
 const EMPTY_ISSUE: IssueDraft = {
   employee_id: "",
   title: "",
+  certificate_type: "achievement",
+  body_text: "",
   issued_date: todayStr,
   expiry_date: "",
   score_percentage: "",
@@ -71,9 +101,13 @@ export default function CertificatesPage() {
   const [issueOpen, setIssueOpen] = useState(false);
   const [issueDraft, setIssueDraft] = useState<IssueDraft>(EMPTY_ISSUE);
 
+  const [typeFilter, setTypeFilter] = useState<CertificateType | "">("");
+
   const [editing, setEditing] = useState<Certificate | null>(null);
   const [editDraft, setEditDraft] = useState<EditDraft>({
     title: "",
+    certificate_type: "achievement",
+    body_text: "",
     issued_date: "",
     expiry_date: "",
     score_percentage: "",
@@ -117,6 +151,8 @@ export default function CertificatesPage() {
       examApi.issueCertificate({
         employee_id: Number(issueDraft.employee_id),
         title: issueDraft.title,
+        certificate_type: issueDraft.certificate_type,
+        body_text: issueDraft.body_text.trim() || null,
         issued_date: issueDraft.issued_date || undefined,
         expiry_date: issueDraft.expiry_date || null,
         score_percentage: issueDraft.score_percentage
@@ -137,6 +173,8 @@ export default function CertificatesPage() {
     mutationFn: () =>
       examApi.updateCertificate(editing!.id, {
         title: editDraft.title,
+        certificate_type: editDraft.certificate_type,
+        body_text: editDraft.body_text.trim() || "",
         issued_date: editDraft.issued_date || undefined,
         expiry_date: editDraft.expiry_date || null,
         score_percentage: editDraft.score_percentage
@@ -183,13 +221,22 @@ export default function CertificatesPage() {
     return { active, revoked, expired, total: list.length };
   }, [list]);
 
-  const pageCount = Math.max(1, Math.ceil(list.length / PAGE_SIZE));
-  const pageRows = list.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const filtered = useMemo(() => {
+    if (!typeFilter) return list;
+    return list.filter(
+      (c) => (c.certificate_type ?? "achievement") === typeFilter,
+    );
+  }, [list, typeFilter]);
+
+  const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const pageRows = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   const openEdit = (c: Certificate) => {
     setEditing(c);
     setEditDraft({
       title: c.title,
+      certificate_type: (c.certificate_type ?? "achievement") as CertificateType,
+      body_text: c.body_text ?? "",
       issued_date: c.issued_date,
       expiry_date: c.expiry_date ?? "",
       score_percentage: c.score_percentage ?? "",
@@ -219,7 +266,7 @@ export default function CertificatesPage() {
       </div>
 
       <Card>
-        <CardContent className="grid gap-3 p-4 md:grid-cols-5">
+        <CardContent className="grid gap-3 p-4 md:grid-cols-6">
           <div className="md:col-span-2 relative">
             <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-brand-brown-light" />
             <Input
@@ -244,6 +291,21 @@ export default function CertificatesPage() {
             {employees.map((emp) => (
               <option key={emp.id} value={emp.id}>
                 {emp.employee_code} — {emp.first_name} {emp.last_name}
+              </option>
+            ))}
+          </select>
+          <select
+            value={typeFilter}
+            onChange={(e) => {
+              setTypeFilter(e.target.value as CertificateType | "");
+              setPage(1);
+            }}
+            className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+          >
+            <option value="">All types</option>
+            {CERT_TYPES.map((t) => (
+              <option key={t.value} value={t.value}>
+                {t.label}
               </option>
             ))}
           </select>
@@ -287,6 +349,7 @@ export default function CertificatesPage() {
               <tr>
                 <th className="px-4 py-3">Number</th>
                 <th className="px-4 py-3">Holder</th>
+                <th className="px-4 py-3">Type</th>
                 <th className="px-4 py-3">Title</th>
                 <th className="px-4 py-3">Issued</th>
                 <th className="px-4 py-3">Expires</th>
@@ -299,7 +362,7 @@ export default function CertificatesPage() {
               {pageRows.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={8}
+                    colSpan={9}
                     className="px-4 py-10 text-center text-brand-brown-light"
                   >
                     No certificates match these filters.
@@ -320,6 +383,13 @@ export default function CertificatesPage() {
                         {emp
                           ? `${emp.employee_code} · ${emp.first_name} ${emp.last_name}`
                           : `Employee #${c.employee_id}`}
+                      </td>
+                      <td className="px-4 py-3">
+                        <span
+                          className={`rounded-full px-2 py-1 text-xs capitalize ${TYPE_COLOR[(c.certificate_type ?? "achievement") as CertificateType]}`}
+                        >
+                          {c.certificate_type ?? "achievement"}
+                        </span>
                       </td>
                       <td className="px-4 py-3">{c.title}</td>
                       <td className="px-4 py-3">{c.issued_date}</td>
@@ -530,13 +600,57 @@ function IssueModal({
               ))}
             </select>
           </div>
-          <div className="md:col-span-2">
+          <div>
+            <Label>Type *</Label>
+            <select
+              value={draft.certificate_type}
+              onChange={(e) =>
+                setDraft({
+                  ...draft,
+                  certificate_type: e.target.value as CertificateType,
+                })
+              }
+              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+            >
+              {CERT_TYPES.map((t) => (
+                <option key={t.value} value={t.value}>
+                  {t.label}
+                </option>
+              ))}
+            </select>
+            <p className="text-[11px] text-brand-brown-light mt-1">
+              {CERT_TYPES.find((t) => t.value === draft.certificate_type)?.hint}
+            </p>
+          </div>
+          <div>
             <Label>Title *</Label>
             <Input
-              placeholder="e.g. Field Verification Mastery"
+              placeholder={
+                draft.certificate_type === "appreciation"
+                  ? "e.g. Outstanding Customer Support"
+                  : draft.certificate_type === "participation"
+                    ? "e.g. Annual Sales Conference 2026"
+                    : "e.g. Field Verification Mastery"
+              }
               value={draft.title}
               onChange={(e) => setDraft({ ...draft, title: e.target.value })}
             />
+          </div>
+          <div className="md:col-span-2">
+            <Label>Custom message (optional)</Label>
+            <textarea
+              value={draft.body_text}
+              onChange={(e) =>
+                setDraft({ ...draft, body_text: e.target.value })
+              }
+              placeholder="Leave blank to auto-generate. e.g. for years of dedicated service to the team."
+              rows={3}
+              className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+            />
+            <p className="text-[11px] text-brand-brown-light mt-1">
+              Renders verbatim on the certificate body. Useful for
+              Appreciation / Custom certificates.
+            </p>
           </div>
           <div>
             <Label>Issued date</Label>
@@ -620,11 +734,42 @@ function EditModal({
           </Button>
         </CardHeader>
         <CardContent className="grid gap-4 md:grid-cols-2">
-          <div className="md:col-span-2">
+          <div>
+            <Label>Type</Label>
+            <select
+              value={draft.certificate_type}
+              onChange={(e) =>
+                setDraft({
+                  ...draft,
+                  certificate_type: e.target.value as CertificateType,
+                })
+              }
+              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+            >
+              {CERT_TYPES.map((t) => (
+                <option key={t.value} value={t.value}>
+                  {t.label}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
             <Label>Title</Label>
             <Input
               value={draft.title}
               onChange={(e) => setDraft({ ...draft, title: e.target.value })}
+            />
+          </div>
+          <div className="md:col-span-2">
+            <Label>Custom message (optional)</Label>
+            <textarea
+              value={draft.body_text}
+              onChange={(e) =>
+                setDraft({ ...draft, body_text: e.target.value })
+              }
+              rows={3}
+              className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+              placeholder="Leave blank to auto-generate from type + title."
             />
           </div>
           <div>

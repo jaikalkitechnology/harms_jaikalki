@@ -243,7 +243,7 @@ class _CertificateCard extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'CERTIFICATE OF ACHIEVEMENT',
+                        cert.headlineLabel,
                         style: theme.textTheme.labelSmall?.copyWith(
                           color: AppColors.brandGold,
                           letterSpacing: 1.4,

@@ -115,6 +115,23 @@ def _draw_decorations(canvas: Canvas, doc) -> None:
     canvas.restoreState()
 
 
+# Map certificate_type -> display heading
+_CERT_HEADINGS = {
+    "achievement": ("Certificate of Achievement",
+                    "presented in recognition of dedication, learning, and excellence"),
+    "appreciation": ("Certificate of Appreciation",
+                     "with sincere gratitude for outstanding contribution and support"),
+    "completion": ("Certificate of Completion",
+                   "in acknowledgement of the successful completion of the programme"),
+    "participation": ("Certificate of Participation",
+                      "for active participation and engagement"),
+    "excellence": ("Certificate of Excellence",
+                   "presented for exemplary performance and standards of excellence"),
+    "training": ("Training Completion Certificate",
+                 "in recognition of the successful completion of the training programme"),
+}
+
+
 def render_certificate(
     *,
     certificate: Certificate,
@@ -125,6 +142,15 @@ def render_certificate(
     verify_url = (
         f"{base}/lms/certificates/verify/{certificate.certificate_number}"
     )
+
+    cert_type = (getattr(certificate, "certificate_type", None) or "achievement").lower()
+    if cert_type == "custom":
+        heading_text = certificate.title
+        sub_text = ""
+    else:
+        heading_text, sub_text = _CERT_HEADINGS.get(
+            cert_type, _CERT_HEADINGS["achievement"]
+        )
 
     buf = io.BytesIO()
     doc = SimpleDocTemplate(
@@ -223,15 +249,22 @@ def render_certificate(
             sub_brand,
         )
     )
-    story.append(Paragraph("Certificate of Achievement", cert_title))
-    story.append(
-        Paragraph(
-            "presented in recognition of dedication, learning, and excellence",
-            cert_subtitle,
-        )
-    )
+    story.append(Paragraph(heading_text, cert_title))
+    if sub_text:
+        story.append(Paragraph(sub_text, cert_subtitle))
+    else:
+        story.append(Spacer(1, 0.2 * cm))
 
-    story.append(Paragraph("This is to certify that", awarded_to))
+    awarded_label = {
+        "appreciation": "Presented to",
+        "participation": "Awarded to",
+        "completion": "This is to certify that",
+        "excellence": "Awarded to",
+        "training": "This is to certify that",
+        "custom": "Awarded to",
+    }.get(cert_type, "This is to certify that")
+    story.append(Paragraph(awarded_label, awarded_to))
+
     full_name = f"{employee.first_name} {employee.last_name}".strip()
     story.append(Paragraph(f"<b>{full_name}</b>", name_style))
     story.append(
@@ -240,17 +273,33 @@ def render_certificate(
             emp_code_style,
         )
     )
-    score = (
-        f" with a score of <b>{certificate.score_percentage}%</b>"
-        if certificate.score_percentage is not None
-        else ""
-    )
-    story.append(
-        Paragraph(
-            f"has successfully completed <b>{certificate.title}</b>{score}.",
-            body,
+
+    body_text = (getattr(certificate, "body_text", None) or "").strip()
+    if body_text:
+        # Admin-supplied custom body — render verbatim (with line breaks).
+        story.append(
+            Paragraph(body_text.replace("\n", "<br/>"), body)
         )
-    )
+    else:
+        score = (
+            f" with a score of <b>{certificate.score_percentage}%</b>"
+            if certificate.score_percentage is not None
+            else ""
+        )
+        verb = {
+            "appreciation": "in heartfelt appreciation for",
+            "participation": "for participating in",
+            "completion": "for successfully completing",
+            "excellence": "in recognition of excellence in",
+            "training": "for successfully completing the training",
+            "custom": "for",
+        }.get(cert_type, "has successfully completed")
+        story.append(
+            Paragraph(
+                f"{verb} <b>{certificate.title}</b>{score}.",
+                body,
+            )
+        )
 
     story.append(Spacer(1, 0.8 * cm))
 

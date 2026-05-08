@@ -228,6 +228,11 @@ class AnswerOut(BaseModel):
     time_taken_seconds: int
 
 
+_CERTIFICATE_TYPES_RE = (
+    "^(achievement|appreciation|completion|participation|excellence|training|custom)$"
+)
+
+
 # ── Certificates ─────────────────────────────────────────────────────
 class CertificateOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -237,6 +242,8 @@ class CertificateOut(BaseModel):
     course_id: Optional[int]
     exam_attempt_id: Optional[int]
     title: str
+    certificate_type: Optional[str] = None
+    body_text: Optional[str] = None
     issued_date: date
     expiry_date: Optional[date]
     score_percentage: Optional[Decimal]
@@ -248,6 +255,10 @@ class CertificateOut(BaseModel):
 class CertificateCreate(BaseModel):
     employee_id: int
     title: str = Field(min_length=2, max_length=200)
+    certificate_type: Optional[str] = Field(
+        default="achievement", pattern=_CERTIFICATE_TYPES_RE
+    )
+    body_text: Optional[str] = Field(default=None, max_length=1000)
     course_id: Optional[int] = None
     exam_attempt_id: Optional[int] = None
     issued_date: Optional[date] = None
@@ -257,6 +268,10 @@ class CertificateCreate(BaseModel):
 
 class CertificateUpdate(BaseModel):
     title: Optional[str] = Field(default=None, min_length=2, max_length=200)
+    certificate_type: Optional[str] = Field(
+        default=None, pattern=_CERTIFICATE_TYPES_RE
+    )
+    body_text: Optional[str] = Field(default=None, max_length=1000)
     issued_date: Optional[date] = None
     expiry_date: Optional[date] = None
     score_percentage: Optional[Decimal] = Field(default=None, ge=0, le=100)
