@@ -158,4 +158,12 @@ class LaunchApi {
     final res = await _dio.get<List<dynamic>>('$_v1/resignations/me');
     return res.data ?? const [];
   }
+
+  /// Returns {unlocked: bool, has_open_request: bool}.
+  Future<Map<String, dynamic>> resignationUnlockStatus() async {
+    final res = await _dio.get<Map<String, dynamic>>(
+      '$_v1/resignations/me/unlock-status',
+    );
+    return res.data ?? const {};
+  }
 }

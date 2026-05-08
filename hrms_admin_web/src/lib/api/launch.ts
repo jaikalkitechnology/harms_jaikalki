@@ -150,6 +150,13 @@ export const launchApi = {
     );
     return data;
   },
+  setResignationUnlock: async (employeeId: number, unlocked: boolean) => {
+    const { data } = await apiClient.post<{
+      employee_id: number;
+      resignation_unlocked: boolean;
+    }>(`${v1}/resignations/employees/${employeeId}/unlock`, { unlocked });
+    return data;
+  },
   myResignations: async () => {
     const { data } = await apiClient.get<Resignation[]>(
       `${v1}/resignations/me`,

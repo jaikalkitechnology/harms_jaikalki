@@ -39,6 +39,7 @@ import {
   type SalaryBreakup,
 } from "@/lib/api/employees";
 import { payrollApi, type GeneratedDocument } from "@/lib/api/payroll";
+import { launchApi } from "@/lib/api/launch";
 import { CategoryBadge } from "./CategoryBadge";
 import { fmtIstDate } from "@/lib/datetime";
 
@@ -88,6 +89,21 @@ export default function EmployeeDetailPage() {
       queryClient.invalidateQueries({ queryKey: ["employee", employeeId] });
     },
     onError: () => toast.error("Failed to extend probation"),
+  });
+
+  const resignationUnlock = useMutation({
+    mutationFn: (unlocked: boolean) =>
+      launchApi.setResignationUnlock(employeeId, unlocked),
+    onSuccess: (r) => {
+      toast.success(
+        r.resignation_unlocked
+          ? "Resignation submission unlocked for this employee"
+          : "Resignation submission locked again",
+      );
+      queryClient.invalidateQueries({ queryKey: ["employee", employeeId] });
+    },
+    onError: (e: any) =>
+      toast.error(e?.response?.data?.detail ?? "Could not toggle"),
   });
 
   if (isLoading || !employee) return <LoadingScreen label="Loading employee…" />;
@@ -323,6 +339,59 @@ export default function EmployeeDetailPage() {
             </Card>
           </PermissionGate>
         )}
+
+        <PermissionGate permission="approval.act">
+          <Card className="lg:col-span-2">
+            <CardHeader>
+              <CardTitle>
+                Resignation <span className="display-em">access</span>
+              </CardTitle>
+              <CardDescription>
+                Resignation submission from the mobile app is locked by
+                default. Toggle this on when the employee has formally
+                requested to resign (e.g. via email). The lock auto-resets
+                once they submit, so this is a one-shot per request.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="flex flex-wrap items-center justify-between gap-3">
+              <div className="text-sm">
+                Current state:{" "}
+                {employee.resignation_unlocked ? (
+                  <span className="font-semibold text-success">
+                    Unlocked — employee can submit
+                  </span>
+                ) : (
+                  <span className="font-semibold text-brand-brown-light">
+                    Locked
+                  </span>
+                )}
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  variant={
+                    employee.resignation_unlocked ? "outline" : "default"
+                  }
+                  onClick={() => resignationUnlock.mutate(true)}
+                  disabled={
+                    resignationUnlock.isPending || employee.resignation_unlocked
+                  }
+                >
+                  Unlock submission
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => resignationUnlock.mutate(false)}
+                  disabled={
+                    resignationUnlock.isPending ||
+                    !employee.resignation_unlocked
+                  }
+                >
+                  Lock again
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </PermissionGate>
       </div>
     </div>
   );

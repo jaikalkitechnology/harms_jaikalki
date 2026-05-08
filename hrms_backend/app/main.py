@@ -70,6 +70,52 @@ async def lifespan(app: FastAPI):
             logger.info("AUTO_CREATE_TABLES: column sync complete")
         except Exception:
             logger.exception("sync_columns failed; continuing startup")
+        try:
+            from app.database import AsyncSessionLocal
+            from app.core.permissions import ROLE_PERMISSIONS
+            from app.models import Permission, Role, RolePermission
+            from sqlalchemy import select
+
+            async with AsyncSessionLocal() as db:
+                roles = {
+                    r.code: r
+                    for r in (
+                        await db.execute(select(Role))
+                    ).scalars().all()
+                }
+                perms = {
+                    p.code: p
+                    for p in (
+                        await db.execute(select(Permission))
+                    ).scalars().all()
+                }
+                existing_pairs = {
+                    (rp.role_id, rp.permission_id)
+                    for rp in (
+                        await db.execute(select(RolePermission))
+                    ).scalars().all()
+                }
+                added = 0
+                for role_code, perm_codes in ROLE_PERMISSIONS.items():
+                    role = roles.get(role_code)
+                    if not role:
+                        continue
+                    for pcode in perm_codes:
+                        perm = perms.get(pcode)
+                        if not perm:
+                            continue
+                        if (role.id, perm.id) in existing_pairs:
+                            continue
+                        db.add(RolePermission(role_id=role.id, permission_id=perm.id))
+                        existing_pairs.add((role.id, perm.id))
+                        added += 1
+                if added:
+                    await db.commit()
+                    logger.info("role-permission sync added %s rows", added)
+        except Exception:
+            logger.exception(
+                "role-permission sync failed; continuing startup"
+            )
 
     get_redis()
     yield

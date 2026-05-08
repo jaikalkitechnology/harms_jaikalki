@@ -117,6 +117,7 @@ export interface EmployeeDetail extends EmployeeListItem {
   work_location: string;
   employment_type: string;
   work_mode: string;
+  resignation_unlocked: boolean;
 }
 
 export interface ExpiringProbation {

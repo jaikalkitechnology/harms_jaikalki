@@ -133,6 +133,12 @@ class Employee(Base, TimestampMixin):
     probation_end_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
     confirmation_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
     exit_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    # Self-service resignation gate: admin must flip this to True before
+    # the employee can submit a resignation from the mobile app. Auto-
+    # locks again after a successful submission so they can't double-file.
+    resignation_unlocked: Mapped[bool] = mapped_column(
+        Boolean, default=False, nullable=False
+    )
 
     salary_template_id: Mapped[Optional[int]] = mapped_column(
         ForeignKey("salary_templates.id", ondelete="SET NULL"), nullable=True
