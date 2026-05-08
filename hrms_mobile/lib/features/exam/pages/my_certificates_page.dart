@@ -190,198 +190,210 @@ class _CertificateCard extends StatelessWidget {
       );
     }
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 16),
-      decoration: BoxDecoration(
-        gradient: bgGradient,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.15),
-            blurRadius: 14,
-            offset: const Offset(0, 6),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          // Decorative top — gold ribbon + medal
-          Container(
-            decoration: BoxDecoration(
-              border: Border(
-                bottom: BorderSide(
-                  color: AppColors.brandGold.withOpacity(0.5),
-                  width: 1,
+    return GestureDetector(
+      onTap: busy ? null : onDownload,
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 16),
+        decoration: BoxDecoration(
+          gradient: bgGradient,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.15),
+              blurRadius: 14,
+              offset: const Offset(0, 6),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // Decorative top — gold ribbon + medal
+            Container(
+              decoration: BoxDecoration(
+                border: Border(
+                  bottom: BorderSide(
+                    color: AppColors.brandGold.withOpacity(0.5),
+                    width: 1,
+                  ),
                 ),
               ),
-            ),
-            padding: const EdgeInsets.fromLTRB(20, 18, 20, 14),
-            child: Row(
-              children: [
-                Container(
-                  width: 44,
-                  height: 44,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: AppColors.brandGold,
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.18),
-                        blurRadius: 6,
-                      ),
-                    ],
-                  ),
-                  child: const Icon(
-                    Icons.workspace_premium,
-                    color: Color(0xFF3D2817),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        cert.headlineLabel,
-                        style: theme.textTheme.labelSmall?.copyWith(
-                          color: AppColors.brandGold,
-                          letterSpacing: 1.4,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        'Jaikalki Technology Pvt Ltd',
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: Colors.white.withOpacity(0.85),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                statusChip(),
-              ],
-            ),
-          ),
-          // Body
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 16, 20, 18),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  cert.title,
-                  style: theme.textTheme.headlineSmall?.copyWith(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  cert.certificateNumber,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: AppColors.brandGoldLight,
-                    fontFamily: 'monospace',
-                  ),
-                ),
-                const SizedBox(height: 14),
-                Row(
-                  children: [
-                    Expanded(
-                      child: _InfoBlock(
-                        label: 'Issued',
-                        value: cert.issuedDate,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: _InfoBlock(
-                        label: 'Valid until',
-                        value: cert.expiryDate ?? 'No expiry',
-                      ),
-                    ),
-                    if (cert.scorePercentage != null) ...[
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: _InfoBlock(
-                          label: 'Score',
-                          value: '${cert.scorePercentage!.toStringAsFixed(1)}%',
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-                if (cert.isRevoked && cert.revokedReason != null) ...[
-                  const SizedBox(height: 12),
+              padding: const EdgeInsets.fromLTRB(20, 18, 20, 14),
+              child: Row(
+                children: [
                   Container(
-                    padding: const EdgeInsets.all(10),
+                    width: 44,
+                    height: 44,
                     decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.15),
-                      borderRadius: BorderRadius.circular(8),
+                      shape: BoxShape.circle,
+                      color: AppColors.brandGold,
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.18),
+                          blurRadius: 6,
+                        ),
+                      ],
                     ),
-                    child: Row(
+                    child: const Icon(
+                      Icons.workspace_premium,
+                      color: Color(0xFF3D2817),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Icon(Icons.cancel,
-                            color: Colors.white70, size: 16),
-                        const SizedBox(width: 6),
-                        Expanded(
-                          child: Text(
-                            'Revoked: ${cert.revokedReason}',
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              color: Colors.white,
-                            ),
+                        Text(
+                          cert.headlineLabel,
+                          style: theme.textTheme.labelSmall?.copyWith(
+                            color: AppColors.brandGold,
+                            letterSpacing: 1.4,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          'Jaikalki Technology Pvt Ltd',
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: Colors.white.withOpacity(0.85),
                           ),
                         ),
                       ],
                     ),
                   ),
+                  statusChip(),
                 ],
-                const SizedBox(height: 16),
-                Row(
-                  children: [
-                    Expanded(
-                      child: ElevatedButton.icon(
-                        onPressed: busy ? null : onDownload,
-                        icon: busy
-                            ? const SizedBox(
-                                width: 14,
-                                height: 14,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                ),
-                              )
-                            : const Icon(Icons.download),
-                        label: const Text('Download'),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: AppColors.brandGold,
-                          foregroundColor: const Color(0xFF3D2817),
+              ),
+            ),
+            // Body
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 18),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    cert.title,
+                    style: theme.textTheme.headlineSmall?.copyWith(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    cert.certificateNumber,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: AppColors.brandGoldLight,
+                      fontFamily: 'monospace',
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _InfoBlock(
+                          label: 'Issued',
+                          value: cert.issuedDate,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: _InfoBlock(
+                          label: 'Valid until',
+                          value: cert.expiryDate ?? 'No expiry',
+                        ),
+                      ),
+                      if (cert.scorePercentage != null) ...[
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: _InfoBlock(
+                            label: 'Score',
+                            value: '${cert.scorePercentage!.toStringAsFixed(1)}%',
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                  if (cert.isRevoked && cert.revokedReason != null) ...[
+                    const SizedBox(height: 12),
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.15),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.cancel,
+                              color: Colors.white70, size: 16),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Text(
+                              'Revoked: ${cert.revokedReason}',
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: Colors.white,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 10),
+                  Text(
+                    'Tap card to preview · Use buttons to download / share',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: Colors.white.withOpacity(0.6),
+                      fontStyle: FontStyle.italic,
+                      fontSize: 11,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: ElevatedButton.icon(
+                          onPressed: busy ? null : onDownload,
+                          icon: busy
+                              ? const SizedBox(
+                                  width: 14,
+                                  height: 14,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                              : const Icon(Icons.download),
+                          label: const Text('Download'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.brandGold,
+                            foregroundColor: const Color(0xFF3D2817),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      OutlinedButton.icon(
+                        onPressed: busy ? null : onShare,
+                        icon: const Icon(Icons.ios_share),
+                        label: const Text('Share'),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: Colors.white,
+                          side: BorderSide(
+                            color: Colors.white.withOpacity(0.6),
+                          ),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(10),
                           ),
                         ),
                       ),
-                    ),
-                    const SizedBox(width: 8),
-                    OutlinedButton.icon(
-                      onPressed: busy ? null : onShare,
-                      icon: const Icon(Icons.ios_share),
-                      label: const Text('Share'),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: Colors.white,
-                        side: BorderSide(
-                          color: Colors.white.withOpacity(0.6),
-                        ),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
+                    ],
+                  ),
+                ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
