@@ -94,14 +94,15 @@ class PolishApi {
         .toList();
   }
 
-  Future<void> preRegisterVisitor({
+  Future<Visitor> preRegisterVisitor({
     required String fullName,
     required String purpose,
     required String expectedAt,
     String? company,
     String? contactPhone,
+    String? contactEmail,
   }) async {
-    await _dio.post(
+    final res = await _dio.post<Map<String, dynamic>>(
       '$_v1/polish/visitors',
       data: {
         'full_name': fullName,
@@ -109,7 +110,41 @@ class PolishApi {
         'expected_at': expectedAt,
         if (company != null) 'company': company,
         if (contactPhone != null) 'contact_phone': contactPhone,
+        if (contactEmail != null) 'contact_email': contactEmail,
       },
     );
+    return Visitor.fromJson(res.data!);
+  }
+
+  Future<List<Visitor>> myVisitors() async {
+    final res = await _dio.get<List<dynamic>>('$_v1/polish/visitors/me');
+    return (res.data ?? const [])
+        .map((e) => Visitor.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<Visitor> visitorByToken(String token) async {
+    final res = await _dio.get<Map<String, dynamic>>(
+      '$_v1/polish/visitors/by-token/${Uri.encodeComponent(token)}',
+    );
+    return Visitor.fromJson(res.data!);
+  }
+
+  Future<Visitor> checkInVisitor(String qrToken, {String? badgeNumber}) async {
+    final res = await _dio.post<Map<String, dynamic>>(
+      '$_v1/polish/visitors/check-in',
+      data: {
+        'qr_token': qrToken,
+        if (badgeNumber != null) 'badge_number': badgeNumber,
+      },
+    );
+    return Visitor.fromJson(res.data!);
+  }
+
+  Future<Visitor> checkOutVisitorByToken(String qrToken) async {
+    final res = await _dio.post<Map<String, dynamic>>(
+      '$_v1/polish/visitors/by-token/${Uri.encodeComponent(qrToken)}/check-out',
+    );
+    return Visitor.fromJson(res.data!);
   }
 }

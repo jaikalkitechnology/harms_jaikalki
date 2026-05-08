@@ -137,6 +137,39 @@ export const polishApi = {
     );
     return data;
   },
+  listVisitors: async (params?: {
+    status?: string;
+    host_employee_id?: number;
+    search?: string;
+    from_date?: string;
+    to_date?: string;
+  }) => {
+    const { data } = await apiClient.get<Visitor[]>(
+      `${v1}/polish/visitors`,
+      { params },
+    );
+    return data;
+  },
+  visitorByToken: async (qrToken: string) => {
+    const { data } = await apiClient.get<Visitor>(
+      `${v1}/polish/visitors/by-token/${encodeURIComponent(qrToken)}`,
+    );
+    return data;
+  },
+  preRegisterVisitor: async (payload: {
+    full_name: string;
+    contact_phone?: string | null;
+    contact_email?: string | null;
+    company?: string | null;
+    purpose: string;
+    expected_at: string;
+  }) => {
+    const { data } = await apiClient.post<Visitor>(
+      `${v1}/polish/visitors`,
+      payload,
+    );
+    return data;
+  },
   visitorCheckIn: async (qrToken: string, badgeNumber?: string) => {
     const { data } = await apiClient.post<Visitor>(
       `${v1}/polish/visitors/check-in`,
@@ -147,6 +180,12 @@ export const polishApi = {
   visitorCheckOut: async (visitorId: number) => {
     const { data } = await apiClient.post<Visitor>(
       `${v1}/polish/visitors/${visitorId}/check-out`,
+    );
+    return data;
+  },
+  visitorCheckOutByToken: async (qrToken: string) => {
+    const { data } = await apiClient.post<Visitor>(
+      `${v1}/polish/visitors/by-token/${encodeURIComponent(qrToken)}/check-out`,
     );
     return data;
   },

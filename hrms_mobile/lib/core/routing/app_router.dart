@@ -15,6 +15,11 @@ import '../../features/employees/pages/employees_list_page.dart';
 import '../../features/exam/pages/exam_list_page.dart';
 import '../../features/exam/pages/exam_taking_page.dart';
 import '../../features/exam/pages/my_certificates_page.dart';
+import '../../features/polish/data/polish_models.dart';
+import '../../features/visitors/pages/visitor_pass_page.dart';
+import '../../features/visitors/pages/visitor_register_page.dart';
+import '../../features/visitors/pages/visitor_scan_page.dart';
+import '../../features/visitors/pages/visitors_home_page.dart';
 import '../../features/field/pages/field_home_page.dart';
 import '../../features/field/pages/field_live_map_page.dart';
 import '../../features/field/pages/field_visit_page.dart';
@@ -90,6 +95,10 @@ class AppRoutes {
   static const lmsBadges = '/lms/badges';
   static const exams = '/exams';
   static const myCertificates = '/exams/me/certificates';
+  static const visitors = '/visitors';
+  static const visitorRegister = '/visitors/new';
+  static const visitorScan = '/visitors/scan';
+  static const visitorPass = '/visitors/pass';
   static const trainers = '/trainers';
   static const trainerSessions = '/trainers/sessions';
   static const myGoals = '/performance/goals';
@@ -298,6 +307,30 @@ GoRouter buildRouter(AuthBloc authBloc) {
       GoRoute(
         path: AppRoutes.myCertificates,
         builder: (_, __) => const MyCertificatesPage(),
+      ),
+      GoRoute(
+        path: AppRoutes.visitors,
+        builder: (_, __) => const VisitorsHomePage(),
+      ),
+      GoRoute(
+        path: AppRoutes.visitorRegister,
+        builder: (_, __) => const VisitorRegisterPage(),
+      ),
+      GoRoute(
+        path: AppRoutes.visitorScan,
+        builder: (_, __) => const VisitorScanPage(),
+      ),
+      GoRoute(
+        path: '${AppRoutes.visitorPass}/:id',
+        builder: (_, state) {
+          final extra = state.extra;
+          if (extra is Visitor) {
+            return VisitorPassPage(visitor: extra);
+          }
+          return const Scaffold(
+            body: Center(child: Text('Visitor pass not found')),
+          );
+        },
       ),
       GoRoute(
         path: AppRoutes.trainers,

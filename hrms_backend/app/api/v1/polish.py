@@ -1,3 +1,4 @@
+from datetime import date
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Query, status
@@ -173,12 +174,44 @@ async def today_visitors(
     return await polish.list_today_visitors(db)
 
 
+@router.get("/visitors", response_model=list[VisitorOut])
+async def list_visitors(
+    visitor_status: Optional[str] = Query(default=None, alias="status"),
+    host_employee_id: Optional[int] = None,
+    search: Optional[str] = None,
+    from_date: Optional[date] = None,
+    to_date: Optional[date] = None,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_permission("admin.users.view")),
+):
+    return await polish.list_visitors(
+        db,
+        status=visitor_status,
+        host_employee_id=host_employee_id,
+        search=search,
+        from_date=from_date,
+        to_date=to_date,
+    )
+
+
+@router.get("/visitors/by-token/{qr_token}", response_model=VisitorOut)
+async def visitor_by_token(
+    qr_token: str,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(get_current_user),
+):
+    """Look up a visitor by QR token without changing state. Used by the
+    mobile/admin scanner to preview before deciding to check-in/out."""
+    return await polish.get_visitor_by_token(db, qr_token)
+
+
 @router.post("/visitors/check-in", response_model=VisitorOut)
 async def visitor_check_in(
     payload: VisitorCheckIn,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(require_permission("admin.users.view")),
+    _: User = Depends(get_current_user),
 ):
+    """Any logged-in employee (reception / host) can scan and check-in."""
     return await polish.visitor_check_in(
         db, qr_token=payload.qr_token, badge_number=payload.badge_number
     )
@@ -188,9 +221,20 @@ async def visitor_check_in(
 async def visitor_check_out(
     visitor_id: int,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(require_permission("admin.users.view")),
+    _: User = Depends(get_current_user),
 ):
     return await polish.visitor_check_out(db, visitor_id)
+
+
+@router.post("/visitors/by-token/{qr_token}/check-out", response_model=VisitorOut)
+async def visitor_check_out_by_token(
+    qr_token: str,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(get_current_user),
+):
+    """Scan-on-exit symmetry — flip a visitor to checked_out by QR token."""
+    visitor = await polish.get_visitor_by_token(db, qr_token)
+    return await polish.visitor_check_out(db, visitor.id)
 
 
 # ─── Meeting rooms ───────────────────────────────────────────────────
