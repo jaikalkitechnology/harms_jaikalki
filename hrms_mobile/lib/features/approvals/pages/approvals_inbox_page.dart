@@ -284,7 +284,7 @@ class _DataRows extends StatelessWidget {
                   ),
                   Expanded(
                     child: Text(r.$2,
-                        style: const TextStyle(
+                        style: TextStyle(
                           color: context.textPrimary,
                         )),
                   ),

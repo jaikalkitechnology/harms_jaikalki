@@ -203,7 +203,7 @@ class _Stat extends StatelessWidget {
           Text(label,
               style: const TextStyle(color: AppColors.brandBrownLight)),
           Text(value,
-              style: const TextStyle(
+              style: TextStyle(
                 color: context.textPrimary,
                 fontWeight: FontWeight.w600,
               )),

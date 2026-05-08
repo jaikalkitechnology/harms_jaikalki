@@ -255,23 +255,23 @@ class _SalaryCard extends StatelessWidget {
                 style: theme.textTheme.bodyMedium,
               ),
             ] else ...[
-              _row('Basic', _inr(breakup.basic)),
-              _row('HRA', _inr(breakup.hra)),
+              _row(context, 'Basic', _inr(breakup.basic)),
+              _row(context, 'HRA', _inr(breakup.hra)),
               if (breakup.otherAllowance > 0)
-                _row('Other allowance', _inr(breakup.otherAllowance)),
+                _row(context, 'Other allowance', _inr(breakup.otherAllowance)),
               const Divider(),
-              _row('Gross', _inr(breakup.gross), bold: true),
+              _row(context, 'Gross', _inr(breakup.gross), bold: true),
               const SizedBox(height: 8),
-              _row('PF (Employee)', '- ${_inr(breakup.pfEmployee)}'),
-              _row('ESIC (Employee)', '- ${_inr(breakup.esicEmployee)}'),
+              _row(context, 'PF (Employee)', '- ${_inr(breakup.pfEmployee)}'),
+              _row(context, 'ESIC (Employee)', '- ${_inr(breakup.esicEmployee)}'),
               if (breakup.professionalTax > 0)
-                _row('Prof. Tax', '- ${_inr(breakup.professionalTax)}'),
+                _row(context, 'Prof. Tax', '- ${_inr(breakup.professionalTax)}'),
               const Divider(),
-              _row('Net Salary', _inr(breakup.netSalary),
+              _row(context, 'Net Salary', _inr(breakup.netSalary),
                   bold: true, color: AppColors.brandGoldDark),
               const SizedBox(height: 12),
-              _row('CTC / month', _inr(breakup.totalCtcMonthly)),
-              _row('CTC / year', _inr(breakup.totalCtcAnnual),
+              _row(context, 'CTC / month', _inr(breakup.totalCtcMonthly)),
+              _row(context, 'CTC / year', _inr(breakup.totalCtcAnnual),
                   bold: true, color: AppColors.brandGoldDark),
             ],
           ],
@@ -280,7 +280,7 @@ class _SalaryCard extends StatelessWidget {
     );
   }
 
-  Widget _row(String label, String value,
+  Widget _row(BuildContext context, String label, String value,
       {bool bold = false, Color? color}) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 3),

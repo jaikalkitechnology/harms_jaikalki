@@ -157,7 +157,7 @@ class _ProfileHeader extends StatelessWidget {
               backgroundColor: AppColors.brandGold.withOpacity(0.15),
               child: Text(
                 name.isNotEmpty ? name[0].toUpperCase() : '?',
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 26,
                   fontWeight: FontWeight.w700,
                   color: context.textPrimary,

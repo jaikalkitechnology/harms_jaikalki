@@ -120,7 +120,7 @@ class _EmployeeRow extends StatelessWidget {
                         employee.firstName.isNotEmpty
                             ? employee.firstName[0]
                             : '?',
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontWeight: FontWeight.w600,
                           color: context.textPrimary,
                         ),
