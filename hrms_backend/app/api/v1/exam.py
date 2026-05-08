@@ -186,6 +186,89 @@ async def create_exam(
     return await exam_svc.create_exam(db, payload=payload.model_dump())
 
 
+# ─── Certificate admin endpoints (declared before /{exam_id} so the
+# generic exam-id catcher doesn't swallow `/certificates`). ─────────
+from datetime import date as _date  # noqa: E402
+
+
+@router.get("/certificates", response_model=list[CertificateOut])
+async def list_certificates(
+    employee_id: Optional[int] = None,
+    course_id: Optional[int] = None,
+    is_revoked: Optional[bool] = None,
+    search: Optional[str] = None,
+    from_date: Optional[_date] = None,
+    to_date: Optional[_date] = None,
+    limit: int = Query(default=100, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(get_current_user),
+):
+    return await exam_svc.list_certificates(
+        db,
+        employee_id=employee_id,
+        course_id=course_id,
+        is_revoked=is_revoked,
+        search=search,
+        from_date=from_date,
+        to_date=to_date,
+        limit=limit,
+        offset=offset,
+    )
+
+
+@router.post(
+    "/certificates",
+    response_model=CertificateOut,
+    status_code=status.HTTP_201_CREATED,
+)
+async def issue_certificate_admin(
+    payload: CertificateCreate,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_permission("approval.act")),
+):
+    return await exam_svc.admin_issue_certificate(
+        db, payload=payload.model_dump()
+    )
+
+
+@router.put("/certificates/{certificate_id}", response_model=CertificateOut)
+async def update_certificate(
+    certificate_id: int,
+    payload: CertificateUpdate,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_permission("approval.act")),
+):
+    return await exam_svc.update_certificate(
+        db, certificate_id, payload=payload.model_dump(exclude_unset=True)
+    )
+
+
+@router.post(
+    "/certificates/{certificate_id}/revoke", response_model=CertificateOut
+)
+async def revoke_certificate(
+    certificate_id: int,
+    payload: CertificateRevoke,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_permission("approval.act")),
+):
+    return await exam_svc.revoke_certificate(
+        db, certificate_id, reason=payload.reason
+    )
+
+
+@router.post(
+    "/certificates/{certificate_id}/restore", response_model=CertificateOut
+)
+async def restore_certificate(
+    certificate_id: int,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_permission("approval.act")),
+):
+    return await exam_svc.restore_certificate(db, certificate_id)
+
+
 @router.get("/{exam_id}", response_model=ExamOut)
 async def get_exam(
     exam_id: int,
@@ -414,88 +497,6 @@ async def verify_certificate(
     _: User = Depends(get_current_user),
 ):
     return await exam_svc.verify_certificate(db, certificate_number)
-
-
-# Admin certificate management
-from datetime import date as _date  # noqa: E402
-
-
-@router.get("/certificates", response_model=list[CertificateOut])
-async def list_certificates(
-    employee_id: Optional[int] = None,
-    course_id: Optional[int] = None,
-    is_revoked: Optional[bool] = None,
-    search: Optional[str] = None,
-    from_date: Optional[_date] = None,
-    to_date: Optional[_date] = None,
-    limit: int = Query(default=100, ge=1, le=500),
-    offset: int = Query(default=0, ge=0),
-    db: AsyncSession = Depends(get_db),
-    _: User = Depends(get_current_user),
-):
-    return await exam_svc.list_certificates(
-        db,
-        employee_id=employee_id,
-        course_id=course_id,
-        is_revoked=is_revoked,
-        search=search,
-        from_date=from_date,
-        to_date=to_date,
-        limit=limit,
-        offset=offset,
-    )
-
-
-@router.post(
-    "/certificates",
-    response_model=CertificateOut,
-    status_code=status.HTTP_201_CREATED,
-)
-async def issue_certificate_admin(
-    payload: CertificateCreate,
-    db: AsyncSession = Depends(get_db),
-    _: User = Depends(require_permission("approval.act")),
-):
-    return await exam_svc.admin_issue_certificate(
-        db, payload=payload.model_dump()
-    )
-
-
-@router.put("/certificates/{certificate_id}", response_model=CertificateOut)
-async def update_certificate(
-    certificate_id: int,
-    payload: CertificateUpdate,
-    db: AsyncSession = Depends(get_db),
-    _: User = Depends(require_permission("approval.act")),
-):
-    return await exam_svc.update_certificate(
-        db, certificate_id, payload=payload.model_dump(exclude_unset=True)
-    )
-
-
-@router.post(
-    "/certificates/{certificate_id}/revoke", response_model=CertificateOut
-)
-async def revoke_certificate(
-    certificate_id: int,
-    payload: CertificateRevoke,
-    db: AsyncSession = Depends(get_db),
-    _: User = Depends(require_permission("approval.act")),
-):
-    return await exam_svc.revoke_certificate(
-        db, certificate_id, reason=payload.reason
-    )
-
-
-@router.post(
-    "/certificates/{certificate_id}/restore", response_model=CertificateOut
-)
-async def restore_certificate(
-    certificate_id: int,
-    db: AsyncSession = Depends(get_db),
-    _: User = Depends(require_permission("approval.act")),
-):
-    return await exam_svc.restore_certificate(db, certificate_id)
 
 
 @router.get("/certificates/{certificate_id}/pdf")
