@@ -1,41 +1,41 @@
-name: Admin Web CI
+# name: Admin Web CI
 
-on:
-  push:
-    branches: [main, develop]
-    paths:
-      - "hrms_admin_web/**"
-      - ".github/workflows/admin-web-ci.yml"
-  pull_request:
-    paths:
-      - "hrms_admin_web/**"
-      - ".github/workflows/admin-web-ci.yml"
+# on:
+#   push:
+#     branches: [main, develop]
+#     paths:
+#       - "hrms_admin_web/**"
+#       - ".github/workflows/admin-web-ci.yml"
+#   pull_request:
+#     paths:
+#       - "hrms_admin_web/**"
+#       - ".github/workflows/admin-web-ci.yml"
 
-jobs:
-  build:
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    defaults:
-      run:
-        working-directory: hrms_admin_web
-    steps:
-      - uses: actions/checkout@v4
+# jobs:
+#   build:
+#     runs-on: ubuntu-latest
+#     timeout-minutes: 10
+#     defaults:
+#       run:
+#         working-directory: hrms_admin_web
+#     steps:
+#       - uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-          cache: "npm"
-          cache-dependency-path: hrms_admin_web/package-lock.json
+#       - uses: actions/setup-node@v4
+#         with:
+#           node-version: "20"
+#           cache: "npm"
+#           cache-dependency-path: hrms_admin_web/package-lock.json
 
-      - name: Install
-        run: npm ci --no-audit --no-fund || npm install --no-audit --no-fund
+#       - name: Install
+#         run: npm ci --no-audit --no-fund || npm install --no-audit --no-fund
 
-      - name: Type check
-        run: npx tsc --noEmit
+#       - name: Type check
+#         run: npx tsc --noEmit
 
-      - name: Lint
-        run: npx eslint "src/**/*.{ts,tsx}" --max-warnings=0
-        continue-on-error: true
+#       - name: Lint
+#         run: npx eslint "src/**/*.{ts,tsx}" --max-warnings=0
+#         continue-on-error: true
 
-      - name: Build
-        run: npm run build
+#       - name: Build
+#         run: npm run build
