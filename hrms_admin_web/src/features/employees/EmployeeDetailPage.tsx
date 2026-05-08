@@ -596,7 +596,7 @@ function EditEmployeeModal({
         gender: draft.gender || null,
         marital_status: draft.marital_status || null,
         blood_group: draft.blood_group || null,
-        work_location: draft.work_location || null,
+        work_location: draft.work_location || undefined,
         work_mode: draft.work_mode || undefined,
       }),
     onSuccess: () => {
