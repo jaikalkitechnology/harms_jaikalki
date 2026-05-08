@@ -32,13 +32,7 @@ class _DashboardView extends StatelessWidget {
   Widget build(BuildContext context) {
     final l = AppL10n.of(context);
     return Scaffold(
-      appBar: AppBar(
-        title: Image.asset(
-          'assets/branding/jaikalki-logo-horizontal-light.png',
-          height: 28,
-        ),
-        centerTitle: false,
-      ),
+      // Edge-to-edge brown header → no AppBar.
       body: BlocBuilder<DashboardCubit, DashboardState>(
         builder: (context, state) {
           if (state.status == LoadStatus.loading && state.summary == null) {
@@ -56,12 +50,30 @@ class _DashboardView extends StatelessWidget {
           return RefreshIndicator(
             onRefresh: () => context.read<DashboardCubit>().load(),
             child: ListView(
-              padding: const EdgeInsets.all(16),
+              padding: EdgeInsets.zero,
               children: [
-                _Header(summary: s),
-                const SizedBox(height: 16),
-                ..._sectionsForRole(context, s),
-                const SizedBox(height: 80),
+                _BrandHeader(summary: s),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _AttendanceHeroCard(today: s.todayAttendance),
+                      const SizedBox(height: 20),
+                      _SectionHeader(
+                        title: 'Quick',
+                        emphasis: 'actions',
+                        link: 'VIEW ALL →',
+                        onTap: () => GoRouter.of(context).push('/more'),
+                      ),
+                      const SizedBox(height: 10),
+                      const _QuickActionsGrid(),
+                      const SizedBox(height: 24),
+                      ..._sectionsForRole(context, s),
+                      const SizedBox(height: 80),
+                    ],
+                  ),
+                ),
               ],
             ),
           );
@@ -72,62 +84,454 @@ class _DashboardView extends StatelessWidget {
 
   List<Widget> _sectionsForRole(BuildContext context, DashboardSummary s) {
     final role = s.role;
+    final widgets = <Widget>[
+      _SectionHeader(title: 'Recent', emphasis: 'updates', link: ''),
+      const SizedBox(height: 8),
+      _RecentUpdates(summary: s),
+      const SizedBox(height: 20),
+    ];
     if (role == 'director' || role == 'super_admin') {
-      return [
-        _DirectorWidgets(summary: s),
-        const SizedBox(height: 16),
-        _CommonEmployeeWidgets(summary: s),
-      ];
+      widgets.add(_DirectorWidgets(summary: s));
+    } else if (role == 'hr') {
+      widgets.add(_HRWidgets(summary: s));
+    } else if (role == 'manager') {
+      widgets.add(_ManagerWidgets(summary: s));
     }
-    if (role == 'hr') {
-      return [
-        _HRWidgets(summary: s),
-        const SizedBox(height: 16),
-        _CommonEmployeeWidgets(summary: s),
-      ];
-    }
-    if (role == 'manager') {
-      return [
-        _ManagerWidgets(summary: s),
-        const SizedBox(height: 16),
-        _CommonEmployeeWidgets(summary: s),
-      ];
-    }
-    return [_CommonEmployeeWidgets(summary: s)];
+    return widgets;
   }
 }
 
-class _Header extends StatelessWidget {
-  const _Header({required this.summary});
+// ── Brand brown header ───────────────────────────────────────────────
+class _BrandHeader extends StatelessWidget {
+  const _BrandHeader({required this.summary});
   final DashboardSummary summary;
+
+  String _greeting() {
+    final h = DateTime.now().hour;
+    if (h < 12) return '★ GOOD MORNING';
+    if (h < 17) return '★ GOOD AFTERNOON';
+    return '★ GOOD EVENING';
+  }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final firstName = summary.userFullName.split(' ').first;
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              '★ ${(summary.role ?? 'EMPLOYEE').toUpperCase()}',
-              style: theme.textTheme.labelSmall?.copyWith(
-                color: AppColors.brandGoldDark,
+    final initial =
+        firstName.isNotEmpty ? firstName[0].toUpperCase() : '?';
+    final rest = summary.userFullName.contains(' ')
+        ? ' ${summary.userFullName.split(' ').sublist(1).join(' ')}'
+        : '';
+
+    final isPresent = summary.todayAttendance.checkedIn;
+    final totalLeaves = summary.leaveBalances.fold<num>(
+      0,
+      (a, b) => a + b.balance,
+    );
+
+    return Container(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          colors: [Color(0xFF2D1810), Color(0xFF3D2817)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+      ),
+      padding: EdgeInsets.fromLTRB(
+        20,
+        MediaQuery.of(context).padding.top + 18,
+        20,
+        24,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      _greeting(),
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        color: AppColors.brandGold,
+                        letterSpacing: 1.6,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    RichText(
+                      text: TextSpan(
+                        style: theme.textTheme.headlineMedium?.copyWith(
+                          color: AppColors.warmWhite,
+                          fontWeight: FontWeight.w700,
+                        ),
+                        children: [
+                          TextSpan(text: firstName),
+                          if (rest.isNotEmpty)
+                            TextSpan(
+                              text: rest,
+                              style: const TextStyle(
+                                fontStyle: FontStyle.italic,
+                                color: AppColors.brandGold,
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            ),
-            const SizedBox(height: 4),
-            Text('Hi, $firstName', style: theme.textTheme.headlineMedium),
-            if (summary.employeeCode != null) ...[
-              const SizedBox(height: 2),
-              Text(
-                summary.employeeCode!,
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: AppColors.brandBrownLight,
+              Container(
+                width: 56,
+                height: 56,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: AppColors.brandGold.withOpacity(0.18),
+                  border: Border.all(
+                    color: AppColors.brandGold.withOpacity(0.4),
+                    width: 2,
+                  ),
+                ),
+                alignment: Alignment.center,
+                child: Text(
+                  initial,
+                  style: const TextStyle(
+                    color: AppColors.warmWhite,
+                    fontSize: 22,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
               ),
             ],
+          ),
+          const SizedBox(height: 22),
+          Container(
+            padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 10),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.06),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: Colors.white.withOpacity(0.10)),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: _HeaderStat(
+                    num: isPresent ? 'IN' : '—',
+                    label: 'TODAY',
+                  ),
+                ),
+                _HeaderDivider(),
+                Expanded(
+                  child: _HeaderStat(
+                    num: totalLeaves.toStringAsFixed(0),
+                    label: 'LEAVES',
+                  ),
+                ),
+                _HeaderDivider(),
+                Expanded(
+                  child: _HeaderStat(
+                    num: '${summary.nextPaydayInDays}d',
+                    label: 'PAYDAY',
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _HeaderStat extends StatelessWidget {
+  const _HeaderStat({required this.num, required this.label});
+  final String num;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          num,
+          style: const TextStyle(
+            fontSize: 22,
+            color: AppColors.brandGold,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          label,
+          style: const TextStyle(
+            color: AppColors.warmWhite,
+            fontSize: 9,
+            letterSpacing: 1.6,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _HeaderDivider extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 1,
+      height: 32,
+      color: Colors.white.withOpacity(0.15),
+    );
+  }
+}
+
+// ── Section header ───────────────────────────────────────────────────
+class _SectionHeader extends StatelessWidget {
+  const _SectionHeader({
+    required this.title,
+    required this.emphasis,
+    this.link,
+    this.onTap,
+  });
+  final String title;
+  final String emphasis;
+  final String? link;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Row(
+      children: [
+        RichText(
+          text: TextSpan(
+            style: theme.textTheme.titleLarge?.copyWith(
+              color: context.textPrimary,
+              fontWeight: FontWeight.w700,
+            ),
+            children: [
+              TextSpan(text: '$title '),
+              TextSpan(
+                text: emphasis,
+                style: const TextStyle(
+                  fontStyle: FontStyle.italic,
+                  color: AppColors.brandGoldDark,
+                ),
+              ),
+            ],
+          ),
+        ),
+        const Spacer(),
+        if (link != null && link!.isNotEmpty)
+          GestureDetector(
+            onTap: onTap,
+            child: Text(
+              link!,
+              style: theme.textTheme.labelSmall?.copyWith(
+                color: AppColors.brandGoldDark,
+                letterSpacing: 1.4,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+// ── Attendance hero card ─────────────────────────────────────────────
+class _AttendanceHeroCard extends StatelessWidget {
+  const _AttendanceHeroCard({required this.today});
+  final TodayAttendance today;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final checkInTime = today.checkIn?.split('T').last.substring(0, 5);
+    final isCheckedIn = today.checkedIn && !today.checkedOut;
+    return Card(
+      child: InkWell(
+        borderRadius: BorderRadius.circular(18),
+        onTap: () => GoRouter.of(context).push(AppRoutes.attendance),
+        child: Padding(
+          padding: const EdgeInsets.all(18),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    width: 12,
+                    height: 12,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: isCheckedIn
+                          ? AppColors.success
+                          : AppColors.brandBrownLight,
+                      boxShadow: isCheckedIn
+                          ? [
+                              BoxShadow(
+                                color: AppColors.success.withOpacity(0.5),
+                                blurRadius: 8,
+                              ),
+                            ]
+                          : null,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: RichText(
+                      text: TextSpan(
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: context.textPrimary,
+                          fontWeight: FontWeight.w600,
+                        ),
+                        children: [
+                          TextSpan(
+                            text: today.checkedOut
+                                ? 'Day complete'
+                                : isCheckedIn
+                                    ? 'Checked in '
+                                    : 'Not checked in',
+                          ),
+                          if (isCheckedIn && checkInTime != null)
+                            TextSpan(
+                              text: 'at $checkInTime',
+                              style: const TextStyle(
+                                fontStyle: FontStyle.italic,
+                                color: AppColors.brandGoldDark,
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFFF4B71F), Color(0xFFC8941A)],
+                  ),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Center(
+                  child: Text(
+                    isCheckedIn
+                        ? 'CHECK OUT  →'
+                        : today.checkedOut
+                            ? 'VIEW ATTENDANCE  →'
+                            : 'CHECK IN  →',
+                    style: const TextStyle(
+                      color: AppColors.brandBrownDarker,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 1.4,
+                      fontSize: 12,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ── Quick actions grid ───────────────────────────────────────────────
+class _QuickActionsGrid extends StatelessWidget {
+  const _QuickActionsGrid();
+
+  @override
+  Widget build(BuildContext context) {
+    final actions = [
+      _QuickAction(
+        Icons.event_outlined,
+        'Apply\nLeave',
+        AppRoutes.leaves,
+      ),
+      _QuickAction(
+        Icons.timer_outlined,
+        'Time\nSheet',
+        AppRoutes.attendance,
+      ),
+      _QuickAction(
+        Icons.description_outlined,
+        'Pay\nSlip',
+        AppRoutes.payroll,
+      ),
+      _QuickAction(
+        Icons.account_balance_wallet_outlined,
+        'Reim-\nburse',
+        AppRoutes.payroll,
+      ),
+    ];
+    return Row(
+      children: [
+        for (var i = 0; i < actions.length; i++) ...[
+          Expanded(child: _QuickActionTile(action: actions[i])),
+          if (i < actions.length - 1) const SizedBox(width: 8),
+        ],
+      ],
+    );
+  }
+}
+
+class _QuickAction {
+  final IconData icon;
+  final String label;
+  final String route;
+  _QuickAction(this.icon, this.label, this.route);
+}
+
+class _QuickActionTile extends StatelessWidget {
+  const _QuickActionTile({required this.action});
+  final _QuickAction action;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(14),
+      onTap: () => GoRouter.of(context).push(action.route),
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 14),
+        decoration: BoxDecoration(
+          color: Theme.of(context).cardColor,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: AppColors.brandGold.withOpacity(0.25),
+          ),
+        ),
+        child: Column(
+          children: [
+            Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: AppColors.brandGold.withOpacity(0.18),
+              ),
+              child: Icon(action.icon,
+                  color: AppColors.brandGoldDark, size: 18),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              action.label,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                height: 1.2,
+                color: context.textPrimary,
+              ),
+            ),
           ],
         ),
       ),
@@ -135,44 +539,101 @@ class _Header extends StatelessWidget {
   }
 }
 
-class _CommonEmployeeWidgets extends StatelessWidget {
-  const _CommonEmployeeWidgets({required this.summary});
+// ── Recent updates ───────────────────────────────────────────────────
+class _RecentUpdates extends StatelessWidget {
+  const _RecentUpdates({required this.summary});
   final DashboardSummary summary;
 
   @override
   Widget build(BuildContext context) {
-    final l = AppL10n.of(context);
-    final theme = Theme.of(context);
+    final items = <_NotifPreview>[
+      _NotifPreview(
+        Icons.event_available_outlined,
+        AppColors.success,
+        'Today’s attendance',
+        summary.todayAttendance.checkedIn
+            ? 'You’re ${summary.todayAttendance.status?.toUpperCase() ?? "CHECKED IN"}'
+            : 'Don’t forget to check in',
+      ),
+      _NotifPreview(
+        Icons.account_balance_wallet_outlined,
+        AppColors.brandGoldDark,
+        'Next payday',
+        '${summary.nextPaydayInDays} days to go',
+      ),
+      _NotifPreview(
+        Icons.beach_access_outlined,
+        AppColors.brandBrownLight,
+        'Leave balance',
+        summary.leaveBalances
+            .map((b) => '${b.code} ${b.balance.toStringAsFixed(0)}')
+            .join(' · '),
+      ),
+    ].where((i) => i.subtitle.trim().isNotEmpty).toList();
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          '★ ${l.today.toUpperCase()}',
-          style: theme.textTheme.labelSmall
-              ?.copyWith(color: AppColors.brandGoldDark),
-        ),
-        const SizedBox(height: 8),
-        _AttendanceCard(today: summary.todayAttendance),
-        const SizedBox(height: 12),
-        if (summary.leaveBalances.isNotEmpty) ...[
-          Text(
-            '★ ${l.leaveBalance.toUpperCase()}',
-            style: theme.textTheme.labelSmall
-                ?.copyWith(color: AppColors.brandGoldDark),
+        for (final n in items) ...[
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(
+                  horizontal: 14, vertical: 10),
+              child: Row(
+                children: [
+                  Container(
+                    width: 38,
+                    height: 38,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: n.color.withOpacity(0.15),
+                    ),
+                    child: Icon(n.icon, color: n.color, size: 18),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          n.title,
+                          style: TextStyle(
+                            color: context.textPrimary,
+                            fontWeight: FontWeight.w600,
+                            fontSize: 13,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          n.subtitle,
+                          style: const TextStyle(
+                            color: AppColors.brandBrownLight,
+                            fontSize: 11,
+                            fontFamily: 'monospace',
+                            letterSpacing: 1.0,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ),
-          const SizedBox(height: 8),
-          _LeaveBalances(balances: summary.leaveBalances),
-          const SizedBox(height: 12),
+          const SizedBox(height: 6),
         ],
-        _StatTile(
-          label: l.nextPayday.toUpperCase(),
-          value: l.daysToPayday(summary.nextPaydayInDays),
-        ),
       ],
     );
   }
 }
 
+class _NotifPreview {
+  final IconData icon;
+  final Color color;
+  final String title;
+  final String subtitle;
+  _NotifPreview(this.icon, this.color, this.title, this.subtitle);
+}
+
+// ── Role-specific add-ons ────────────────────────────────────────────
 class _ManagerWidgets extends StatelessWidget {
   const _ManagerWidgets({required this.summary});
   final DashboardSummary summary;
@@ -180,15 +641,10 @@ class _ManagerWidgets extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l = AppL10n.of(context);
-    final theme = Theme.of(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          '★ TEAM',
-          style: theme.textTheme.labelSmall
-              ?.copyWith(color: AppColors.brandGoldDark),
-        ),
+        _SectionHeader(title: 'Team', emphasis: 'overview'),
         const SizedBox(height: 8),
         Row(
           children: [
@@ -210,37 +666,6 @@ class _ManagerWidgets extends StatelessWidget {
             ),
           ],
         ),
-        if (summary.teamToday.isNotEmpty) ...[
-          const SizedBox(height: 12),
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(12),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Today',
-                    style: theme.textTheme.labelSmall?.copyWith(
-                      color: AppColors.brandBrownLight,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  ...summary.teamToday.take(8).map(
-                        (m) => Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 4),
-                          child: Row(
-                            children: [
-                              Expanded(child: Text(m.fullName)),
-                              _StatusPill(status: m.statusToday),
-                            ],
-                          ),
-                        ),
-                      ),
-                ],
-              ),
-            ),
-          ),
-        ],
       ],
     );
   }
@@ -253,94 +678,16 @@ class _HRWidgets extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l = AppL10n.of(context);
-    final theme = Theme.of(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('★ HR',
-            style: theme.textTheme.labelSmall
-                ?.copyWith(color: AppColors.brandGoldDark)),
+        _SectionHeader(title: 'HR', emphasis: 'queue'),
         const SizedBox(height: 8),
         _StatTile(
           label: l.pendingApprovals.toUpperCase(),
           value: '${summary.pendingApprovalsCount}',
           onTap: () => GoRouter.of(context).push(AppRoutes.approvalsInbox),
         ),
-        const SizedBox(height: 12),
-        if (summary.birthdaysThisWeek.isNotEmpty)
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(12),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    l.birthdaysThisWeek.toUpperCase(),
-                    style: theme.textTheme.labelSmall?.copyWith(
-                      color: AppColors.brandGoldDark,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  ...summary.birthdaysThisWeek.map(
-                    (b) => Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 4),
-                      child: Row(
-                        children: [
-                          const Icon(Icons.cake_outlined,
-                              size: 16, color: AppColors.brandGoldDark),
-                          const SizedBox(width: 8),
-                          Expanded(child: Text(b.fullName)),
-                          if (b.dateOfBirth != null)
-                            Text(
-                              b.dateOfBirth!,
-                              style: theme.textTheme.bodySmall?.copyWith(
-                                color: AppColors.brandBrownLight,
-                              ),
-                            ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        if (summary.probationExpiring.isNotEmpty) ...[
-          const SizedBox(height: 12),
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(12),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    l.probationExpiring.toUpperCase(),
-                    style: theme.textTheme.labelSmall?.copyWith(
-                      color: AppColors.warning,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  ...summary.probationExpiring.take(6).map(
-                        (p) => Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 4),
-                          child: Row(
-                            children: [
-                              Expanded(child: Text(p.fullName)),
-                              Text(
-                                '${p.daysRemaining}d',
-                                style: theme.textTheme.bodySmall?.copyWith(
-                                  color: AppColors.brandBrownLight,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                ],
-              ),
-            ),
-          ),
-        ],
       ],
     );
   }
@@ -353,13 +700,10 @@ class _DirectorWidgets extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l = AppL10n.of(context);
-    final theme = Theme.of(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('★ COMPANY',
-            style: theme.textTheme.labelSmall
-                ?.copyWith(color: AppColors.brandGoldDark)),
+        _SectionHeader(title: 'Company', emphasis: 'snapshot'),
         const SizedBox(height: 8),
         Row(
           children: [
@@ -380,146 +724,7 @@ class _DirectorWidgets extends StatelessWidget {
             ),
           ],
         ),
-        if (summary.headcountByCategory.isNotEmpty) ...[
-          const SizedBox(height: 12),
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(12),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'CATEGORIES',
-                    style: theme.textTheme.labelSmall?.copyWith(
-                      color: AppColors.brandBrownLight,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  ...summary.headcountByCategory.map(
-                    (c) => Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 3),
-                      child: Row(
-                        children: [
-                          Expanded(child: Text(c.key)),
-                          Text(
-                            '${c.count}',
-                            style: theme.textTheme.titleMedium?.copyWith(
-                              color: AppColors.brandGoldDark,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
       ],
-    );
-  }
-}
-
-class _AttendanceCard extends StatelessWidget {
-  const _AttendanceCard({required this.today});
-  final TodayAttendance today;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final status = today.status ?? 'absent';
-    final color = switch (status) {
-      'present' => AppColors.success,
-      'wfh' => AppColors.info,
-      'half_day' => AppColors.warning,
-      _ => AppColors.error,
-    };
-    return Card(
-      child: InkWell(
-        borderRadius: BorderRadius.circular(18),
-        onTap: () => GoRouter.of(context).push(AppRoutes.attendance),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Row(
-            children: [
-              Container(
-                width: 4,
-                height: 56,
-                decoration: BoxDecoration(
-                  color: color,
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      status.toUpperCase(),
-                      style: theme.textTheme.labelSmall?.copyWith(color: color),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      today.checkedIn
-                          ? today.checkedOut
-                              ? 'Day complete'
-                              : 'Checked in${today.checkIn != null ? ' · ${today.checkIn!.split('T').last.substring(0, 5)}' : ''}'
-                          : 'Tap to check in',
-                      style: theme.textTheme.bodyMedium,
-                    ),
-                  ],
-                ),
-              ),
-              const Icon(Icons.arrow_forward_ios,
-                  size: 14, color: AppColors.brandBrownLight),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _LeaveBalances extends StatelessWidget {
-  const _LeaveBalances({required this.balances});
-  final List<LeaveBalanceItem> balances;
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Wrap(
-          spacing: 16,
-          runSpacing: 8,
-          children: balances.map((b) {
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  b.code,
-                  style: const TextStyle(
-                    fontFamily: 'monospace',
-                    fontSize: 10,
-                    letterSpacing: 1.5,
-                    color: AppColors.brandBrownLight,
-                  ),
-                ),
-                Text(
-                  '${b.balance}',
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w700,
-                    fontSize: 18,
-                    color: AppColors.brandGoldDark,
-                  ),
-                ),
-              ],
-            );
-          }).toList(),
-        ),
-      ),
     );
   }
 }
@@ -567,40 +772,6 @@ class _StatTile extends StatelessWidget {
               ],
             ],
           ),
-        ),
-      ),
-    );
-  }
-}
-
-class _StatusPill extends StatelessWidget {
-  const _StatusPill({required this.status});
-  final String status;
-
-  @override
-  Widget build(BuildContext context) {
-    final color = switch (status) {
-      'present' => AppColors.success,
-      'wfh' => AppColors.info,
-      'half_day' => AppColors.warning,
-      'leave' => AppColors.brandGoldDark,
-      'holiday' => AppColors.brandBrownLight,
-      _ => AppColors.error,
-    };
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.15),
-        borderRadius: BorderRadius.circular(6),
-      ),
-      child: Text(
-        status.toUpperCase(),
-        style: TextStyle(
-          fontSize: 10,
-          fontFamily: 'monospace',
-          letterSpacing: 1.5,
-          fontWeight: FontWeight.w700,
-          color: color,
         ),
       ),
     );

@@ -42,7 +42,6 @@ class _MoreMenuPageState extends State<MoreMenuPage> {
 
     final allSections = <_MoreSection>[
       _MoreSection('Work', [
-        _MoreItem('attendance', l.attendance, Icons.fingerprint_outlined, AppRoutes.attendance),
         _MoreItem('leaves', l.leaves, Icons.beach_access_outlined, AppRoutes.leaves),
         _MoreItem('dwp', 'Daily plan', Icons.checklist_outlined, AppRoutes.dwp),
         _MoreItem('approvals', l.approvals, Icons.inbox_outlined, AppRoutes.approvalsInbox),

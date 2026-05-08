@@ -202,6 +202,14 @@ class EmployeeDetail extends Equatable {
     this.salaryTemplateId,
     this.workLocation,
     required this.ctcAnnual,
+    this.dateOfBirth,
+    this.gender,
+    this.bloodGroup,
+    this.maritalStatus,
+    this.workMode,
+    this.employmentType,
+    this.reportingTo,
+    this.userId,
   });
 
   final int id;
@@ -222,6 +230,14 @@ class EmployeeDetail extends Equatable {
   final int? salaryTemplateId;
   final String? workLocation;
   final num ctcAnnual;
+  final String? dateOfBirth;
+  final String? gender;
+  final String? bloodGroup;
+  final String? maritalStatus;
+  final String? workMode;
+  final String? employmentType;
+  final int? reportingTo;
+  final int? userId;
 
   String get fullName => '$firstName $lastName';
 
@@ -253,6 +269,14 @@ class EmployeeDetail extends Equatable {
             : (json['salary_template'] as Map<String, dynamic>)['id'] as int,
         workLocation: json['work_location'] as String?,
         ctcAnnual: num.tryParse('${json['ctc_annual']}') ?? 0,
+        dateOfBirth: json['date_of_birth'] as String?,
+        gender: json['gender'] as String?,
+        bloodGroup: json['blood_group'] as String?,
+        maritalStatus: json['marital_status'] as String?,
+        workMode: json['work_mode'] as String?,
+        employmentType: json['employment_type'] as String?,
+        reportingTo: json['reporting_to'] as int?,
+        userId: json['user_id'] as int?,
       );
 
   @override
