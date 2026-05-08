@@ -575,6 +575,8 @@ async def admin_issue_certificate(
         course_id=payload.get("course_id"),
         exam_attempt_id=payload.get("exam_attempt_id"),
         title=payload["title"],
+        certificate_type=payload.get("certificate_type") or "achievement",
+        body_text=payload.get("body_text"),
         issued_date=payload.get("issued_date") or _today(),
         expiry_date=payload.get("expiry_date"),
         score_percentage=payload.get("score_percentage"),
@@ -589,10 +591,26 @@ async def update_certificate(
     db: AsyncSession, certificate_id: int, *, payload: dict
 ) -> Certificate:
     cert = await get_certificate(db, certificate_id)
-    allowed = {"title", "issued_date", "expiry_date", "score_percentage", "course_id"}
+    allowed = {
+        "title",
+        "certificate_type",
+        "body_text",
+        "issued_date",
+        "expiry_date",
+        "score_percentage",
+        "course_id",
+    }
+    # Allow body_text to be cleared by passing "" — distinguish from None
+    # (which means "field omitted from update").
     for k, v in payload.items():
-        if k in allowed and v is not None:
-            setattr(cert, k, v)
+        if k not in allowed:
+            continue
+        if k == "body_text":
+            cert.body_text = v if v else None
+            continue
+        if v is None:
+            continue
+        setattr(cert, k, v)
     await db.commit()
     await db.refresh(cert)
     return cert

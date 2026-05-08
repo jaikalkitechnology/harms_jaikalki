@@ -264,6 +264,15 @@ class Certificate(Base, TimestampMixin):
         ForeignKey("exam_attempts.id", ondelete="SET NULL"), nullable=True
     )
     title: Mapped[str] = mapped_column(String(200), nullable=False)
+    # Certificate flavour — drives the PDF heading/body. NULL == legacy
+    # "achievement" certificate. Values: achievement | appreciation |
+    # completion | participation | excellence | training | custom.
+    certificate_type: Mapped[Optional[str]] = mapped_column(
+        String(32), nullable=True
+    )
+    # Optional admin-supplied body text. When set, overrides the
+    # auto-generated "has successfully completed …" line in the PDF.
+    body_text: Mapped[Optional[str]] = mapped_column(String(1000), nullable=True)
     issued_date: Mapped[date] = mapped_column(Date, nullable=False)
     expiry_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
     score_percentage: Mapped[Optional[Numeric]] = mapped_column(

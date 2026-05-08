@@ -162,6 +162,7 @@ class CertificateOut extends Equatable {
     this.scorePercentage,
     this.isRevoked = false,
     this.revokedReason,
+    this.certificateType,
   });
 
   final int id;
@@ -172,6 +173,28 @@ class CertificateOut extends Equatable {
   final double? scorePercentage;
   final bool isRevoked;
   final String? revokedReason;
+  final String? certificateType;
+
+  String get displayType => (certificateType ?? 'achievement').toLowerCase();
+
+  String get headlineLabel {
+    switch (displayType) {
+      case 'appreciation':
+        return 'CERTIFICATE OF APPRECIATION';
+      case 'completion':
+        return 'CERTIFICATE OF COMPLETION';
+      case 'participation':
+        return 'CERTIFICATE OF PARTICIPATION';
+      case 'excellence':
+        return 'CERTIFICATE OF EXCELLENCE';
+      case 'training':
+        return 'TRAINING CERTIFICATE';
+      case 'custom':
+        return 'CERTIFICATE';
+      default:
+        return 'CERTIFICATE OF ACHIEVEMENT';
+    }
+  }
 
   factory CertificateOut.fromJson(Map<String, dynamic> j) => CertificateOut(
         id: j['id'] as int,
@@ -184,8 +207,9 @@ class CertificateOut extends Equatable {
             : null,
         isRevoked: j['is_revoked'] as bool? ?? false,
         revokedReason: j['revoked_reason'] as String?,
+        certificateType: j['certificate_type'] as String?,
       );
 
   @override
-  List<Object?> get props => [id, isRevoked];
+  List<Object?> get props => [id, isRevoked, certificateType];
 }

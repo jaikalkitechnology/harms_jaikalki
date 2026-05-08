@@ -52,6 +52,15 @@ export interface CertificateVerifyResponse {
   revoked_reason: string | null;
 }
 
+export type CertificateType =
+  | "achievement"
+  | "appreciation"
+  | "completion"
+  | "participation"
+  | "excellence"
+  | "training"
+  | "custom";
+
 export interface Certificate {
   id: number;
   certificate_number: string;
@@ -59,6 +68,8 @@ export interface Certificate {
   course_id: number | null;
   exam_attempt_id: number | null;
   title: string;
+  certificate_type: CertificateType | null;
+  body_text: string | null;
   issued_date: string;
   expiry_date: string | null;
   score_percentage: string | null;
@@ -174,6 +185,8 @@ export const examApi = {
   issueCertificate: async (payload: {
     employee_id: number;
     title: string;
+    certificate_type?: CertificateType;
+    body_text?: string | null;
     course_id?: number | null;
     exam_attempt_id?: number | null;
     issued_date?: string;
@@ -190,6 +203,8 @@ export const examApi = {
     id: number,
     payload: {
       title?: string;
+      certificate_type?: CertificateType;
+      body_text?: string | null;
       issued_date?: string;
       expiry_date?: string | null;
       score_percentage?: number | null;
