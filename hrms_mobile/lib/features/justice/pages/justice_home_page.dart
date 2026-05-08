@@ -79,7 +79,7 @@ class _JusticeHomePageState extends State<JusticeHomePage> {
                         child: Text(
                           'Your complaints are end-to-end encrypted. Only authorised members can decrypt them, and every access is logged.',
                           style: theme.textTheme.bodySmall?.copyWith(
-                            color: AppColors.brandBrownDarker,
+                            color: context.textPrimary,
                           ),
                         ),
                       ),

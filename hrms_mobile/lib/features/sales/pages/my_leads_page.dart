@@ -215,7 +215,7 @@ class _MyLeadsPageState extends State<MyLeadsPage> {
         },
         selectedColor: color.withOpacity(0.15),
         labelStyle: TextStyle(
-          color: selected ? color : AppColors.brandBrownDarker,
+          color: selected ? color : context.textPrimary,
         ),
       ),
     );

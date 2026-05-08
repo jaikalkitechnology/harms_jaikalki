@@ -211,7 +211,7 @@ class _KpiCard extends StatelessWidget {
             Text(
               value,
               style: theme.textTheme.headlineSmall?.copyWith(
-                color: color ?? AppColors.brandBrownDarker,
+                color: color ?? context.textPrimary,
                 fontWeight: FontWeight.bold,
               ),
             ),

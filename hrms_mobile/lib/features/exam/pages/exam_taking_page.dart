@@ -215,7 +215,7 @@ class _ExamTakingPageState extends State<ExamTakingPage>
                       style: TextStyle(
                         color: lowTime
                             ? AppColors.error
-                            : AppColors.brandBrownDarker,
+                            : context.textPrimary,
                         fontWeight: FontWeight.bold,
                       ),
                     ),

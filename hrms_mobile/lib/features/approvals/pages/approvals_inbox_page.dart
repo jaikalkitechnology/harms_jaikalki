@@ -141,7 +141,7 @@ class _Pill extends StatelessWidget {
             letterSpacing: 1.5,
             fontWeight: FontWeight.w600,
             color: active
-                ? AppColors.brandBrownDarker
+                ? context.textPrimary
                 : AppColors.brandBrownLight,
           ),
         ),
@@ -285,7 +285,7 @@ class _DataRows extends StatelessWidget {
                   Expanded(
                     child: Text(r.$2,
                         style: const TextStyle(
-                          color: AppColors.brandBrownDarker,
+                          color: context.textPrimary,
                         )),
                   ),
                 ],
