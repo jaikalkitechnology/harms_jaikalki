@@ -174,6 +174,40 @@ export const employeesApi = {
     return data;
   },
 
+  async getCredential(id: number): Promise<{
+    user_id: number;
+    email: string;
+    is_active: boolean;
+    has_account: boolean;
+  }> {
+    const { data } = await apiClient.get(`${v1}/employees/${id}/credential`);
+    return data;
+  },
+  async createCredential(
+    id: number,
+    payload: { email: string; password: string; role_code?: string },
+  ) {
+    const { data } = await apiClient.post(
+      `${v1}/employees/${id}/credential`,
+      payload,
+    );
+    return data;
+  },
+  async resetCredentialPassword(id: number, newPassword: string) {
+    const { data } = await apiClient.post(
+      `${v1}/employees/${id}/credential/password`,
+      { new_password: newPassword },
+    );
+    return data;
+  },
+  async setCredentialActive(id: number, isActive: boolean) {
+    const { data } = await apiClient.post(
+      `${v1}/employees/${id}/credential/active`,
+      { is_active: isActive },
+    );
+    return data;
+  },
+
   async expiringProbations(days = 30): Promise<ExpiringProbation[]> {
     const { data } = await apiClient.get(
       `${v1}/employees/probation/expiring`,
