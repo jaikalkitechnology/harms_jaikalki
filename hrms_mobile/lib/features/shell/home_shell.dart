@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
 
 import '../../l10n/app_l10n.dart';
-import '../approvals/pages/approvals_inbox_page.dart';
 import '../attendance/pages/attendance_home_page.dart';
 import '../dashboard/dashboard_page.dart';
 import '../more/more_menu_page.dart';
 import '../profile/profile_page.dart';
 
-/// Persistent bottom-nav shell hosting the 5 primary tabs.
+/// Persistent bottom-nav shell hosting the 4 primary tabs (Home /
+/// Attendance / More / Profile). Approvals moved into the More menu.
 class HomeShell extends StatefulWidget {
   const HomeShell({super.key});
 
@@ -23,15 +23,12 @@ class _HomeShellState extends State<HomeShell> {
     final l = AppL10n.of(context);
     final pages = const [
       DashboardPage(),
-      ApprovalsInboxPage(),
       AttendanceHomePage(),
       MoreMenuPage(),
       ProfilePage(),
     ];
 
     return Scaffold(
-      // Each child tab provides its own AppBar; the shell only wraps
-      // them with the persistent bottom navigation.
       body: IndexedStack(index: _index, children: pages),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _index,
@@ -41,11 +38,6 @@ class _HomeShellState extends State<HomeShell> {
             icon: const Icon(Icons.home_outlined),
             selectedIcon: const Icon(Icons.home),
             label: l.home,
-          ),
-          NavigationDestination(
-            icon: const Icon(Icons.inbox_outlined),
-            selectedIcon: const Icon(Icons.inbox),
-            label: l.approvals,
           ),
           NavigationDestination(
             icon: const Icon(Icons.fingerprint_outlined),
