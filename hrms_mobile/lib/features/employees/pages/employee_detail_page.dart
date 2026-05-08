@@ -98,8 +98,8 @@ class _Header extends StatelessWidget {
               ? NetworkImage(employee.photoUrl!)
               : null,
           child: employee.photoUrl == null
-              ? const Icon(Icons.person,
-                  size: 32, color: AppColors.brandBrownDarker)
+              ? Icon(Icons.person,
+                  size: 32, color: context.textPrimary)
               : null,
         ),
         const SizedBox(width: 16),
@@ -294,7 +294,7 @@ class _SalaryCard extends StatelessWidget {
               )),
           Text(value,
               style: TextStyle(
-                color: color ?? AppColors.brandBrownDarker,
+                color: color ?? context.textPrimary,
                 fontWeight: bold ? FontWeight.w700 : FontWeight.w500,
               )),
         ],

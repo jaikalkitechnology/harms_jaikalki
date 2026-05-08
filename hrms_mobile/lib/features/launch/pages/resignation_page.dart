@@ -144,7 +144,7 @@ class _ResignationPageState extends State<ResignationPage> {
           'Resignation submission is locked',
           textAlign: TextAlign.center,
           style: theme.textTheme.headlineSmall?.copyWith(
-            color: AppColors.brandBrownDarker,
+            color: context.textPrimary,
             fontWeight: FontWeight.w600,
           ),
         ),
@@ -201,7 +201,7 @@ class _ResignationPageState extends State<ResignationPage> {
                   child: Text(
                     'You already have an active resignation request. '
                     'Track its progress below.',
-                    style: TextStyle(color: AppColors.brandBrownDarker),
+                    style: TextStyle(color: context.textPrimary),
                   ),
                 ),
               ],

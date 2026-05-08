@@ -48,3 +48,33 @@ class AppColors {
   static const Color roleTrainer = Color(0xFF15803D);
   static const Color roleIntern = Color(0xFFFCD34D);
 }
+
+
+/// Theme-aware accessors so widgets can keep using brand-flavoured
+/// colours without rendering dark-on-dark in dark mode. Prefer these
+/// inside Text / Icon widgets:
+///
+///     Text('Hello', style: TextStyle(color: ctx.textPrimary));
+///     Text('Subtitle', style: TextStyle(color: ctx.textMuted));
+extension AppColorsContext on BuildContext {
+  /// Brand-brown in light mode, near-white in dark mode.
+  Color get textPrimary {
+    final brightness = Theme.of(this).brightness;
+    return brightness == Brightness.dark
+        ? AppColors.warmWhite
+        : AppColors.brandBrownDarker;
+  }
+
+  /// Slightly muted body text — readable in both modes.
+  Color get textMuted {
+    final brightness = Theme.of(this).brightness;
+    return brightness == Brightness.dark
+        ? AppColors.brandBrown100
+        : AppColors.brandBrownLight;
+  }
+
+  /// A surface card colour that contrasts with the scaffold.
+  Color get surfaceCard {
+    return Theme.of(this).cardColor;
+  }
+}

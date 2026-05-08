@@ -160,7 +160,7 @@ class _ProfileHeader extends StatelessWidget {
                 style: const TextStyle(
                   fontSize: 26,
                   fontWeight: FontWeight.w700,
-                  color: AppColors.brandBrownDarker,
+                  color: context.textPrimary,
                 ),
               ),
             ),

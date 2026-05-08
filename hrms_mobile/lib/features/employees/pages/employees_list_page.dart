@@ -122,7 +122,7 @@ class _EmployeeRow extends StatelessWidget {
                             : '?',
                         style: const TextStyle(
                           fontWeight: FontWeight.w600,
-                          color: AppColors.brandBrownDarker,
+                          color: context.textPrimary,
                         ),
                       )
                     : null,

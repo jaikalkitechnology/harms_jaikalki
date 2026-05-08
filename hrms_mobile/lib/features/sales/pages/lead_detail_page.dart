@@ -463,7 +463,7 @@ class _StageStepper extends StatelessWidget {
                     color: isCurrent
                         ? AppColors.brandGoldDark
                         : (reached
-                            ? AppColors.brandBrownDarker
+                            ? context.textPrimary
                             : AppColors.brandBrownLight),
                     fontWeight: isCurrent ? FontWeight.w600 : FontWeight.w400,
                   ),
