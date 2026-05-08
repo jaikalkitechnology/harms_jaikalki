@@ -57,6 +57,26 @@ async def check_in(
 ) -> tuple[Attendance, GeoFenceCheck | None]:
     today = _today()
 
+    # Guard: if HR/manager has already approved a leave covering today,
+    # block the check-in. The employee is on leave; attendance for the
+    # day is reflected via the approved leave instead.
+    on_leave = (
+        await db.execute(
+            select(LeaveRequest)
+            .where(LeaveRequest.employee_id == employee.id)
+            .where(LeaveRequest.status == "approved")
+            .where(LeaveRequest.from_date <= today)
+            .where(LeaveRequest.to_date >= today)
+            .limit(1)
+        )
+    ).scalar_one_or_none()
+    if on_leave is not None:
+        raise ValidationError(
+            "You're on approved leave today "
+            f"({on_leave.from_date} → {on_leave.to_date}). "
+            "Cancel the leave from the Leaves screen if you intend to work."
+        )
+
     existing = await _get_today_record(db, employee.id, today)
     if existing and existing.check_in:
         raise ConflictError("Already checked in today")
