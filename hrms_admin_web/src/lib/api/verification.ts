@@ -1,4 +1,5 @@
 import { apiClient } from "./client";
+import { API_BASE_URL } from "@/lib/constants";
 
 const v1 = "/api/v1";
 
@@ -162,5 +163,5 @@ export const verificationApi = {
     );
     return data;
   },
-  reportUrl: (id: number) => `${v1}/verification/${id}/report`,
+  reportUrl: (id: number) => `${API_BASE_URL}${v1}/verification/${id}/report`,
 };
