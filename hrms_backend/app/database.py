@@ -78,6 +78,10 @@ _PENDING_COLUMNS: list[tuple[str, str, str, str | None]] = [
         "BOOLEAN NOT NULL DEFAULT FALSE",
         None,
     ),
+    ("report_saved", "file_url", "VARCHAR(500) NULL", None),
+    ("report_saved", "file_name", "VARCHAR(255) NULL", None),
+    ("report_saved", "file_size", "INT NULL", None),
+    ("report_saved", "file_mime", "VARCHAR(120) NULL", None),
 ]
 
 

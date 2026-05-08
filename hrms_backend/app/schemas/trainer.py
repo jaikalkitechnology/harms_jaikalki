@@ -78,6 +78,23 @@ class TrainingSessionStatusUpdate(BaseModel):
     )
 
 
+class TrainingSessionUpdate(BaseModel):
+    title: Optional[str] = None
+    description: Optional[str] = None
+    trainer_id: Optional[int] = None
+    course_id: Optional[int] = None
+    department_id: Optional[int] = None
+    session_type: Optional[str] = Field(
+        default=None, pattern="^(in_person|virtual|hybrid|self_paced)$"
+    )
+    scheduled_start: Optional[datetime] = None
+    scheduled_end: Optional[datetime] = None
+    timezone: Optional[str] = None
+    location: Optional[str] = None
+    meeting_url: Optional[str] = None
+    capacity: Optional[int] = Field(default=None, ge=1, le=2000)
+
+
 class TrainingSessionOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: int

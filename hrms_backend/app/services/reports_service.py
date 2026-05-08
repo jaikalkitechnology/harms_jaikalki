@@ -488,6 +488,8 @@ async def list_saved_reports(
     *,
     user_id: int,
     include_shared: bool = True,
+    search: Optional[str] = None,
+    report_type: Optional[str] = None,
 ) -> Sequence[SavedReport]:
     stmt = select(SavedReport)
     if include_shared:
@@ -496,18 +498,84 @@ async def list_saved_reports(
         )
     else:
         stmt = stmt.where(SavedReport.created_by == user_id)
+    if report_type:
+        stmt = stmt.where(SavedReport.report_type == report_type)
+    if search:
+        like = f"%{search.strip()}%"
+        stmt = stmt.where(
+            or_(
+                SavedReport.code.ilike(like),
+                SavedReport.name.ilike(like),
+                SavedReport.description.ilike(like),
+            )
+        )
     stmt = stmt.order_by(SavedReport.created_at.desc())
     return (await db.execute(stmt)).scalars().all()
 
 
-async def delete_saved_report(
-    db: AsyncSession, report_id: int, *, user_id: int
-) -> None:
+async def get_saved_report(
+    db: AsyncSession, report_id: int
+) -> SavedReport:
     report = (
         await db.execute(select(SavedReport).where(SavedReport.id == report_id))
     ).scalar_one_or_none()
     if not report:
         raise NotFoundError("Report not found")
+    return report
+
+
+async def update_saved_report(
+    db: AsyncSession,
+    report_id: int,
+    *,
+    user_id: int,
+    payload: dict,
+) -> SavedReport:
+    report = await get_saved_report(db, report_id)
+    if report.created_by != user_id:
+        from app.core.exceptions import ForbiddenError
+
+        raise ForbiddenError("Only the creator can edit a saved report")
+    allowed = {
+        "name", "description", "report_type", "filters",
+        "schedule_cron", "schedule_recipients", "is_shared",
+        "file_url", "file_name", "file_size", "file_mime",
+    }
+    for k, v in payload.items():
+        if k in allowed and v is not None:
+            setattr(report, k, v)
+    await db.commit()
+    await db.refresh(report)
+    return report
+
+
+async def attach_saved_report_file(
+    db: AsyncSession,
+    report_id: int,
+    *,
+    user_id: int,
+    file_url: str,
+    file_name: str,
+    file_size: int,
+    file_mime: Optional[str],
+) -> SavedReport:
+    return await update_saved_report(
+        db,
+        report_id,
+        user_id=user_id,
+        payload={
+            "file_url": file_url,
+            "file_name": file_name,
+            "file_size": file_size,
+            "file_mime": file_mime,
+        },
+    )
+
+
+async def delete_saved_report(
+    db: AsyncSession, report_id: int, *, user_id: int
+) -> None:
+    report = await get_saved_report(db, report_id)
     if report.created_by != user_id:
         from app.core.exceptions import ForbiddenError
 

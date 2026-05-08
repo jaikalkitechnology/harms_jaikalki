@@ -52,6 +52,13 @@ class SavedReport(Base, TimestampMixin):
     schedule_recipients: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
     last_run_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     is_shared: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    # Optional uploaded artefact: PDF, ZIP, XLSX, etc. Set when an admin
+    # attaches a generated report file. file_size in bytes; file_mime is
+    # the original Content-Type so the UI can show the right icon.
+    file_url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    file_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    file_size: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    file_mime: Mapped[Optional[str]] = mapped_column(String(120), nullable=True)
     created_by: Mapped[Optional[int]] = mapped_column(
         ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )

@@ -176,18 +176,23 @@ class _TrainerSessionsPageState extends State<TrainerSessionsPage> {
             const SizedBox(height: 8),
             Wrap(
               spacing: 8,
+              runSpacing: 8,
               children: [
-                if (s.meetingUrl != null)
-                  OutlinedButton.icon(
-                    icon: const Icon(Icons.video_camera_front_outlined,
-                        size: 16),
-                    label: const Text('Join'),
+                if (s.meetingUrl != null && s.status != 'completed' &&
+                    s.status != 'cancelled')
+                  ElevatedButton.icon(
+                    icon: const Icon(Icons.play_circle_filled, size: 18),
+                    label: const Text('Launch meeting'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.brandGoldDark,
+                      foregroundColor: Colors.white,
+                    ),
                     onPressed: () => _open(s.meetingUrl!),
                   ),
                 if (!registered &&
                     (s.status == 'open_for_registration' ||
                         s.status == 'scheduled'))
-                  ElevatedButton.icon(
+                  OutlinedButton.icon(
                     icon: const Icon(Icons.app_registration, size: 16),
                     label: const Text('Register'),
                     onPressed: _busy ? null : () => _register(s),
