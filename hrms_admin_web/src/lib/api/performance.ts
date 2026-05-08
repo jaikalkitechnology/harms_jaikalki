@@ -56,26 +56,6 @@ export interface FeedbackAggregate {
 }
 
 export const performanceApi = {
-  listCycles: async () => {
-    const { data } = await apiClient.get<ReviewCycle[]>(
-      `${v1}/performance/cycles`,
-    );
-    return data;
-  },
-  createCycle: async (payload: Record<string, unknown>) => {
-    const { data } = await apiClient.post<ReviewCycle>(
-      `${v1}/performance/cycles`,
-      payload,
-    );
-    return data;
-  },
-  setCycleStatus: async (id: number, status: string) => {
-    const { data } = await apiClient.patch<ReviewCycle>(
-      `${v1}/performance/cycles/${id}/status`,
-      { status },
-    );
-    return data;
-  },
   shareReview: async (reviewId: number) => {
     const { data } = await apiClient.post<PerformanceReview>(
       `${v1}/performance/reviews/${reviewId}/share`,

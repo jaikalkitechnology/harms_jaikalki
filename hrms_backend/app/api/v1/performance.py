@@ -9,9 +9,6 @@ from app.core.permissions import require_permission
 from app.dependencies import get_current_user, get_db
 from app.models import Employee, FeedbackRequest, User
 from app.schemas.performance import (
-    CycleCreate,
-    CycleOut,
-    CycleStatusUpdate,
     FeedbackAggregate,
     FeedbackRequestCreate,
     FeedbackRequestOut,
@@ -38,39 +35,11 @@ async def _self_employee(db: AsyncSession, user: User):
     return emp
 
 
-# ─── Cycles ──────────────────────────────────────────────────────────
-@router.get("/cycles", response_model=list[CycleOut])
-async def list_cycles(
-    cycle_status: Optional[str] = Query(default=None, alias="status"),
-    db: AsyncSession = Depends(get_db),
-    _: User = Depends(get_current_user),
-):
-    return await perf.list_cycles(db, status=cycle_status)
-
-
-@router.post(
-    "/cycles",
-    response_model=CycleOut,
-    status_code=status.HTTP_201_CREATED,
-)
-async def create_cycle(
-    payload: CycleCreate,
-    db: AsyncSession = Depends(get_db),
-    _: User = Depends(require_permission("admin.users.manage")),
-):
-    return await perf.create_cycle(db, payload=payload.model_dump())
-
-
-@router.patch("/cycles/{cycle_id}/status", response_model=CycleOut)
-async def update_cycle_status(
-    cycle_id: int,
-    payload: CycleStatusUpdate,
-    db: AsyncSession = Depends(get_db),
-    _: User = Depends(require_permission("admin.users.manage")),
-):
-    return await perf.update_cycle_status(
-        db, cycle_id, status=payload.status
-    )
+# Cycle management is no longer exposed via the public API. The
+# ReviewCycle model still exists internally because goals / reviews /
+# reports reference it, but admins / mobile no longer manage cycles
+# through HTTP endpoints. Cycles are now considered an internal
+# implementation detail of the review pipeline.
 
 
 # ─── Goals ───────────────────────────────────────────────────────────

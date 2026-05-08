@@ -58,6 +58,7 @@ export const trainerApi = {
     search?: string;
     specialization?: string;
     is_external?: boolean;
+    include_inactive?: boolean;
   }) => {
     const { data } = await apiClient.get<Trainer[]>(
       `${v1}/trainer/trainers`,
@@ -71,6 +72,16 @@ export const trainerApi = {
       payload,
     );
     return data;
+  },
+  updateTrainer: async (id: number, payload: Record<string, unknown>) => {
+    const { data } = await apiClient.put<Trainer>(
+      `${v1}/trainer/trainers/${id}`,
+      payload,
+    );
+    return data;
+  },
+  deleteTrainer: async (id: number) => {
+    await apiClient.delete(`${v1}/trainer/trainers/${id}`);
   },
   analytics: async (trainerId: number) => {
     const { data } = await apiClient.get<TrainerAnalytics>(

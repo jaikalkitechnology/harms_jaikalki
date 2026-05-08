@@ -23,6 +23,22 @@ class AssetCreate(BaseModel):
     notes: Optional[str] = None
 
 
+class AssetUpdate(BaseModel):
+    name: Optional[str] = None
+    category: Optional[str] = Field(
+        default=None,
+        pattern="^(laptop|mobile|headset|monitor|keyboard|mouse|vehicle|other)$",
+    )
+    serial_number: Optional[str] = None
+    purchase_date: Optional[date] = None
+    purchase_cost: Optional[Decimal] = None
+    warranty_until: Optional[date] = None
+    condition: Optional[str] = Field(
+        default=None, pattern="^(new|good|fair|damaged|retired)$"
+    )
+    notes: Optional[str] = None
+
+
 class AssetOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: int
@@ -157,6 +173,21 @@ class JobPostingStatusUpdate(BaseModel):
     status: str = Field(pattern="^(draft|published|closed|filled)$")
 
 
+class JobPostingUpdate(BaseModel):
+    title: Optional[str] = None
+    department_id: Optional[int] = None
+    location: Optional[str] = None
+    employment_type: Optional[str] = Field(
+        default=None, pattern="^(full_time|part_time|contract|intern)$"
+    )
+    description: Optional[str] = None
+    requirements: Optional[str] = None
+    referral_bonus: Optional[Decimal] = None
+    is_internal_only: Optional[bool] = None
+    published_to_app: Optional[bool] = None
+    closes_on: Optional[date] = None
+
+
 class JobPostingOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: int
@@ -169,6 +200,7 @@ class JobPostingOut(BaseModel):
     requirements: Optional[str]
     referral_bonus: Optional[Decimal]
     is_internal_only: bool
+    published_to_app: bool = False
     posted_at: datetime
     closes_on: Optional[date]
     status: str

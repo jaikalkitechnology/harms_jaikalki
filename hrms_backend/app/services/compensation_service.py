@@ -280,3 +280,64 @@ async def list_pending_approval(db: AsyncSession) -> Sequence[SalaryRevision]:
             .order_by(SalaryRevision.created_at.desc())
         )
     ).scalars().all()
+
+
+async def list_revisions(
+    db: AsyncSession,
+    *,
+    employee_id: Optional[int] = None,
+    status: Optional[str] = None,
+    reason: Optional[str] = None,
+    from_date=None,
+    to_date=None,
+) -> Sequence[SalaryRevision]:
+    stmt = select(SalaryRevision)
+    if employee_id is not None:
+        stmt = stmt.where(SalaryRevision.employee_id == employee_id)
+    if status:
+        stmt = stmt.where(SalaryRevision.status == status)
+    if reason:
+        stmt = stmt.where(SalaryRevision.reason == reason)
+    if from_date is not None:
+        stmt = stmt.where(SalaryRevision.effective_date >= from_date)
+    if to_date is not None:
+        stmt = stmt.where(SalaryRevision.effective_date <= to_date)
+    stmt = stmt.order_by(SalaryRevision.created_at.desc())
+    return (await db.execute(stmt)).scalars().all()
+
+
+async def update_revision(
+    db: AsyncSession, revision_id: int, *, payload: dict
+) -> SalaryRevision:
+    """Edit a draft / pending_approval revision. Approved / applied
+    revisions are immutable."""
+    rev = (
+        await db.execute(
+            select(SalaryRevision).where(SalaryRevision.id == revision_id)
+        )
+    ).scalar_one_or_none()
+    if not rev:
+        from app.core.exceptions import NotFoundError
+        raise NotFoundError("Revision not found")
+    if rev.status not in ("draft", "pending_approval"):
+        from app.core.exceptions import ValidationError
+        raise ValidationError(
+            f"Cannot edit a revision in '{rev.status}' state"
+        )
+    allowed = {
+        "new_ctc_annual", "effective_date", "reason", "notes",
+        "new_salary_template_id", "new_designation_id",
+    }
+    for k, v in payload.items():
+        if k in allowed and v is not None:
+            setattr(rev, k, v)
+    # Recompute increment_pct if new_ctc_annual changed.
+    if "new_ctc_annual" in payload and rev.previous_ctc_annual:
+        from decimal import Decimal as _D
+        prev = _D(str(rev.previous_ctc_annual))
+        new = _D(str(rev.new_ctc_annual))
+        if prev > 0:
+            rev.increment_pct = ((new - prev) / prev * _D("100")).quantize(_D("0.01"))
+    await db.commit()
+    await db.refresh(rev)
+    return rev

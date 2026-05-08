@@ -23,6 +23,19 @@ class SalaryRevisionRejectBody(BaseModel):
     reason: Optional[str] = None
 
 
+class SalaryRevisionUpdate(BaseModel):
+    new_ctc_annual: Optional[Decimal] = Field(default=None, gt=0)
+    effective_date: Optional[date] = None
+    reason: Optional[str] = Field(
+        default=None,
+        pattern="^(annual_review|promotion|market_correction|"
+        "retention|role_change|other)$",
+    )
+    notes: Optional[str] = None
+    new_salary_template_id: Optional[int] = None
+    new_designation_id: Optional[int] = None
+
+
 class SalaryRevisionOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: int

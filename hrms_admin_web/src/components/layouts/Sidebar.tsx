@@ -268,12 +268,6 @@ const SECTIONS: NavSection[] = [
         icon: CalendarDays,
       },
       {
-        label: "Performance Cycles",
-        to: "/performance/cycles",
-        icon: GoalIcon,
-        permission: "approval.act",
-      },
-      {
         label: "Director Dashboard",
         to: "/reports/dashboard",
         icon: LayoutDashboard,

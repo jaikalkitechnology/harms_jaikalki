@@ -229,6 +229,11 @@ class JobPosting(Base, TimestampMixin):
     is_internal_only: Mapped[bool] = mapped_column(
         Boolean, default=True, nullable=False
     )
+    # When True, mobile users can see this posting in the in-app job
+    # browser. Acts as the "publish to app" switch on the admin page.
+    published_to_app: Mapped[bool] = mapped_column(
+        Boolean, default=False, nullable=False
+    )
     posted_by: Mapped[Optional[int]] = mapped_column(
         ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
