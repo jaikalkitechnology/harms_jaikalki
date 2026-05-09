@@ -32,20 +32,24 @@ SHIFTS = [
 ]
 
 
-# (code, name, days/year, carry_forward, max_cf, requires_attachment_after_days)
+# (code, name, days/year, carry_forward, max_cf, requires_attachment_after_days,
+#  description, is_paid, applies_sandwich_rule)
 LEAVE_TYPES = [
     ("CL", "Casual Leave", Decimal("12"), False, Decimal("0"), 0,
-     "12 days/year. Resets each Jan."),
+     "12 days/year. Resets each Jan.", True, False),
     ("SL", "Sick Leave", Decimal("12"), False, Decimal("0"), 3,
-     "Doctor's note required for 3+ consecutive days."),
+     "Doctor's note required for 3+ consecutive days.", True, False),
     ("PL", "Privilege Leave", Decimal("18"), True, Decimal("30"), 0,
-     "Earned leave. Carries forward up to 30 days."),
+     "Earned leave. Carries forward up to 30 days.", True, False),
     ("ML", "Maternity Leave", Decimal("182"), False, Decimal("0"), 0,
-     "26 weeks per the Maternity Benefit Act."),
+     "26 weeks per the Maternity Benefit Act.", True, False),
     ("PTL", "Paternity Leave", Decimal("15"), False, Decimal("0"), 0,
-     "15 days within 6 months of childbirth."),
+     "15 days within 6 months of childbirth.", True, False),
     ("BL", "Bereavement Leave", Decimal("5"), False, Decimal("0"), 0,
-     "Up to 5 days for immediate family."),
+     "Up to 5 days for immediate family.", True, False),
+    ("LWP", "Leave Without Pay", Decimal("0"), False, Decimal("0"), 0,
+     "Unpaid leave. Sandwich rule applies — Sundays/holidays falling "
+     "between two LWP days are also unpaid.", False, True),
 ]
 
 
@@ -86,7 +90,7 @@ async def seed_leave_types(db: AsyncSession) -> dict[str, LeaveType]:
     existing = {
         t.code: t for t in (await db.execute(select(LeaveType))).scalars().all()
     }
-    for code, name, days, cf, max_cf, attach_after, desc in LEAVE_TYPES:
+    for code, name, days, cf, max_cf, attach_after, desc, is_paid, sandwich in LEAVE_TYPES:
         if code not in existing:
             t = LeaveType(
                 code=code,
@@ -97,10 +101,17 @@ async def seed_leave_types(db: AsyncSession) -> dict[str, LeaveType]:
                 encashable=False,
                 requires_attachment_after_days=attach_after,
                 description=desc,
+                is_paid=is_paid,
+                applies_sandwich_rule=sandwich,
                 is_active=True,
             )
             db.add(t)
             existing[code] = t
+        else:
+            # Keep paid/sandwich flags in sync if seed evolves.
+            t = existing[code]
+            t.is_paid = is_paid
+            t.applies_sandwich_rule = sandwich
     await db.flush()
     return existing
 

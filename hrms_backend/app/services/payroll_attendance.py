@@ -1,0 +1,221 @@
+"""Day-class breakdown for one employee, one calendar month.
+
+Drives Loss-Of-Pay scaling in `payroll_service.process_payroll`. Each
+day in the month gets exactly one of these classes (priority order):
+
+    holiday    — a Holiday row covers the date (any location).
+    week_off   — Sunday (Jaikalki convention; Saturday is a working day).
+    paid_leave — approved LeaveRequest of an `is_paid` LeaveType.
+    unpaid_leave — approved LeaveRequest of a non-paid type, OR a
+                   sandwich Sunday/holiday between two unpaid days
+                   when the leave type's `applies_sandwich_rule` is
+                   set. Sandwich days are also tallied separately.
+    present    — an Attendance row with status present/wfh/half_day.
+    absent     — anything left over (no attendance, no leave, on a
+                 working day).
+
+Outputs Decimal counters because half-day attendance contributes 0.5.
+
+Loss of Pay = days_unpaid_leave + days_absent.
+Paid days  = working_days - LOP.
+
+Sandwich rule (only applies to leave types flagged
+`applies_sandwich_rule`, and only ever pulls *non-working* days into
+LOP — actual working days that fall between two LWP days were already
+classified as LWP by the LeaveRequest itself):
+
+    LWP on Friday + LWP on Monday → the Saturday is a working day so
+    it'd be classified by attendance/absent; the Sunday in between is
+    a week-off but gets reclassified as unpaid_leave (sandwich).
+"""
+from __future__ import annotations
+
+from calendar import monthrange
+from dataclasses import dataclass, field
+from datetime import date, timedelta
+from decimal import Decimal
+from typing import Sequence
+
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.models import Attendance, Holiday, LeaveRequest, LeaveType
+
+
+@dataclass
+class AttendanceMonth:
+    year: int
+    month: int
+    working_days: Decimal = Decimal("0")
+    days_present: Decimal = Decimal("0")
+    days_paid_leave: Decimal = Decimal("0")
+    days_unpaid_leave: Decimal = Decimal("0")
+    days_absent: Decimal = Decimal("0")
+    days_holiday: Decimal = Decimal("0")
+    days_weekoff: Decimal = Decimal("0")
+    days_sandwich: Decimal = Decimal("0")
+
+    # Per-day class for debugging / payslip annotation.
+    by_date: dict[date, str] = field(default_factory=dict)
+
+    @property
+    def days_lop(self) -> Decimal:
+        return self.days_unpaid_leave + self.days_absent
+
+    @property
+    def days_paid(self) -> Decimal:
+        # Holidays + week-offs + present + paid leave + 0.5 of half-days
+        # are all paid. We count this as (working_days - LOP) because
+        # weekoffs/holidays don't enter the divisor either.
+        return self.working_days - self.days_lop
+
+
+def _is_sunday(d: date) -> bool:
+    # Mon=0 ... Sun=6. Jaikalki's standard week-off is Sunday only.
+    return d.weekday() == 6
+
+
+async def compute_attendance_month(
+    db: AsyncSession,
+    employee_id: int,
+    *,
+    year: int,
+    month: int,
+) -> AttendanceMonth:
+    days_in_month = monthrange(year, month)[1]
+    first = date(year, month, 1)
+    last = date(year, month, days_in_month)
+
+    # Holidays for the month — match by date (any location).
+    holidays: set[date] = {
+        h.date for h in (
+            await db.execute(
+                select(Holiday).where(Holiday.date >= first).where(Holiday.date <= last)
+            )
+        ).scalars().all()
+    }
+
+    # Approved leaves overlapping the month.
+    leaves: Sequence[LeaveRequest] = (
+        await db.execute(
+            select(LeaveRequest)
+            .where(LeaveRequest.employee_id == employee_id)
+            .where(LeaveRequest.status == "approved")
+            .where(LeaveRequest.from_date <= last)
+            .where(LeaveRequest.to_date >= first)
+        )
+    ).scalars().all()
+
+    # Map every leave-day in the month to (is_paid, applies_sandwich, half_day).
+    leave_day: dict[date, tuple[bool, bool, bool]] = {}
+    for lr in leaves:
+        lt: LeaveType = lr.leave_type
+        is_paid = bool(getattr(lt, "is_paid", True))
+        sandwich = bool(getattr(lt, "applies_sandwich_rule", False))
+        d = max(lr.from_date, first)
+        end = min(lr.to_date, last)
+        while d <= end:
+            # If a paid leave already claims the day, don't downgrade
+            # it to unpaid. Otherwise prefer the more-restrictive flag.
+            prior = leave_day.get(d)
+            if prior is None or (prior[0] and not is_paid):
+                leave_day[d] = (is_paid, sandwich, bool(lr.half_day))
+            d = d + timedelta(days=1)
+
+    # Apply sandwich rule: walk across the month and flip any
+    # week-off/holiday flanked by unpaid leave with applies_sandwich
+    # into an unpaid-leave (sandwich) day.
+    sandwich_days: set[date] = set()
+    for i in range(days_in_month):
+        d = first + timedelta(days=i)
+        if d in leave_day:
+            continue
+        if not (_is_sunday(d) or d in holidays):
+            continue
+        # Look back for the nearest non-off-non-holiday day.
+        prev = d - timedelta(days=1)
+        while prev >= first and (_is_sunday(prev) or prev in holidays):
+            prev -= timedelta(days=1)
+        # Look forward similarly.
+        nxt = d + timedelta(days=1)
+        while nxt <= last and (_is_sunday(nxt) or nxt in holidays):
+            nxt += timedelta(days=1)
+        if prev < first or nxt > last:
+            # Bracket runs off the month edge — skip; sandwich only
+            # applies when both flanks are inside the period.
+            continue
+        prev_l = leave_day.get(prev)
+        nxt_l = leave_day.get(nxt)
+        if (
+            prev_l and not prev_l[0] and prev_l[1]
+            and nxt_l and not nxt_l[0] and nxt_l[1]
+        ):
+            sandwich_days.add(d)
+
+    # Attendance rows for the month.
+    att_by_date: dict[date, Attendance] = {
+        a.date: a
+        for a in (
+            await db.execute(
+                select(Attendance)
+                .where(Attendance.employee_id == employee_id)
+                .where(Attendance.date >= first)
+                .where(Attendance.date <= last)
+            )
+        ).scalars().all()
+    }
+
+    out = AttendanceMonth(year=year, month=month)
+
+    for i in range(days_in_month):
+        d = first + timedelta(days=i)
+        is_holiday = d in holidays
+        is_weekoff = _is_sunday(d)
+        leave_info = leave_day.get(d)
+        is_sandwich = d in sandwich_days
+
+        if leave_info is not None:
+            is_paid, _, half = leave_info
+            inc = Decimal("0.5") if half else Decimal("1")
+            if is_paid:
+                out.days_paid_leave += inc
+                out.by_date[d] = "paid_leave"
+            else:
+                out.days_unpaid_leave += inc
+                out.by_date[d] = "unpaid_leave"
+            # Working-days denominator excludes holidays/week-offs;
+            # everything else (incl. paid leave / unpaid leave) counts.
+            if not (is_holiday or is_weekoff):
+                out.working_days += Decimal("1")
+            continue
+
+        if is_sandwich:
+            out.days_unpaid_leave += Decimal("1")
+            out.days_sandwich += Decimal("1")
+            out.working_days += Decimal("1")
+            out.by_date[d] = "unpaid_leave_sandwich"
+            continue
+
+        if is_holiday:
+            out.days_holiday += Decimal("1")
+            out.by_date[d] = "holiday"
+            continue
+        if is_weekoff:
+            out.days_weekoff += Decimal("1")
+            out.by_date[d] = "week_off"
+            continue
+
+        out.working_days += Decimal("1")
+        att = att_by_date.get(d)
+        if att and att.status in ("present", "wfh"):
+            out.days_present += Decimal("1")
+            out.by_date[d] = "present"
+        elif att and att.status == "half_day":
+            out.days_present += Decimal("0.5")
+            out.days_absent += Decimal("0.5")
+            out.by_date[d] = "half_day"
+        else:
+            out.days_absent += Decimal("1")
+            out.by_date[d] = "absent"
+
+    return out

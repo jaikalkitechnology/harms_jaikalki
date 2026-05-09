@@ -37,6 +37,13 @@ export interface Payslip {
   days_paid: string;
   days_lop: string;
   working_days: string;
+  days_present: string;
+  days_paid_leave: string;
+  days_unpaid_leave: string;
+  days_absent: string;
+  days_holiday: string;
+  days_weekoff: string;
+  days_sandwich: string;
   pdf_url: string | null;
 }
 

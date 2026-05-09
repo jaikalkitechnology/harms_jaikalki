@@ -37,6 +37,16 @@ class LeaveType(Base, TimestampMixin):
     requires_attachment_after_days: Mapped[int] = mapped_column(
         Integer, default=0, nullable=False
     )
+    # Paid leaves count toward `days_paid` in payroll. Unpaid leave (LWP)
+    # is counted as Loss-Of-Pay so the gross is scaled down accordingly.
+    is_paid: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    # When true, intervening Sundays/holidays sandwiched between two
+    # leave days of this type are also counted as leave. The classic
+    # case: Friday + Monday LWP → Saturday (off-day at Jaikalki is Sun
+    # only, so Sat is a working day already), Sunday between → also LWP.
+    applies_sandwich_rule: Mapped[bool] = mapped_column(
+        Boolean, default=False, nullable=False
+    )
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 

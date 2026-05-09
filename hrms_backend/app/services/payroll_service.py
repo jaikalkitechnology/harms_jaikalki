@@ -1,8 +1,7 @@
 """Payroll engine: bulk-process monthly payroll, generate payslips."""
 from __future__ import annotations
 
-from calendar import monthrange
-from datetime import date, datetime, timezone
+from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Optional, Sequence
 
@@ -15,14 +14,13 @@ from app.core.exceptions import (
     ValidationError,
 )
 from app.models import (
-    Attendance,
     Employee,
-    EmployeeCategory,
     PayrollRun,
     Payslip,
     Reimbursement,
     User,
 )
+from app.services.payroll_attendance import compute_attendance_month
 from app.services.salary_calculator import JaikalkiSalaryCalculator
 
 
@@ -91,7 +89,6 @@ async def process_payroll(
 
     calc = JaikalkiSalaryCalculator()
 
-    days_in_month = monthrange(year, month)[1]
     total_gross = Decimal("0")
     total_net = Decimal("0")
     total_employer = Decimal("0")
@@ -111,19 +108,15 @@ async def process_payroll(
             employee=emp,
         ).as_dict()
 
-        # Loss of pay: count attendance present + leave + holiday days
-        # for this month; LOP = working days - paid days.
-        first = date(year, month, 1)
-        last = date(year, month, days_in_month)
-        att_days, lop_days = await _attendance_summary_days(
-            db, emp.id, first=first, last=last
+        # Per-day class breakdown: holidays + Sundays drop out of the
+        # divisor; LOP = unpaid leave (incl. sandwich days) + absent.
+        # Paid leave keeps the day's gross intact.
+        att = await compute_attendance_month(
+            db, emp.id, year=year, month=month
         )
-        # Simple LOP scaling on the gross.
-        working = Decimal(days_in_month)
-        paid = max(Decimal("0"), working - Decimal(lop_days))
-        # Don't penalise weekends — Jaikalki's convention is that
-        # the calendar month is the divisor, and only unauthorized
-        # absence (status='absent' on a non-Sunday non-holiday) counts.
+        working = att.working_days
+        lop = att.days_lop
+        paid = att.days_paid
         scaling = paid / working if working > 0 else Decimal("0")
 
         gross = (Decimal(breakup["gross"]) * scaling).quantize(Decimal("1"))
@@ -171,8 +164,15 @@ async def process_payroll(
             pf_employer=pf_er,
             esic_employer=esic_er,
             days_paid=paid,
-            days_lop=Decimal(lop_days),
+            days_lop=lop,
             working_days=working,
+            days_present=att.days_present,
+            days_paid_leave=att.days_paid_leave,
+            days_unpaid_leave=att.days_unpaid_leave,
+            days_absent=att.days_absent,
+            days_holiday=att.days_holiday,
+            days_weekoff=att.days_weekoff,
+            days_sandwich=att.days_sandwich,
         )
         db.add(ps)
         await db.flush()
@@ -199,34 +199,6 @@ async def process_payroll(
     await db.commit()
     await db.refresh(run)
     return run
-
-
-async def _attendance_summary_days(
-    db: AsyncSession,
-    employee_id: int,
-    *,
-    first: date,
-    last: date,
-) -> tuple[int, int]:
-    """Return (paid_days, lop_days) for the employee in the month."""
-    rows = (
-        await db.execute(
-            select(Attendance)
-            .where(Attendance.employee_id == employee_id)
-            .where(Attendance.date >= first)
-            .where(Attendance.date <= last)
-        )
-    ).scalars().all()
-    paid = 0
-    lop = 0
-    for a in rows:
-        if a.status in ("present", "wfh", "leave", "holiday"):
-            paid += 1
-        elif a.status == "half_day":
-            paid += 1  # half-day handled by gross scaling later if desired
-        elif a.status == "absent":
-            lop += 1
-    return paid, lop
 
 
 async def finalize_run(
