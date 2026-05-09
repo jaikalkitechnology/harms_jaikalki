@@ -48,7 +48,7 @@ import asyncio
 import re
 import sys
 from collections import defaultdict
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 from pathlib import Path
 from typing import Optional
@@ -92,6 +92,18 @@ def _resolve_workbook_path() -> Path:
 XLSX_PATH = _resolve_workbook_path()
 
 _DEMO_EMPLOYEE_CODES = {"JKT014", "JKT015", "JKT016", "JKT017", "JKT018"}
+
+# All HR audit timestamps written by this seed are anchored in IST so
+# the values read naturally on the admin web. The rest of the stack
+# stores UTC and converts to IST at display time; for hand-curated
+# seed data the wall-clock value is more useful directly.
+_IST = timezone(timedelta(hours=5, minutes=30))
+
+
+def _now_ist() -> datetime:
+    """Naive IST datetime — strips tzinfo so MySQL DATETIME columns
+    (which don't carry timezones) round-trip cleanly."""
+    return datetime.now(_IST).replace(tzinfo=None)
 
 # Map sheet name → (year, month). Sheet names are like "Jan '25" / "Apr '26".
 _MONTH_NAMES = {
@@ -584,7 +596,7 @@ async def _resign(
                 reason=reason,
                 status="cleared",
                 notice_period_days=0,
-                hr_cleared_at=datetime.utcnow(),
+                hr_cleared_at=_now_ist(),
             )
         )
     else:
@@ -592,7 +604,7 @@ async def _resign(
         existing.proposed_last_working_day = exit_date
         existing.status = "cleared"
         if not existing.hr_cleared_at:
-            existing.hr_cleared_at = datetime.utcnow()
+            existing.hr_cleared_at = _now_ist()
         if not existing.reason:
             existing.reason = reason
 
