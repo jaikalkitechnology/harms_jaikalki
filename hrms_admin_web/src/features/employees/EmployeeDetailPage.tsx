@@ -783,6 +783,7 @@ interface EmployeeEditDraft {
   designation_id: string;
   salary_template_id: string;
   reporting_to: string;
+  ctc_annual: string;
 }
 
 function EditEmployeeModal({
@@ -828,6 +829,7 @@ function EditEmployeeModal({
       ? String(employee.salary_template.id)
       : "",
     reporting_to: employee.reporting_to ? String(employee.reporting_to) : "",
+    ctc_annual: employee.ctc_annual ?? "",
   });
 
   const update = useMutation({
@@ -849,6 +851,10 @@ function EditEmployeeModal({
           ? Number(draft.salary_template_id)
           : null,
         reporting_to: draft.reporting_to ? Number(draft.reporting_to) : null,
+        ctc_annual:
+          draft.ctc_annual === "" || draft.ctc_annual === null
+            ? null
+            : Number(draft.ctc_annual),
       } as never),
     onSuccess: () => {
       toast.success("Employee updated");
@@ -1062,6 +1068,23 @@ function EditEmployeeModal({
                   </option>
                 ))}
             </select>
+          </div>
+          <div className="md:col-span-2">
+            <Label>CTC (annual ₹)</Label>
+            <Input
+              type="number"
+              min={0}
+              step={1}
+              value={draft.ctc_annual}
+              onChange={(e) =>
+                setDraft({ ...draft, ctc_annual: e.target.value })
+              }
+            />
+            <p className="text-xs text-brand-brown-light mt-1">
+              Direct edit — for typos or backfilling old data. For raises
+              and increments use <strong>New revision</strong> below so the
+              change shows up in compensation history.
+            </p>
           </div>
           <div className="md:col-span-2 flex justify-end gap-2">
             <Button variant="outline" onClick={onClose}>
