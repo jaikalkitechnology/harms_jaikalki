@@ -38,6 +38,7 @@ import {
   salaryTemplatesApi,
   type SalaryBreakup,
 } from "@/lib/api/employees";
+import { compensationApi, type SalaryRevision } from "@/lib/api/compensation";
 import { payrollApi, type GeneratedDocument } from "@/lib/api/payroll";
 import { launchApi } from "@/lib/api/launch";
 import { CategoryBadge } from "./CategoryBadge";
@@ -264,6 +265,10 @@ export default function EmployeeDetailPage() {
               )}
             </CardContent>
           </Card>
+        </PermissionGate>
+
+        <PermissionGate permission="salary.view.team">
+          <CompensationHistoryCard employee={employee} />
         </PermissionGate>
 
         <PermissionGate permission="salary.view.team">
@@ -774,6 +779,10 @@ interface EmployeeEditDraft {
   blood_group: string;
   work_location: string;
   work_mode: string;
+  department_id: string;
+  designation_id: string;
+  salary_template_id: string;
+  reporting_to: string;
 }
 
 function EditEmployeeModal({
@@ -785,6 +794,23 @@ function EditEmployeeModal({
   onClose: () => void;
   onSaved: () => void;
 }) {
+  const { data: departments = [] } = useQuery({
+    queryKey: ["departments"],
+    queryFn: () => import("@/lib/api/employees").then((m) => m.lookupsApi.departments()),
+  });
+  const { data: designations = [] } = useQuery({
+    queryKey: ["designations"],
+    queryFn: () => import("@/lib/api/employees").then((m) => m.lookupsApi.designations()),
+  });
+  const { data: templates = [] } = useQuery({
+    queryKey: ["salary-templates"],
+    queryFn: () => salaryTemplatesApi.list(),
+  });
+  const { data: managers = [] } = useQuery({
+    queryKey: ["employees-as-managers"],
+    queryFn: () => employeesApi.list(),
+  });
+
   const [draft, setDraft] = useState<EmployeeEditDraft>({
     first_name: employee.first_name,
     last_name: employee.last_name,
@@ -796,6 +822,12 @@ function EditEmployeeModal({
     blood_group: employee.blood_group ?? "",
     work_location: employee.work_location ?? "",
     work_mode: employee.work_mode ?? "",
+    department_id: employee.department?.id ? String(employee.department.id) : "",
+    designation_id: employee.designation?.id ? String(employee.designation.id) : "",
+    salary_template_id: employee.salary_template?.id
+      ? String(employee.salary_template.id)
+      : "",
+    reporting_to: employee.reporting_to ? String(employee.reporting_to) : "",
   });
 
   const update = useMutation({
@@ -811,7 +843,13 @@ function EditEmployeeModal({
         blood_group: draft.blood_group || null,
         work_location: draft.work_location || undefined,
         work_mode: draft.work_mode || undefined,
-      }),
+        department_id: draft.department_id ? Number(draft.department_id) : null,
+        designation_id: draft.designation_id ? Number(draft.designation_id) : null,
+        salary_template_id: draft.salary_template_id
+          ? Number(draft.salary_template_id)
+          : null,
+        reporting_to: draft.reporting_to ? Number(draft.reporting_to) : null,
+      } as never),
     onSuccess: () => {
       toast.success("Employee updated");
       onSaved();
@@ -831,8 +869,9 @@ function EditEmployeeModal({
           <div>
             <CardTitle>Edit employee</CardTitle>
             <CardDescription>
-              Editable details. Department / designation / salary changes go
-              through the Salary Revisions flow.
+              Personal details, department, designation and salary
+              template are editable here. Salary CTC changes are tracked
+              separately under Compensation history below.
             </CardDescription>
           </div>
           <Button variant="ghost" size="sm" onClick={onClose}>
@@ -949,6 +988,79 @@ function EditEmployeeModal({
               <option value="hybrid">Hybrid</option>
               <option value="remote">Remote</option>
               <option value="field">Field</option>
+            </select>
+          </div>
+          <div className="md:col-span-2 mt-2 text-[10px] font-mono uppercase tracking-[0.3em] text-brand-gold-dark">
+            ★ Org placement
+          </div>
+          <div>
+            <Label>Department</Label>
+            <select
+              value={draft.department_id}
+              onChange={(e) =>
+                setDraft({ ...draft, department_id: e.target.value })
+              }
+              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+            >
+              <option value="">—</option>
+              {departments.map((d) => (
+                <option key={d.id} value={d.id}>
+                  {d.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <Label>Designation</Label>
+            <select
+              value={draft.designation_id}
+              onChange={(e) =>
+                setDraft({ ...draft, designation_id: e.target.value })
+              }
+              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+            >
+              <option value="">—</option>
+              {designations.map((d) => (
+                <option key={d.id} value={d.id}>
+                  {d.name} (L{d.level})
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <Label>Salary template</Label>
+            <select
+              value={draft.salary_template_id}
+              onChange={(e) =>
+                setDraft({ ...draft, salary_template_id: e.target.value })
+              }
+              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+            >
+              <option value="">—</option>
+              {templates.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.template_code} · {t.template_name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <Label>Reports to</Label>
+            <select
+              value={draft.reporting_to}
+              onChange={(e) =>
+                setDraft({ ...draft, reporting_to: e.target.value })
+              }
+              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+            >
+              <option value="">—</option>
+              {managers
+                .filter((m) => m.id !== employee.id)
+                .map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.employee_code} · {m.first_name} {m.last_name}
+                  </option>
+                ))}
             </select>
           </div>
           <div className="md:col-span-2 flex justify-end gap-2">
@@ -1169,6 +1281,380 @@ function CredentialModal({
               </div>
             </div>
           )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+const REVISION_REASONS = [
+  { value: "annual_review", label: "Annual review" },
+  { value: "promotion", label: "Promotion" },
+  { value: "market_correction", label: "Market correction" },
+  { value: "retention", label: "Retention" },
+  { value: "role_change", label: "Role change" },
+  { value: "other", label: "Other" },
+];
+
+const REVISION_STATUS_TONE: Record<string, string> = {
+  draft: "bg-brand-brown-50 text-brand-brown-darker",
+  pending_approval: "bg-info/15 text-info",
+  approved: "bg-brand-gold/15 text-brand-gold-dark",
+  applied: "bg-success/15 text-success",
+  rejected: "bg-error/15 text-error",
+  cancelled: "bg-brand-brown-50 text-brand-brown-light",
+};
+
+function CompensationHistoryCard({
+  employee,
+}: {
+  employee: import("@/lib/api/employees").EmployeeDetail;
+}) {
+  const qc = useQueryClient();
+  const [proposeOpen, setProposeOpen] = useState(false);
+
+  const { data: revisions = [] } = useQuery({
+    queryKey: ["compensation-revisions", employee.id],
+    queryFn: () => compensationApi.forEmployee(employee.id),
+  });
+
+  const sorted = [...revisions].sort((a, b) =>
+    a.effective_date < b.effective_date ? 1 : -1,
+  );
+  const applied = sorted.filter((r) => r.status === "applied");
+  const inFlight = sorted.filter(
+    (r) =>
+      r.status !== "applied" &&
+      r.status !== "rejected" &&
+      r.status !== "cancelled",
+  );
+
+  const activeCtc = Number(employee.ctc_annual);
+  const previousCtc =
+    applied.length > 0 ? Number(applied[0].previous_ctc_annual) : null;
+
+  const inr = (n: number) => `₹${n.toLocaleString("en-IN")}`;
+
+  return (
+    <Card className="lg:col-span-2">
+      <CardHeader className="flex flex-row items-center justify-between">
+        <div>
+          <CardTitle>
+            Compensation <span className="display-em">history</span>
+          </CardTitle>
+          <CardDescription>
+            Active CTC plus every salary revision applied to this employee.
+            New revisions create an auditable record (old vs new CTC,
+            increment %, reason, effective date).
+          </CardDescription>
+        </div>
+        <Button onClick={() => setProposeOpen(true)} className="gap-2">
+          <Pencil className="size-4" />
+          New revision
+        </Button>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="grid sm:grid-cols-3 gap-3">
+          <CompStat
+            label="Active CTC"
+            value={inr(activeCtc)}
+            sub={`per year`}
+            tone="gold"
+          />
+          <CompStat
+            label={previousCtc !== null ? "Previous CTC" : "Joining CTC"}
+            value={
+              previousCtc !== null ? inr(previousCtc) : inr(activeCtc)
+            }
+            sub={
+              previousCtc !== null
+                ? `before ${applied[0]?.effective_date ?? ""}`
+                : `no revision yet`
+            }
+          />
+          <CompStat
+            label="Total revisions"
+            value={String(applied.length)}
+            sub={
+              inFlight.length
+                ? `${inFlight.length} in progress`
+                : "all applied"
+            }
+          />
+        </div>
+
+        {sorted.length === 0 ? (
+          <p className="text-sm text-brand-brown-light">
+            No salary revisions on record yet.
+          </p>
+        ) : (
+          <div className="rounded-xl border border-brand-brown-100 overflow-hidden">
+            <table className="w-full text-sm">
+              <thead className="bg-brand-brown-50/60">
+                <tr>
+                  {[
+                    "Effective",
+                    "Old CTC",
+                    "New CTC",
+                    "Increment",
+                    "Reason",
+                    "Status",
+                  ].map((h) => (
+                    <th
+                      key={h}
+                      className="text-left px-3 py-2 text-[10px] font-mono uppercase tracking-[0.2em] text-brand-brown-light"
+                    >
+                      {h}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {sorted.map((r) => (
+                  <RevisionRow key={r.id} rev={r} />
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </CardContent>
+
+      {proposeOpen && (
+        <ProposeRevisionModal
+          employee={employee}
+          onClose={() => setProposeOpen(false)}
+          onDone={() => {
+            setProposeOpen(false);
+            qc.invalidateQueries({
+              queryKey: ["compensation-revisions", employee.id],
+            });
+            qc.invalidateQueries({ queryKey: ["employee", employee.id] });
+            qc.invalidateQueries({ queryKey: ["salary-breakup"] });
+          }}
+        />
+      )}
+    </Card>
+  );
+}
+
+function CompStat({
+  label,
+  value,
+  sub,
+  tone = "muted",
+}: {
+  label: string;
+  value: string;
+  sub?: string;
+  tone?: "muted" | "gold";
+}) {
+  const valueCls =
+    tone === "gold" ? "text-brand-gold-dark" : "text-brand-brown-darker";
+  return (
+    <div className="rounded-md border border-brand-brown-100 p-3">
+      <div className="text-[10px] font-mono uppercase tracking-[0.2em] text-brand-brown-light">
+        {label}
+      </div>
+      <div className={`text-xl font-semibold ${valueCls}`}>{value}</div>
+      {sub && (
+        <div className="text-xs text-brand-brown-light mt-0.5">{sub}</div>
+      )}
+    </div>
+  );
+}
+
+function RevisionRow({ rev }: { rev: SalaryRevision }) {
+  const inr = (n: number) => `₹${n.toLocaleString("en-IN")}`;
+  const old = Number(rev.previous_ctc_annual);
+  const neu = Number(rev.new_ctc_annual);
+  const pct = Number(rev.increment_pct);
+  const tone =
+    REVISION_STATUS_TONE[rev.status] ??
+    "bg-brand-brown-50 text-brand-brown-darker";
+  return (
+    <tr className="border-t border-brand-brown-100/60">
+      <td className="px-3 py-2 font-mono text-xs">{rev.effective_date}</td>
+      <td className="px-3 py-2">{inr(old)}</td>
+      <td className="px-3 py-2 font-medium text-brand-gold-dark">
+        {inr(neu)}
+      </td>
+      <td
+        className={`px-3 py-2 text-xs ${pct >= 0 ? "text-success" : "text-error"}`}
+      >
+        {pct >= 0 ? "+" : ""}
+        {pct.toFixed(2)}%
+      </td>
+      <td className="px-3 py-2 text-xs text-brand-brown-light capitalize">
+        {rev.reason.replace("_", " ")}
+      </td>
+      <td className="px-3 py-2">
+        <span
+          className={`text-[10px] font-mono uppercase tracking-[0.2em] px-2 py-1 rounded ${tone}`}
+        >
+          {rev.status.replace("_", " ")}
+        </span>
+      </td>
+    </tr>
+  );
+}
+
+function ProposeRevisionModal({
+  employee,
+  onClose,
+  onDone,
+}: {
+  employee: import("@/lib/api/employees").EmployeeDetail;
+  onClose: () => void;
+  onDone: () => void;
+}) {
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const [newCtc, setNewCtc] = useState<string>(String(employee.ctc_annual));
+  const [effective, setEffective] = useState<string>(todayStr);
+  const [reason, setReason] = useState("annual_review");
+  const [notes, setNotes] = useState("");
+  const [autoApply, setAutoApply] = useState(true);
+
+  const oldCtc = Number(employee.ctc_annual);
+  const newCtcNum = Number(newCtc);
+  const pct = oldCtc > 0 ? ((newCtcNum - oldCtc) / oldCtc) * 100 : 0;
+
+  const submit = useMutation({
+    mutationFn: async () => {
+      const proposed = await compensationApi.propose({
+        employee_id: employee.id,
+        new_ctc_annual: newCtcNum,
+        effective_date: effective,
+        reason,
+        notes: notes || undefined,
+      });
+      if (autoApply) {
+        try {
+          await compensationApi.approve(proposed.id);
+        } catch {
+          /* some flows auto-approve on propose */
+        }
+        await compensationApi.apply(proposed.id);
+      }
+      return proposed;
+    },
+    onSuccess: () => {
+      toast.success(
+        autoApply
+          ? "Salary revision applied"
+          : "Salary revision saved as draft",
+      );
+      onDone();
+    },
+    onError: (e: unknown) => {
+      const detail =
+        (e as { response?: { data?: { detail?: string } } })?.response?.data
+          ?.detail ?? "Could not save revision";
+      toast.error(detail);
+    },
+  });
+
+  const valid =
+    newCtcNum > 0 &&
+    Number.isFinite(newCtcNum) &&
+    newCtcNum !== oldCtc &&
+    !!effective;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+      <Card className="w-full max-w-xl">
+        <CardHeader className="flex flex-row items-center justify-between">
+          <div>
+            <CardTitle>New salary revision</CardTitle>
+            <CardDescription>
+              {employee.first_name} {employee.last_name} ·{" "}
+              <code>{employee.employee_code}</code>
+            </CardDescription>
+          </div>
+          <Button variant="ghost" size="sm" onClick={onClose}>
+            <X className="size-4" />
+          </Button>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label>Old CTC (₹/yr)</Label>
+              <Input value={oldCtc.toLocaleString("en-IN")} disabled />
+            </div>
+            <div>
+              <Label>New CTC (₹/yr) *</Label>
+              <Input
+                type="number"
+                min={0}
+                value={newCtc}
+                onChange={(e) => setNewCtc(e.target.value)}
+              />
+            </div>
+          </div>
+          {newCtcNum > 0 && oldCtc > 0 && newCtcNum !== oldCtc && (
+            <div
+              className={`text-xs font-mono ${pct >= 0 ? "text-success" : "text-error"}`}
+            >
+              Change: {pct >= 0 ? "+" : ""}
+              {pct.toFixed(2)}% · ₹
+              {(newCtcNum - oldCtc).toLocaleString("en-IN")} per year
+            </div>
+          )}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label>Effective date *</Label>
+              <Input
+                type="date"
+                value={effective}
+                onChange={(e) => setEffective(e.target.value)}
+              />
+            </div>
+            <div>
+              <Label>Reason</Label>
+              <select
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+              >
+                {REVISION_REASONS.map((r) => (
+                  <option key={r.value} value={r.value}>
+                    {r.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+          <div>
+            <Label>Notes</Label>
+            <Input
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="Optional context"
+            />
+          </div>
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              className="accent-brand-gold-dark"
+              checked={autoApply}
+              onChange={(e) => setAutoApply(e.target.checked)}
+            />
+            Apply immediately (skip approval queue)
+          </label>
+          <div className="flex justify-end gap-2 pt-2">
+            <Button variant="outline" onClick={onClose}>
+              Cancel
+            </Button>
+            <Button
+              disabled={!valid || submit.isPending}
+              onClick={() => submit.mutate()}
+            >
+              {submit.isPending
+                ? "Saving…"
+                : autoApply
+                  ? "Apply revision"
+                  : "Save draft"}
+            </Button>
+          </div>
         </CardContent>
       </Card>
     </div>
