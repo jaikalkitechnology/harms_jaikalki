@@ -141,15 +141,67 @@ class JaikalkiSalaryCalculator:
         lta = Decimal(t.lta or 0)
         food = Decimal(t.food_coupon or 0)
 
-        # If CTC override is provided AND template has zero explicit components,
-        # back-fill via Jaikalki ratios (66.78 / 22.56 / 2.26) from gross.
-        if ctc_annual and basic == 0 and hra == 0 and other == 0:
+        # Hybrid back-fill: when basic+HRA aren't hard-coded on the
+        # template (the typical "structure-only" template), derive them
+        # from the employee's CTC. The fixed allowances on the template
+        # (other / special / medical / etc.) layer on top so the gross =
+        # ratio-derived(basic+hra) + fixed extras.
+        #
+        # We fire whenever both basic_amount and hra_amount are zero —
+        # not also other_allowance — because mixing fixed-rupee adders
+        # with ratio-driven basic/HRA is the common case (a small
+        # special allowance or medical adder while basic still scales
+        # with CTC).
+        if ctc_annual and basic == 0 and hra == 0:
             ctc_monthly = Decimal(ctc_annual) / Decimal(12)
-            # CTC ≈ Gross × 1.13 (employer PF+ESIC) → reverse it.
-            gross_est = ctc_monthly / Decimal("1.13")
-            basic = (gross_est * Decimal("0.6678")).quantize(Decimal("1"))
-            hra = (gross_est * Decimal("0.2256")).quantize(Decimal("1"))
-            other = (gross_est * Decimal("0.0226")).quantize(Decimal("1"))
+            # Prefer the template's own percentages (default 50% basic,
+            # 30% HRA-of-basic per the model defaults). Fall back to the
+            # legacy Jaikalki ratios if both are zero on the template.
+            basic_pct = Decimal(t.basic_percentage or 0) / Decimal(100)
+            hra_pct = Decimal(t.hra_percentage or 0) / Decimal(100)
+            if basic_pct > 0:
+                basic = (ctc_monthly * basic_pct).quantize(Decimal("1"))
+                hra = (basic * hra_pct).quantize(Decimal("1"))
+            else:
+                # Legacy Jaikalki ratios from the gross side.
+                gross_est = ctc_monthly / Decimal("1.13")
+                basic = (gross_est * Decimal("0.6678")).quantize(Decimal("1"))
+                hra = (gross_est * Decimal("0.2256")).quantize(Decimal("1"))
+                # Only overwrite `other` when the template didn't pin a
+                # fixed value — preserves the user's intent.
+                if other == 0:
+                    other = (gross_est * Decimal("0.0226")).quantize(Decimal("1"))
+
+            # Pad `special_allowance` so the resulting CTC matches the
+            # employee's configured ctc_annual exactly. Iterate up to
+            # six times so the employer-side ESIC threshold can flip
+            # mid-convergence without leaving a residual gap. The loop
+            # is allowed to shrink `special` too — bumping past the
+            # ESIC threshold can over-correct on the first pass.
+            initial_special = special
+            for _ in range(6):
+                gross_try = (
+                    basic + hra + other + special + conveyance
+                    + medical + lta + food
+                )
+                pf_basic_try = min(basic, PF_BASIC_CAP)
+                pf_er_try = pf_basic_try * PF_EMPLOYER_RATE
+                if gross_try <= ESIC_GROSS_THRESHOLD:
+                    esic_er_try = gross_try * ESIC_EMPLOYER_RATE
+                else:
+                    esic_er_try = Decimal(0)
+                ctc_try = gross_try + pf_er_try + esic_er_try
+                gap = ctc_monthly - ctc_try
+                if abs(gap) < Decimal("1"):
+                    break
+                # Adjust special by the gap. Don't shrink below the
+                # template's own initial special_allowance — the template
+                # author put it there for a reason.
+                new_special = (special + gap).quantize(Decimal("1"))
+                if new_special < initial_special:
+                    special = initial_special
+                    break
+                special = new_special
 
         gross = basic + hra + other + special + conveyance + medical + lta + food
 
