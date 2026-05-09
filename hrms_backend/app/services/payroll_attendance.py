@@ -176,17 +176,36 @@ async def compute_attendance_month(
 
         if leave_info is not None:
             is_paid, _, half = leave_info
-            inc = Decimal("0.5") if half else Decimal("1")
-            if is_paid:
-                out.days_paid_leave += inc
-                out.by_date[d] = "paid_leave"
-            else:
-                out.days_unpaid_leave += inc
-                out.by_date[d] = "unpaid_leave"
-            # Working-days denominator excludes holidays/week-offs;
-            # everything else (incl. paid leave / unpaid leave) counts.
             if not (is_holiday or is_weekoff):
                 out.working_days += Decimal("1")
+            if not half:
+                if is_paid:
+                    out.days_paid_leave += Decimal("1")
+                    out.by_date[d] = "paid_leave"
+                else:
+                    out.days_unpaid_leave += Decimal("1")
+                    out.by_date[d] = "unpaid_leave"
+                continue
+            # Half-day leave: the other 0.5 of the day comes from
+            # attendance (present/wfh ⇒ paid; otherwise ⇒ absent).
+            half_inc = Decimal("0.5")
+            if is_paid:
+                out.days_paid_leave += half_inc
+            else:
+                out.days_unpaid_leave += half_inc
+            att = att_by_date.get(d)
+            if att and att.status in ("present", "wfh"):
+                out.days_present += half_inc
+                out.by_date[d] = (
+                    "paid_leave_half+present" if is_paid
+                    else "unpaid_leave_half+present"
+                )
+            else:
+                out.days_absent += half_inc
+                out.by_date[d] = (
+                    "paid_leave_half+absent" if is_paid
+                    else "unpaid_leave_half+absent"
+                )
             continue
 
         if is_sandwich:
