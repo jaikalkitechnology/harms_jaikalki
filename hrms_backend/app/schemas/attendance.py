@@ -107,3 +107,18 @@ class RegularizationOut(BaseModel):
     approved_at: Optional[datetime]
     decision_comment: Optional[str]
     created_at: datetime
+
+
+class AttendanceUploadRowError(BaseModel):
+    row: int
+    employee_code: Optional[str] = None
+    date: Optional[str] = None
+    error: str
+
+
+class AttendanceUploadResult(BaseModel):
+    rows_total: int
+    rows_imported: int
+    rows_updated: int
+    rows_skipped: int
+    errors: List[AttendanceUploadRowError]

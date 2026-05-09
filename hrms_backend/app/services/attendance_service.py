@@ -382,6 +382,185 @@ async def approve_regularization(
     return reg
 
 
+# ── Bulk import / CSV upload ────────────────────────────────────────────
+_VALID_STATUS = {"present", "absent", "half_day", "wfh", "leave", "holiday"}
+_VALID_WORK_MODE = {"office", "wfh", "hybrid", "field"}
+
+
+def _parse_date(raw: str) -> date:
+    raw = raw.strip()
+    for fmt in ("%Y-%m-%d", "%d/%m/%Y", "%d-%m-%Y", "%m/%d/%Y"):
+        try:
+            return datetime.strptime(raw, fmt).date()
+        except ValueError:
+            continue
+    raise ValueError(f"Unrecognised date '{raw}' (use YYYY-MM-DD)")
+
+
+def _parse_dt(raw: Optional[str], on: date) -> Optional[datetime]:
+    """Accept either a full ISO timestamp or a HH:MM(:SS) — combined with `on`."""
+    if not raw:
+        return None
+    raw = raw.strip()
+    if not raw:
+        return None
+    # Full timestamp first.
+    try:
+        return datetime.fromisoformat(raw.replace("Z", "+00:00")).replace(tzinfo=None)
+    except ValueError:
+        pass
+    # Time-only.
+    for fmt in ("%H:%M:%S", "%H:%M", "%I:%M %p", "%I:%M:%S %p"):
+        try:
+            t = datetime.strptime(raw, fmt).time()
+            return datetime.combine(on, t)
+        except ValueError:
+            continue
+    raise ValueError(f"Unrecognised time '{raw}' (use HH:MM or ISO 8601)")
+
+
+async def bulk_import(
+    db: AsyncSession,
+    rows: list[dict],
+) -> dict:
+    """Upsert Attendance from a list of pre-parsed dict rows.
+
+    Each row must include `employee_code` and `date`. Optional:
+    `status`, `check_in`, `check_out`, `work_mode`, `notes`.
+
+    Status defaults to `present` when check_in is set, else `absent`.
+    work_mode defaults to `office`. Existing (employee, date) rows are
+    *updated* in place and counted as `rows_updated`.
+    """
+    # Pre-load employees by code.
+    codes = {r.get("employee_code") for r in rows if r.get("employee_code")}
+    by_code: dict[str, Employee] = {}
+    if codes:
+        emps = (
+            await db.execute(
+                select(Employee).where(Employee.employee_code.in_(codes))
+            )
+        ).scalars().all()
+        by_code = {e.employee_code: e for e in emps}
+
+    errors: list[dict] = []
+    rows_imported = 0
+    rows_updated = 0
+    rows_skipped = 0
+
+    for idx, raw in enumerate(rows, start=2):  # +1 header, +1 1-indexed
+        code = (raw.get("employee_code") or "").strip()
+        date_raw = (raw.get("date") or "").strip()
+        if not code and not date_raw:
+            continue  # blank line
+        if not code:
+            errors.append({"row": idx, "employee_code": None, "date": date_raw,
+                           "error": "employee_code is required"})
+            rows_skipped += 1
+            continue
+        if not date_raw:
+            errors.append({"row": idx, "employee_code": code, "date": None,
+                           "error": "date is required"})
+            rows_skipped += 1
+            continue
+        emp = by_code.get(code)
+        if not emp:
+            errors.append({"row": idx, "employee_code": code, "date": date_raw,
+                           "error": f"unknown employee_code '{code}'"})
+            rows_skipped += 1
+            continue
+        try:
+            on = _parse_date(date_raw)
+        except ValueError as e:
+            errors.append({"row": idx, "employee_code": code, "date": date_raw,
+                           "error": str(e)})
+            rows_skipped += 1
+            continue
+        try:
+            ci = _parse_dt(raw.get("check_in"), on)
+            co = _parse_dt(raw.get("check_out"), on)
+        except ValueError as e:
+            errors.append({"row": idx, "employee_code": code, "date": date_raw,
+                           "error": str(e)})
+            rows_skipped += 1
+            continue
+        if ci and co and co < ci:
+            errors.append({"row": idx, "employee_code": code, "date": date_raw,
+                           "error": "check_out is before check_in"})
+            rows_skipped += 1
+            continue
+
+        status = (raw.get("status") or "").strip().lower() or None
+        if status and status not in _VALID_STATUS:
+            errors.append({"row": idx, "employee_code": code, "date": date_raw,
+                           "error": f"invalid status '{status}'"})
+            rows_skipped += 1
+            continue
+        work_mode = (raw.get("work_mode") or "").strip().lower() or None
+        if work_mode and work_mode not in _VALID_WORK_MODE:
+            errors.append({"row": idx, "employee_code": code, "date": date_raw,
+                           "error": f"invalid work_mode '{work_mode}'"})
+            rows_skipped += 1
+            continue
+        notes = (raw.get("notes") or "").strip() or None
+
+        # Default status: present if any timestamp is set; absent otherwise.
+        if not status:
+            status = "present" if (ci or co) else "absent"
+        if not work_mode:
+            work_mode = "wfh" if status == "wfh" else "office"
+
+        existing = (
+            await db.execute(
+                select(Attendance)
+                .where(Attendance.employee_id == emp.id)
+                .where(Attendance.date == on)
+            )
+        ).scalar_one_or_none()
+
+        if existing is None:
+            att = Attendance(
+                employee_id=emp.id,
+                date=on,
+                status=status,
+                work_mode=work_mode,
+                source="import",
+                check_in=ci,
+                check_out=co,
+                notes=notes,
+            )
+            db.add(att)
+            rows_imported += 1
+        else:
+            att = existing
+            att.status = status
+            att.work_mode = work_mode
+            att.source = "import"
+            if ci is not None:
+                att.check_in = ci
+            if co is not None:
+                att.check_out = co
+            if notes is not None:
+                att.notes = notes
+            rows_updated += 1
+
+        if att.check_in and att.check_out:
+            att.total_minutes = int(
+                (att.check_out - att.check_in).total_seconds() // 60
+            )
+        else:
+            att.total_minutes = att.total_minutes or 0
+
+    await db.commit()
+    return {
+        "rows_total": len(rows),
+        "rows_imported": rows_imported,
+        "rows_updated": rows_updated,
+        "rows_skipped": rows_skipped,
+        "errors": errors,
+    }
+
+
 async def reject_regularization(
     db: AsyncSession,
     reg_id: int,

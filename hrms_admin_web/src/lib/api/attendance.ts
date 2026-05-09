@@ -19,6 +19,21 @@ export interface AttendanceRecord {
   notes: string | null;
 }
 
+export interface AttendanceUploadRowError {
+  row: number;
+  employee_code: string | null;
+  date: string | null;
+  error: string;
+}
+
+export interface AttendanceUploadResult {
+  rows_total: number;
+  rows_imported: number;
+  rows_updated: number;
+  rows_skipped: number;
+  errors: AttendanceUploadRowError[];
+}
+
 export interface RegularizationRequest {
   id: number;
   employee_id: number;
@@ -72,6 +87,17 @@ export const attendanceApi = {
     });
     if (params.employee_id) q.set("employee_id", String(params.employee_id));
     return `${v1}/attendance/report.csv?${q.toString()}`;
+  },
+  async upload(file: File): Promise<AttendanceUploadResult> {
+    const fd = new FormData();
+    fd.append("file", file);
+    const { data } = await apiClient.post(`${v1}/attendance/upload`, fd, {
+      headers: { "Content-Type": "multipart/form-data" },
+    });
+    return data;
+  },
+  uploadTemplateUrl(): string {
+    return `${v1}/attendance/upload/template.csv`;
   },
   async pendingRegularizations(): Promise<RegularizationRequest[]> {
     const { data } = await apiClient.get(`${v1}/attendance/regularize/pending`);
