@@ -440,8 +440,8 @@ def resolve_canonical_codes(
 # ── DB-side helpers ──────────────────────────────────────────────────
 def _split_name(name: str, fallback_code: str) -> tuple[str, str]:
     parts = name.split(maxsplit=1) if name else [fallback_code, ""]
-    first = parts[0] or fallback_code
-    last = parts[1] if len(parts) > 1 else ""
+    first = (parts[0] or fallback_code)[:64]
+    last = (parts[1] if len(parts) > 1 else "")[:64]
     return first, last
 
 
@@ -591,12 +591,10 @@ async def main(*, gap_days: int, dry_run: bool, path: Path) -> None:
     print("  Code resolution:")
     for key, info in sorted(people.items(), key=lambda kv: canonical[kv[0]]):
         c = canonical[key]
-        doj = info["doj"]
-        doe = info["doe"]
+        doj = str(info["doj"]) if info["doj"] else "—"
+        doe = str(info["doe"]) if info["doe"] else "—"
         print(
-            f"    {c:9s} {info['name']:30s} "
-            f"DOJ={doj if doj else '—':12} "
-            f"DOE={doe if doe else '—':12}"
+            f"    {c:9s} {info['name']:30s} DOJ={doj:12s} DOE={doe:12s}"
         )
 
     async with AsyncSessionLocal() as db:
@@ -620,8 +618,14 @@ async def main(*, gap_days: int, dry_run: bool, path: Path) -> None:
                   file=sys.stderr)
             sys.exit(2)
 
-        # 1. Cleanup leftover demo Employee rows.
+        # 1. Cleanup leftover demo Employee rows. Flush immediately so
+        #    the DELETE lands in the DB before the next pass tries to
+        #    INSERT new employees that reuse the same codes (the
+        #    spreadsheet's real JKT014 Pooja, JKT015 Atharv, JKT016
+        #    Anurag would otherwise collide on the unique-code index
+        #    when SQLAlchemy batches the writes).
         deleted = await _delete_demo_employees(db)
+        await db.flush()
         if deleted:
             print(
                 "  Removed demo employees (User logins preserved): "
