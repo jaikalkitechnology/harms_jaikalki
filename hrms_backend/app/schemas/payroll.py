@@ -48,6 +48,13 @@ class PayslipOut(BaseModel):
     days_paid: Decimal
     days_lop: Decimal
     working_days: Decimal
+    days_present: Decimal = Decimal("0")
+    days_paid_leave: Decimal = Decimal("0")
+    days_unpaid_leave: Decimal = Decimal("0")
+    days_absent: Decimal = Decimal("0")
+    days_holiday: Decimal = Decimal("0")
+    days_weekoff: Decimal = Decimal("0")
+    days_sandwich: Decimal = Decimal("0")
     pdf_url: Optional[str] = None
 
 

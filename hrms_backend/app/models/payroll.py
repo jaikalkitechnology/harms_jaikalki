@@ -104,6 +104,27 @@ class Payslip(Base, TimestampMixin):
     days_paid: Mapped[Decimal] = mapped_column(Numeric(5, 2), default=Decimal("0"))
     days_lop: Mapped[Decimal] = mapped_column(Numeric(5, 2), default=Decimal("0"))
     working_days: Mapped[Decimal] = mapped_column(Numeric(5, 2), default=Decimal("0"))
+    # Day-class breakdown so admins can see *why* the LOP came out the
+    # way it did. Always recomputable from attendance + leaves.
+    days_present: Mapped[Decimal] = mapped_column(Numeric(5, 2), default=Decimal("0"))
+    days_paid_leave: Mapped[Decimal] = mapped_column(
+        Numeric(5, 2), default=Decimal("0")
+    )
+    days_unpaid_leave: Mapped[Decimal] = mapped_column(
+        Numeric(5, 2), default=Decimal("0")
+    )
+    days_absent: Mapped[Decimal] = mapped_column(
+        Numeric(5, 2), default=Decimal("0")
+    )
+    days_holiday: Mapped[Decimal] = mapped_column(
+        Numeric(5, 2), default=Decimal("0")
+    )
+    days_weekoff: Mapped[Decimal] = mapped_column(
+        Numeric(5, 2), default=Decimal("0")
+    )
+    days_sandwich: Mapped[Decimal] = mapped_column(
+        Numeric(5, 2), default=Decimal("0")
+    )
 
     pdf_url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
 

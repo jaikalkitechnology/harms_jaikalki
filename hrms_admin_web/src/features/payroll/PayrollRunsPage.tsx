@@ -207,7 +207,7 @@ export default function PayrollRunsPage() {
                 <table className="w-full text-sm">
                   <thead className="bg-brand-brown-50/60">
                     <tr>
-                      {["Employee", "Gross", "Deductions", "Net Pay", ""].map(
+                      {["Employee", "Days", "Gross", "Deductions", "Net Pay", ""].map(
                         (h) => (
                           <th
                             key={h}
@@ -224,6 +224,30 @@ export default function PayrollRunsPage() {
                       <tr key={p.id} className="border-t border-brand-brown-100/60">
                         <td className="px-4 py-2 font-mono text-xs">
                           #{p.employee_id}
+                        </td>
+                        <td className="px-4 py-2 text-xs text-brand-brown-light whitespace-nowrap">
+                          <span className="font-semibold text-brand-brown-darker">
+                            {Number(p.days_paid).toFixed(1)}
+                          </span>
+                          {" / "}
+                          {Number(p.working_days).toFixed(0)}
+                          {Number(p.days_unpaid_leave) > 0 && (
+                            <span className="ml-1 text-error">
+                              · LWP {Number(p.days_unpaid_leave).toFixed(1)}
+                              {Number(p.days_sandwich) > 0 &&
+                                ` (${Number(p.days_sandwich).toFixed(1)} sw)`}
+                            </span>
+                          )}
+                          {Number(p.days_absent) > 0 && (
+                            <span className="ml-1 text-error">
+                              · Abs {Number(p.days_absent).toFixed(1)}
+                            </span>
+                          )}
+                          {Number(p.days_paid_leave) > 0 && (
+                            <span className="ml-1 text-success">
+                              · PL {Number(p.days_paid_leave).toFixed(1)}
+                            </span>
+                          )}
                         </td>
                         <td className="px-4 py-2">{inr(p.gross)}</td>
                         <td className="px-4 py-2 text-error">
