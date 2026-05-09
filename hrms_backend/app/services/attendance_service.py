@@ -616,6 +616,7 @@ async def calendar_for_employee(
         present=0, absent=0, leave=0, holiday=0, weekoff=0, half_day=0, wfh=0,
     )
     working = 0
+    today = _today()
 
     for i in range(days_in):
         d = first + _td(days=i)
@@ -624,8 +625,9 @@ async def calendar_for_employee(
         h = holiday_by_date.get(d)
         att = by_date.get(d)
         leave = leave_by_date.get(d)
+        is_future = d > today
 
-        is_editable = not (is_sunday or h is not None)
+        is_editable = not (is_sunday or h is not None or is_future)
 
         if is_sunday:
             status_ = "week_off"
@@ -646,6 +648,10 @@ async def calendar_for_employee(
                 counts["half_day"] += 1
             elif status_ == "absent":
                 counts["absent"] += 1
+        elif is_future:
+            # Don't pre-mark future working days as absent — the
+            # calendar should only report what already happened.
+            status_ = "upcoming"
         else:
             status_ = "absent"
             counts["absent"] += 1

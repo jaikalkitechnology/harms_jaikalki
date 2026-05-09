@@ -322,10 +322,13 @@ class _DayTile extends StatelessWidget {
   const _DayTile({required this.day});
   final CalendarDay day;
 
+  bool get _isUpcoming => day.status == 'upcoming';
+
   Color _bg() {
     if (day.isHoliday || day.isSunday) {
       return AppColors.error.withOpacity(0.10);
     }
+    if (_isUpcoming) return AppColors.brandBrownLight.withOpacity(0.04);
     switch (day.status) {
       case 'present':
         return AppColors.success.withOpacity(0.12);
@@ -349,12 +352,14 @@ class _DayTile extends StatelessWidget {
 
   Color _numColor() {
     if (day.isHoliday || day.isSunday) return AppColors.error;
+    if (_isUpcoming) return AppColors.brandBrownLight;
     return AppColors.brandBrownDarker;
   }
 
   String _badge() {
     if (day.isHoliday) return 'HOL';
     if (day.isSunday) return 'SUN';
+    if (_isUpcoming) return '';
     switch (day.status) {
       case 'present':
         return 'P';
@@ -448,6 +453,11 @@ class _DayTile extends StatelessWidget {
                   const Text(
                     'Sunday — week off',
                     style: TextStyle(color: AppColors.error),
+                  )
+                else if (_isUpcoming)
+                  const Text(
+                    'Upcoming day — nothing to show yet.',
+                    style: TextStyle(color: AppColors.brandBrownLight),
                   )
                 else ...[
                   _kv('Status', day.status.toUpperCase()),

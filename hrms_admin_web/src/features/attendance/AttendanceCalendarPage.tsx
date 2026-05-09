@@ -28,6 +28,7 @@ const STATUS_LABEL: Record<string, string> = {
   leave: "Leave",
   holiday: "Holiday",
   week_off: "Sunday",
+  upcoming: "—",
   blank: "—",
 };
 
@@ -39,6 +40,7 @@ const STATUS_BG: Record<string, string> = {
   leave: "bg-brand-gold/15 text-brand-gold-dark",
   holiday: "bg-error/15 text-error",
   week_off: "bg-error/15 text-error",
+  upcoming: "bg-brand-brown-50 text-brand-brown-light",
 };
 
 function ymOf(d: Date) {
@@ -241,39 +243,43 @@ function DayCell({
 }) {
   const dayNum = Number(day.date.slice(8, 10));
   const blocked = !day.is_editable;
+  const isUpcoming = day.status === "upcoming";
+  const isOffDay = day.is_sunday || day.is_holiday;
   const tone = STATUS_BG[day.status] ?? "bg-brand-brown-50";
+  const cellTone = isOffDay
+    ? "bg-error/10 border-error/30 cursor-not-allowed"
+    : isUpcoming
+      ? "bg-brand-brown-50/40 border-brand-brown-50 cursor-not-allowed"
+      : "bg-card hover:border-brand-gold-dark border-brand-brown-50 cursor-pointer";
+  const numTone = isOffDay
+    ? "text-error"
+    : isUpcoming
+      ? "text-brand-brown-light"
+      : "text-brand-brown-darker";
   return (
     <button
       type="button"
       onClick={onClick}
       disabled={blocked}
-      className={`aspect-square rounded-md border text-left p-1.5 transition-colors ${
-        blocked
-          ? "bg-error/10 border-error/30 cursor-not-allowed"
-          : "bg-card hover:border-brand-gold-dark border-brand-brown-50 cursor-pointer"
-      }`}
+      className={`aspect-square rounded-md border text-left p-1.5 transition-colors ${cellTone}`}
       title={
         day.is_holiday
           ? `Holiday: ${day.holiday_name ?? ""}`
           : day.is_sunday
             ? "Sunday — week off"
-            : STATUS_LABEL[day.status] ?? day.status
+            : isUpcoming
+              ? "Upcoming — not editable yet"
+              : STATUS_LABEL[day.status] ?? day.status
       }
     >
-      <div
-        className={`text-sm font-semibold ${
-          blocked ? "text-error" : "text-brand-brown-darker"
-        }`}
-      >
-        {dayNum}
-      </div>
+      <div className={`text-sm font-semibold ${numTone}`}>{dayNum}</div>
       {day.is_holiday ? (
         <div className="text-[9px] text-error font-medium truncate mt-0.5">
           {day.holiday_name}
         </div>
       ) : day.is_sunday ? (
         <div className="text-[9px] text-error mt-0.5">Sun</div>
-      ) : (
+      ) : isUpcoming ? null : (
         <div
           className={`text-[9px] mt-0.5 inline-block px-1 rounded ${tone}`}
         >
