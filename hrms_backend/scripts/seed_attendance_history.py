@@ -6,11 +6,16 @@ Run after seed_employees.py / seed_attendance_leave.py:
 
 Behaviour
 ---------
-1.  Reads every monthly sheet (`Jan '25` → `Jun '26`).
-2.  Auto-creates any employees from the workbook that don't yet exist
-    in the DB. The first 11 of those (JKT001..JKT011) are slotted into
-    the PERMANENT category with the JKT-PERM-L2 template; JKT012 and
-    onward use the same defaults but can be tuned afterwards by HR.
+1.  Drops any leftover demo Employee rows from older seeds
+    (JKT014..JKT018). Their User logins (hr@, manager@, employee@,
+    pooja@) are *kept* — only the Employee profile is removed.
+2.  Reads every monthly sheet (`Jan '25` → `Jun '26`) and pulls the
+    spreadsheet employees JKT001..JKT012. JKT001 already exists (it
+    hosts the super-admin login admin@hrms.com); its name/DOJ are
+    rewritten in place so the real employee Shyamveer Singh shares
+    that row. JKT002..JKT012 are auto-created under PERMANENT with
+    the JKT-PERM-L2 template; HR can tune category/template/CTC
+    afterwards.
 3.  Walks days 1..31 for each employee row and upserts an Attendance
     row keyed on (employee_id, date):
         P → status='present', source='import'
@@ -188,6 +193,19 @@ def read_workbook(path: Path) -> dict:
 
 
 # ── DB-side helpers ──────────────────────────────────────────────────
+# JKT001 doubles as the super-admin login. The spreadsheet places the
+# real employee Shyamveer Singh on JKT001, so we rename the existing
+# row's name/DOJ in place but never touch the user_id link.
+_DEMO_EMPLOYEE_CODES = {"JKT014", "JKT015", "JKT016", "JKT017", "JKT018"}
+
+
+def _split_name(name: str, code: str) -> tuple[str, str]:
+    parts = name.split(maxsplit=1) if name else [code, ""]
+    first = parts[0] or code
+    last = parts[1] if len(parts) > 1 else ""
+    return first, last
+
+
 async def _ensure_employee(
     db: AsyncSession,
     *,
@@ -201,15 +219,15 @@ async def _ensure_employee(
         await db.execute(select(Employee).where(Employee.employee_code == code))
     ).scalar_one_or_none()
     if existing is not None:
-        # Backfill DOJ if the seed didn't have one, but never clobber a real value.
-        if doj and not existing.date_of_joining:
+        if name:
+            first, last = _split_name(name, code)
+            existing.first_name = first
+            existing.last_name = last
+        if doj:
             existing.date_of_joining = doj
         return existing
 
-    parts = name.split(maxsplit=1) if name else [code, ""]
-    first = parts[0] or code
-    last = parts[1] if len(parts) > 1 else ""
-
+    first, last = _split_name(name, code)
     emp = Employee(
         employee_code=code,
         first_name=first,
@@ -224,6 +242,25 @@ async def _ensure_employee(
     db.add(emp)
     await db.flush()
     return emp
+
+
+async def _delete_demo_employees(db: AsyncSession) -> list[str]:
+    """Drop the placeholder JKT014..JKT018 employees that older seed runs
+    may have created. The User accounts behind their logins (hr@, manager@,
+    employee@, pooja@) are intentionally left alone so test logins keep
+    working — only the Employee row is removed. Cascading FKs clean up
+    attendance / leave / probation rows for those Employee ids.
+    """
+    rows = (
+        await db.execute(
+            select(Employee).where(Employee.employee_code.in_(_DEMO_EMPLOYEE_CODES))
+        )
+    ).scalars().all()
+    deleted: list[str] = []
+    for emp in rows:
+        deleted.append(emp.employee_code)
+        await db.delete(emp)
+    return deleted
 
 
 async def _upsert_attendance(
@@ -351,10 +388,26 @@ async def main(*, gap_days: int, dry_run: bool, path: Path) -> None:
                   file=sys.stderr)
             sys.exit(2)
 
-        # 1. Ensure each spreadsheet employee exists.
+        # 1. Cleanup demo placeholder employees from older seed runs.
+        deleted = await _delete_demo_employees(db)
+        if deleted:
+            print(
+                "  Removed demo employees (User logins preserved): "
+                f"{', '.join(sorted(deleted))}"
+            )
+
+        # 2. Ensure each spreadsheet employee exists. JKT001 already
+        #    holds the super-admin user link; this pass only rewrites
+        #    its name/DOJ so it lines up with the real employee in the
+        #    workbook (Shyamveer Singh) without touching user_id.
         emp_by_code: dict[str, Employee] = {}
         created = 0
         for code, info in sorted(employees_in_wb.items()):
+            existed_before = (
+                await db.execute(
+                    select(Employee).where(Employee.employee_code == code)
+                )
+            ).scalar_one_or_none() is not None
             emp = await _ensure_employee(
                 db,
                 code=code,
@@ -363,15 +416,16 @@ async def main(*, gap_days: int, dry_run: bool, path: Path) -> None:
                 permanent_cat_id=permanent_cat.id,
                 default_template_id=default_template.id,
             )
-            if emp.id is None:
-                # New row — flush so it gets an id.
-                await db.flush()
+            await db.flush()
             emp_by_code[code] = emp
-            if emp.id and emp.created_at is None:
+            if not existed_before:
                 created += 1
-        print(f"  Employees: {created} new, {len(emp_by_code) - created} existing.")
+        print(
+            f"  Employees: {created} new, "
+            f"{len(emp_by_code) - created} updated from spreadsheet."
+        )
 
-        # 2. Upsert attendance rows.
+        # 3. Upsert attendance rows.
         last_present: dict[str, date] = {}
         upserted = 0
         skipped = 0
@@ -405,7 +459,7 @@ async def main(*, gap_days: int, dry_run: bool, path: Path) -> None:
                 skipped += 1
         print(f"  Attendance: {upserted} rows imported, {skipped} skipped.")
 
-        # 3. Resignation pass.
+        # 4. Resignation pass.
         today = date.today()
         resigned = []
         for code, emp in emp_by_code.items():
