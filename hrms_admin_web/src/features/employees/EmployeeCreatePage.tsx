@@ -25,15 +25,32 @@ import {
   type CreateEmployeePayload,
 } from "@/lib/api/employees";
 
+// Helpers — `<select>` and `<input type="number">` hand react-hook-form
+// strings ("") or sometimes undefined when the field is empty. If we
+// pipe those straight into `z.coerce.number()` we get NaN which fails
+// validation with "Expected number, received nan" even on optional
+// fields. Preprocess: anything blank → null *before* coercion.
+const blankToNull = (v: unknown) =>
+  v === "" || v === null || v === undefined ? null : v;
+
+const optionalPositiveIntFk = z.preprocess(
+  blankToNull,
+  z.coerce.number().int().positive().nullable(),
+);
+const optionalNonNegativeNumber = z.preprocess(
+  blankToNull,
+  z.coerce.number().nonnegative().nullable(),
+);
+
 const schema = z
   .object({
     first_name: z.string().min(1, "Required"),
     last_name: z.string().min(1, "Required"),
     category_id: z.coerce.number().int().positive("Choose a category"),
-    designation_id: z.coerce.number().int().positive().optional().nullable(),
-    department_id: z.coerce.number().int().positive().optional().nullable(),
-    salary_template_id: z.coerce.number().int().positive().optional().nullable(),
-    ctc_annual: z.coerce.number().nonnegative().optional().nullable(),
+    designation_id: optionalPositiveIntFk,
+    department_id: optionalPositiveIntFk,
+    salary_template_id: optionalPositiveIntFk,
+    ctc_annual: optionalNonNegativeNumber,
     date_of_joining: z.string().min(1, "Required"),
     personal_email: z.string().email().optional().or(z.literal("")),
     personal_phone: z.string().optional(),
