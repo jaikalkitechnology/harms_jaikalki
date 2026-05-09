@@ -18,15 +18,34 @@ from app.services.storage import signed_url, upload_fileobj
 router = APIRouter(tags=["documents"])
 
 ALLOWED_DOC_TYPES = {
+    # KYC / identity
     "aadhaar",
     "pan",
     "passport",
-    "education",
-    "experience",
-    "offer_letter",
-    "confirmation_letter",
+    "voter_id",
+    "driving_license",
     "address_proof",
     "photo",
+    # Banking
+    "bank_passbook",
+    "cancelled_cheque",
+    # Education marksheets / certificates
+    "ssc_marksheet",          # Class 10
+    "hsc_marksheet",          # Class 12
+    "graduation_marksheet",
+    "post_graduation_marksheet",
+    "diploma_certificate",
+    "professional_certificate",
+    "education",              # generic legacy
+    # Employment history
+    "experience",
+    "prev_offer_letter",
+    "prev_relieving_letter",
+    "prev_payslip",
+    "form16",
+    # Internal letters (auto-generated from offer/confirmation flows)
+    "offer_letter",
+    "confirmation_letter",
     "other",
 }
 MAX_BYTES = 10 * 1024 * 1024  # 10 MB
@@ -112,6 +131,55 @@ async def upload_document(
     await db.commit()
     await db.refresh(doc)
     return doc
+
+
+@router.post(
+    "/documents/{document_id}/verify",
+    response_model=DocumentOut,
+)
+async def verify_document(
+    document_id: int,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """HR / admin flips verified=true on a document after physical KYC."""
+    doc = (
+        await db.execute(
+            select(EmployeeDocument).where(EmployeeDocument.id == document_id)
+        )
+    ).scalar_one_or_none()
+    if not doc:
+        raise NotFoundError("Document not found")
+    if not svc.can_see_all(user):
+        raise ForbiddenError("Only HR/admin can verify documents")
+    doc.verified = True
+    await db.commit()
+    await db.refresh(doc)
+    return doc
+
+
+@router.delete(
+    "/documents/{document_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def delete_document(
+    document_id: int,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    doc = (
+        await db.execute(
+            select(EmployeeDocument).where(EmployeeDocument.id == document_id)
+        )
+    ).scalar_one_or_none()
+    if not doc:
+        raise NotFoundError("Document not found")
+    emp = await svc.get_employee(db, doc.employee_id)
+    if not _can_modify(user, emp):
+        raise ForbiddenError("Cannot delete documents for this employee")
+    await db.delete(doc)
+    await db.commit()
+    return None
 
 
 @router.get("/documents/{document_id}/signed-url")

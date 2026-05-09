@@ -188,6 +188,8 @@ export default function EmployeeCreatePage() {
         </h1>
         <p className="mt-1 text-sm text-brand-brown-light">
           Employee code is auto-generated (next in the {"{prefix}"}### sequence).
+          KYC, marksheets and bank documents can be uploaded on the
+          employee profile page right after this step.
         </p>
       </div>
 
