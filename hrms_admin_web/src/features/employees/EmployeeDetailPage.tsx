@@ -41,6 +41,7 @@ import {
 import { payrollApi, type GeneratedDocument } from "@/lib/api/payroll";
 import { launchApi } from "@/lib/api/launch";
 import { CategoryBadge } from "./CategoryBadge";
+import { OnboardingDocsCard } from "./OnboardingDocsCard";
 import { fmtIstDate } from "@/lib/datetime";
 
 export default function EmployeeDetailPage() {
@@ -267,6 +268,10 @@ export default function EmployeeDetailPage() {
 
         <PermissionGate permission="salary.view.team">
           <StatutoryOverridesCard employee={employee} />
+        </PermissionGate>
+
+        <PermissionGate permission="employee.update">
+          <OnboardingDocsCard employeeId={employee.id} />
         </PermissionGate>
 
         <PermissionGate permission="employee.create">
