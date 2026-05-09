@@ -11,6 +11,7 @@ import EmployeeCreatePage from "@/features/employees/EmployeeCreatePage";
 import SalaryTemplatesPage from "@/features/salary-templates/SalaryTemplatesPage";
 import InternExpensesPage from "@/features/intern-expenses/InternExpensesPage";
 import AttendancePage from "@/features/attendance/AttendancePage";
+import AttendanceCalendarPage from "@/features/attendance/AttendanceCalendarPage";
 import AttendanceUploadPage from "@/features/attendance/AttendanceUploadPage";
 import LeaveApprovalsPage from "@/features/leaves/LeaveApprovalsPage";
 import HolidaysPage from "@/features/holidays/HolidaysPage";
@@ -95,6 +96,14 @@ export const router = createBrowserRouter([
       { path: "holidays", element: <HolidaysPage /> },
       { path: "shifts", element: <ShiftsPage /> },
       { path: "attendance", element: <AttendancePage /> },
+      {
+        path: "attendance/calendar",
+        element: (
+          <ProtectedRoute requirePermission="attendance.view.all">
+            <AttendanceCalendarPage />
+          </ProtectedRoute>
+        ),
+      },
       {
         path: "attendance/upload",
         element: (

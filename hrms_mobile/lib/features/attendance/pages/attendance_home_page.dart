@@ -8,6 +8,7 @@ import '../../employees/cubit/employees_cubit.dart' show LoadStatus;
 import '../cubit/attendance_cubit.dart';
 import '../data/attendance_api.dart';
 import '../data/attendance_models.dart';
+import 'attendance_calendar_page.dart';
 
 class AttendanceHomePage extends StatelessWidget {
   const AttendanceHomePage({super.key});
@@ -28,7 +29,22 @@ class _AttendanceView extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Scaffold(
-      appBar: AppBar(title: const Text('Attendance')),
+      appBar: AppBar(
+        title: const Text('Attendance'),
+        actions: [
+          IconButton(
+            tooltip: 'Calendar view',
+            icon: const Icon(Icons.calendar_month),
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => const AttendanceCalendarPage(),
+                ),
+              );
+            },
+          ),
+        ],
+      ),
       body: BlocConsumer<AttendanceCubit, AttendanceState>(
         listener: (context, state) {
           if (state.error != null && !state.busy) {

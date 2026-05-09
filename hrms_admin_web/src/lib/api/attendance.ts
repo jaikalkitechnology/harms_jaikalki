@@ -19,6 +19,47 @@ export interface AttendanceRecord {
   notes: string | null;
 }
 
+export interface CalendarDay {
+  date: string;
+  weekday: number;
+  status: string;
+  is_sunday: boolean;
+  is_holiday: boolean;
+  holiday_name: string | null;
+  is_editable: boolean;
+  attendance_id: number | null;
+  check_in: string | null;
+  check_out: string | null;
+  work_mode: string | null;
+  total_minutes: number;
+  notes: string | null;
+  leave_type: string | null;
+}
+
+export interface AttendanceCalendar {
+  year: number;
+  month: number;
+  employee_id: number;
+  days: CalendarDay[];
+  days_present: number;
+  days_absent: number;
+  days_leave: number;
+  days_holiday: number;
+  days_weekoff: number;
+  days_half_day: number;
+  days_wfh: number;
+  working_days: number;
+}
+
+export interface AttendanceUpsertByDate {
+  date: string;
+  status?: AttendanceRecord["status"] | null;
+  check_in?: string | null;
+  check_out?: string | null;
+  work_mode?: string | null;
+  notes?: string | null;
+}
+
 export interface AttendanceUploadRowError {
   row: number;
   employee_code: string | null;
@@ -87,6 +128,27 @@ export const attendanceApi = {
     });
     if (params.employee_id) q.set("employee_id", String(params.employee_id));
     return `${v1}/attendance/report.csv?${q.toString()}`;
+  },
+  async employeeCalendar(
+    employeeId: number,
+    year: number,
+    month: number,
+  ): Promise<AttendanceCalendar> {
+    const { data } = await apiClient.get(
+      `${v1}/attendance/employee/${employeeId}/calendar`,
+      { params: { year, month } },
+    );
+    return data;
+  },
+  async upsertByDate(
+    employeeId: number,
+    body: AttendanceUpsertByDate,
+  ): Promise<AttendanceRecord> {
+    const { data } = await apiClient.put(
+      `${v1}/attendance/employee/${employeeId}/by-date`,
+      body,
+    );
+    return data;
   },
   async upload(file: File): Promise<AttendanceUploadResult> {
     const fd = new FormData();
