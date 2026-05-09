@@ -337,7 +337,9 @@ async def attendance_payroll_export(
         ctc_m = gross_m = net_m = earn_g = earn_n = ""
         if e.salary_template_id and e.salary_template_id in tpl_by_id:
             tpl = tpl_by_id[e.salary_template_id]
-            br = calc.calculate(tpl, ctc_annual=e.ctc_annual or None)
+            br = calc.calculate(
+                tpl, ctc_annual=e.ctc_annual or None, employee=e
+            )
             d_ = br.as_dict()
             if not d_.get("is_intern"):
                 ctc_m = d_["total_ctc_monthly"]

@@ -106,7 +106,9 @@ async def process_payroll(
             continue
 
         breakup = calc.calculate(
-            emp.salary_template, ctc_annual=emp.ctc_annual or None
+            emp.salary_template,
+            ctc_annual=emp.ctc_annual or None,
+            employee=emp,
         ).as_dict()
 
         # Loss of pay: count attendance present + leave + holiday days

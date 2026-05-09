@@ -145,6 +145,22 @@ class Employee(Base, TimestampMixin):
     )
     ctc_annual: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=Decimal("0"))
 
+    # Per-employee statutory overrides. Templates carry the salary
+    # *structure*; these flags carry the statutory deviations that vary
+    # employee-by-employee (PF opt-out for >₹15k basic, custom PF cap,
+    # ESIC exemption for international/contractor cases, and the PT
+    # state which drives the Professional Tax slab).
+    pf_opt_out: Mapped[bool] = mapped_column(
+        Boolean, default=False, nullable=False
+    )
+    pf_basic_cap_override: Mapped[Optional[Decimal]] = mapped_column(
+        Numeric(10, 2), nullable=True
+    )
+    esic_force_exempt: Mapped[bool] = mapped_column(
+        Boolean, default=False, nullable=False
+    )
+    pt_state: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+
     work_location: Mapped[str] = mapped_column(
         String(200), default="Mira Road, Thane", nullable=False
     )

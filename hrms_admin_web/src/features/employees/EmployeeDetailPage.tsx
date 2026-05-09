@@ -56,11 +56,21 @@ export default function EmployeeDetailPage() {
   });
 
   const { data: breakup } = useQuery({
-    queryKey: ["salary-breakup", employee?.salary_template?.id, employee?.ctc_annual],
+    queryKey: [
+      "salary-breakup",
+      employee?.salary_template?.id,
+      employee?.ctc_annual,
+      employee?.id,
+      employee?.pf_opt_out,
+      employee?.pf_basic_cap_override,
+      employee?.esic_force_exempt,
+      employee?.pt_state,
+    ],
     queryFn: () =>
       salaryTemplatesApi.calculate(
         employee!.salary_template!.id,
         Number(employee!.ctc_annual),
+        employee!.id,
       ),
     enabled: !!employee?.salary_template,
   });
@@ -253,6 +263,10 @@ export default function EmployeeDetailPage() {
               )}
             </CardContent>
           </Card>
+        </PermissionGate>
+
+        <PermissionGate permission="salary.view.team">
+          <StatutoryOverridesCard employee={employee} />
         </PermissionGate>
 
         <PermissionGate permission="employee.create">
@@ -506,6 +520,137 @@ function SalaryGrid({ breakup }: { breakup: SalaryBreakup }) {
         </dl>
       </div>
     </div>
+  );
+}
+
+function StatutoryOverridesCard({
+  employee,
+}: {
+  employee: import("@/lib/api/employees").EmployeeDetail;
+}) {
+  const queryClient = useQueryClient();
+  const [pfOptOut, setPfOptOut] = useState(employee.pf_opt_out);
+  const [pfCap, setPfCap] = useState<string>(
+    employee.pf_basic_cap_override ?? "",
+  );
+  const [esicExempt, setEsicExempt] = useState(employee.esic_force_exempt);
+  const [ptState, setPtState] = useState<string>(employee.pt_state ?? "");
+
+  const dirty =
+    pfOptOut !== employee.pf_opt_out ||
+    (pfCap || "") !== (employee.pf_basic_cap_override ?? "") ||
+    esicExempt !== employee.esic_force_exempt ||
+    (ptState || "") !== (employee.pt_state ?? "");
+
+  const save = useMutation({
+    mutationFn: () =>
+      employeesApi.update(employee.id, {
+        pf_opt_out: pfOptOut,
+        pf_basic_cap_override: pfCap === "" ? null : pfCap,
+        esic_force_exempt: esicExempt,
+        pt_state: ptState === "" ? null : ptState,
+      } as Partial<import("@/lib/api/employees").EmployeeDetail>),
+    onSuccess: () => {
+      toast.success("Statutory overrides saved");
+      queryClient.invalidateQueries({ queryKey: ["employee", employee.id] });
+      queryClient.invalidateQueries({ queryKey: ["salary-breakup"] });
+    },
+    onError: (e: unknown) => {
+      const detail =
+        (e as { response?: { data?: { detail?: string } } })?.response?.data
+          ?.detail ?? "Could not save";
+      toast.error(detail);
+    },
+  });
+
+  return (
+    <Card className="lg:col-span-2">
+      <CardHeader>
+        <CardTitle>
+          Statutory <span className="display-em">overrides</span>
+        </CardTitle>
+        <CardDescription>
+          Per-employee deviations from the salary template — PF opt-out for
+          high earners, custom PF basic cap, ESIC exemption (e.g. expats /
+          contractors), and the state used for Professional Tax.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="grid md:grid-cols-2 gap-4">
+        <label className="flex items-start gap-3 text-sm">
+          <input
+            type="checkbox"
+            className="mt-1 accent-brand-gold-dark"
+            checked={pfOptOut}
+            onChange={(e) => setPfOptOut(e.target.checked)}
+          />
+          <div>
+            <div className="font-medium">PF opt-out</div>
+            <div className="text-xs text-brand-brown-light">
+              Skips both employee and employer PF contributions. Use only when
+              the employee has a valid Form 11 declaration.
+            </div>
+          </div>
+        </label>
+        <label className="flex items-start gap-3 text-sm">
+          <input
+            type="checkbox"
+            className="mt-1 accent-brand-gold-dark"
+            checked={esicExempt}
+            onChange={(e) => setEsicExempt(e.target.checked)}
+          />
+          <div>
+            <div className="font-medium">ESIC force-exempt</div>
+            <div className="text-xs text-brand-brown-light">
+              Skips ESIC even when gross is ≤ ₹21,000. Useful for
+              international employees or contractor arrangements.
+            </div>
+          </div>
+        </label>
+        <div>
+          <Label>PF basic cap override (₹)</Label>
+          <Input
+            type="number"
+            min={0}
+            step={1}
+            value={pfCap}
+            placeholder="Default ₹15,000"
+            onChange={(e) => setPfCap(e.target.value)}
+          />
+          <p className="text-xs text-brand-brown-light mt-1">
+            Leave blank to use the statutory ₹15,000 cap.
+          </p>
+        </div>
+        <div>
+          <Label>Professional Tax state</Label>
+          <select
+            value={ptState}
+            onChange={(e) => setPtState(e.target.value)}
+            className="flex h-10 w-full rounded-md border border-input bg-card px-3 py-2 text-sm"
+          >
+            <option value="">— No PT —</option>
+            <option value="MH">Maharashtra</option>
+            <option value="KA">Karnataka</option>
+            <option value="WB">West Bengal</option>
+            <option value="TN">Tamil Nadu</option>
+            <option value="GJ">Gujarat</option>
+            <option value="AP">Andhra Pradesh</option>
+            <option value="TS">Telangana</option>
+            <option value="KL">Kerala</option>
+          </select>
+          <p className="text-xs text-brand-brown-light mt-1">
+            Slabs follow the state's published Professional Tax schedule.
+          </p>
+        </div>
+        <div className="md:col-span-2 flex justify-end">
+          <Button
+            disabled={!dirty || save.isPending}
+            onClick={() => save.mutate()}
+          >
+            {save.isPending ? "Saving…" : "Save overrides"}
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 

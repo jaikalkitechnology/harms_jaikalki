@@ -118,6 +118,10 @@ export interface EmployeeDetail extends EmployeeListItem {
   employment_type: string;
   work_mode: string;
   resignation_unlocked: boolean;
+  pf_opt_out: boolean;
+  pf_basic_cap_override: string | null;
+  esic_force_exempt: boolean;
+  pt_state: string | null;
 }
 
 export interface ExpiringProbation {
@@ -268,10 +272,17 @@ export const salaryTemplatesApi = {
     return data;
   },
 
-  async calculate(id: number, ctc?: number): Promise<SalaryBreakup> {
+  async calculate(
+    id: number,
+    ctc?: number,
+    employee_id?: number,
+  ): Promise<SalaryBreakup> {
+    const params: Record<string, number> = {};
+    if (ctc) params.ctc = ctc;
+    if (employee_id) params.employee_id = employee_id;
     const { data } = await apiClient.get(
       `${v1}/salary-templates/${id}/calculate`,
-      { params: ctc ? { ctc } : undefined },
+      { params: Object.keys(params).length ? params : undefined },
     );
     return data;
   },

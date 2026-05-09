@@ -299,10 +299,17 @@ class EmployeeUpdate(BaseModel):
     designation_id: Optional[int] = None
     department_id: Optional[int] = None
     reporting_to: Optional[int] = None
+    salary_template_id: Optional[int] = None
+    ctc_annual: Optional[Decimal] = None
     work_location: Optional[str] = None
     employment_type: Optional[str] = None
     work_mode: Optional[str] = None
     status: Optional[str] = None
+    # Per-employee statutory overrides
+    pf_opt_out: Optional[bool] = None
+    pf_basic_cap_override: Optional[Decimal] = None
+    esic_force_exempt: Optional[bool] = None
+    pt_state: Optional[str] = Field(default=None, max_length=64)
 
 
 class EmployeeListItem(BaseModel):
@@ -350,6 +357,10 @@ class EmployeeOut(BaseModel):
     status: str
     is_on_probation: bool
     resignation_unlocked: bool = False
+    pf_opt_out: bool = False
+    pf_basic_cap_override: Optional[Decimal] = None
+    esic_force_exempt: bool = False
+    pt_state: Optional[str] = None
     created_at: datetime
 
 
