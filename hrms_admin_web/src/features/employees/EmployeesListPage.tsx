@@ -82,19 +82,10 @@ export default function EmployeesListPage() {
         ),
       },
       {
-        id: "probation",
+        id: "status",
         header: "Status",
-        accessorFn: (e) => (e.is_on_probation ? "Probation" : "Confirmed"),
-        cell: ({ row }) =>
-          row.original.is_on_probation ? (
-            <span className="text-[10px] font-mono uppercase tracking-[0.2em] px-2 py-1 rounded bg-warning/10 text-warning">
-              On Probation
-            </span>
-          ) : (
-            <span className="text-[10px] font-mono uppercase tracking-[0.2em] px-2 py-1 rounded bg-success/10 text-success">
-              Confirmed
-            </span>
-          ),
+        accessorFn: (e) => statusLabel(e),
+        cell: ({ row }) => <StatusBadge employee={row.original} />,
       },
       {
         accessorKey: "date_of_joining",
@@ -200,5 +191,42 @@ function FilterPill({
     >
       {label}
     </button>
+  );
+}
+
+function statusLabel(e: EmployeeListItem): string {
+  switch (e.status) {
+    case "resigned":
+      return "Resigned";
+    case "exited":
+      return "Exited";
+    case "terminated":
+      return "Terminated";
+    case "absconded":
+      return "Absconded";
+    case "on_leave":
+      return "On Long Leave";
+    default:
+      return e.is_on_probation ? "On Probation" : "Confirmed";
+  }
+}
+
+function StatusBadge({ employee }: { employee: EmployeeListItem }) {
+  const label = statusLabel(employee);
+  let cls = "bg-success/10 text-success";
+  if (employee.status === "resigned" || employee.status === "exited" ||
+      employee.status === "terminated" || employee.status === "absconded") {
+    cls = "bg-error/15 text-error";
+  } else if (employee.status === "on_leave") {
+    cls = "bg-info/15 text-info";
+  } else if (employee.is_on_probation) {
+    cls = "bg-warning/10 text-warning";
+  }
+  return (
+    <span
+      className={`text-[10px] font-mono uppercase tracking-[0.2em] px-2 py-1 rounded ${cls}`}
+    >
+      {label}
+    </span>
   );
 }
