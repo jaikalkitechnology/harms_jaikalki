@@ -15,6 +15,7 @@ from app.schemas.attendance import (
     AttendanceOut,
     AttendanceSummary,
     AttendanceUpdate,
+    AttendanceUploadResult,
     RegularizationCreate,
     RegularizationDecision,
     RegularizationOut,
@@ -318,6 +319,93 @@ async def update_attendance(
     await db.commit()
     await db.refresh(att)
     return att
+
+
+# ── Admin: bulk upload from CSV / Excel ─────────────────────────────
+@router.post("/upload", response_model=AttendanceUploadResult)
+async def upload_attendance(
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_permission("attendance.view.all")),
+):
+    """Bulk-import attendance rows. Accepts CSV (preferred) or XLSX.
+
+    Required columns: `employee_code`, `date` (YYYY-MM-DD; / and -
+    separators also work). Optional columns: `status` (present, absent,
+    half_day, wfh, leave, holiday), `check_in`, `check_out` (HH:MM or
+    full ISO timestamp), `work_mode` (office, wfh, hybrid, field),
+    `notes`. Existing (employee, date) rows are updated in place.
+
+    Returns a summary plus a structured list of per-row errors so the
+    admin can fix the spreadsheet and re-upload.
+    """
+    contents = await file.read()
+    if not contents:
+        from app.core.exceptions import ValidationError
+        raise ValidationError("Uploaded file is empty")
+
+    fname = (file.filename or "").lower()
+    rows: list[dict] = []
+
+    if fname.endswith(".xlsx") or fname.endswith(".xls"):
+        try:
+            from openpyxl import load_workbook
+        except ImportError:
+            from app.core.exceptions import ValidationError
+            raise ValidationError(
+                "Excel uploads need `openpyxl` installed; please convert "
+                "to CSV and try again."
+            )
+        import io as _io
+        wb = load_workbook(filename=_io.BytesIO(contents), data_only=True)
+        ws = wb.active
+        header = None
+        for r in ws.iter_rows(values_only=True):
+            cells = [(str(c).strip() if c is not None else "") for c in r]
+            if header is None:
+                header = [h.lower() for h in cells]
+                continue
+            row = {header[i]: cells[i] if i < len(cells) else "" for i in range(len(header))}
+            rows.append(row)
+    else:
+        import csv as _csv
+        import io as _io
+        text = contents.decode("utf-8-sig", errors="replace")
+        reader = _csv.DictReader(_io.StringIO(text))
+        if reader.fieldnames is None:
+            from app.core.exceptions import ValidationError
+            raise ValidationError("CSV is missing a header row")
+        # Lowercase header keys so the parser is forgiving.
+        norm_headers = [h.strip().lower() for h in reader.fieldnames]
+        for r in reader:
+            rows.append(
+                {norm_headers[i]: (list(r.values())[i] or "")
+                 for i in range(len(norm_headers))}
+            )
+
+    return await att_svc.bulk_import(db, rows)
+
+
+@router.get("/upload/template.csv")
+async def upload_template(
+    _: User = Depends(require_permission("attendance.view.all")),
+):
+    """Download a starter CSV with the headers Jaikalki expects."""
+    from fastapi.responses import StreamingResponse
+
+    csv = (
+        "employee_code,date,status,check_in,check_out,work_mode,notes\n"
+        "JKT001,2026-05-01,present,09:30,18:15,office,\n"
+        "JKT001,2026-05-02,half_day,10:30,15:00,office,Late grace\n"
+        "JKT002,2026-05-01,wfh,09:45,18:30,wfh,Working from home\n"
+    )
+    return StreamingResponse(
+        iter([csv]),
+        media_type="text/csv",
+        headers={
+            "Content-Disposition": 'attachment; filename="attendance-template.csv"',
+        },
+    )
 
 
 # ── Admin: report CSV export ────────────────────────────────────────

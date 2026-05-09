@@ -39,6 +39,7 @@ import {
   Bell,
   DoorOpen,
   ClipboardList as ClipboardIcon,
+  Upload,
   Settings,
   Shield,
   ShieldCheck,
@@ -121,6 +122,12 @@ const SECTIONS: NavSection[] = [
         label: "Attendance",
         to: "/attendance",
         icon: Clock,
+        permission: "attendance.view.all",
+      },
+      {
+        label: "Upload Attendance",
+        to: "/attendance/upload",
+        icon: Upload,
         permission: "attendance.view.all",
       },
       {
