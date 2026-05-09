@@ -130,7 +130,9 @@ async def generate_offer_letter(
         db, doc_type="offer_letter", year=today.year
     )
     breakup = JaikalkiSalaryCalculator().calculate(
-        employee.salary_template, ctc_annual=employee.ctc_annual or None
+        employee.salary_template,
+        ctc_annual=employee.ctc_annual or None,
+        employee=employee,
     ).as_dict()
 
     pdf_bytes = _render_offer_letter(

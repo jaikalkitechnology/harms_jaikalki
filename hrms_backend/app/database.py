@@ -89,6 +89,25 @@ _PENDING_COLUMNS: list[tuple[str, str, str, str | None]] = [
         "BOOLEAN NOT NULL DEFAULT FALSE",
         None,
     ),
+    (
+        "employees",
+        "pf_opt_out",
+        "BOOLEAN NOT NULL DEFAULT FALSE",
+        None,
+    ),
+    (
+        "employees",
+        "pf_basic_cap_override",
+        "DECIMAL(10,2) NULL",
+        None,
+    ),
+    (
+        "employees",
+        "esic_force_exempt",
+        "BOOLEAN NOT NULL DEFAULT FALSE",
+        None,
+    ),
+    ("employees", "pt_state", "VARCHAR(64) NULL", None),
     ("departments", "enabled_modules", "JSON NULL", None),
 ]
 

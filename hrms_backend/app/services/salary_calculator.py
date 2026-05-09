@@ -13,7 +13,7 @@ from dataclasses import dataclass, field
 from decimal import Decimal, ROUND_HALF_UP
 from typing import Optional
 
-from app.models import SalaryTemplate
+from app.models import Employee, SalaryTemplate
 
 # ── Statutory caps & rates ─────────────────────────────────────────────
 PF_BASIC_CAP = Decimal("15000")
@@ -23,6 +23,86 @@ PF_EMPLOYER_RATE = Decimal("0.13")           # Jaikalki uses 13% (incl. admin ch
 ESIC_GROSS_THRESHOLD = Decimal("21000")
 ESIC_EMPLOYEE_RATE = Decimal("0.0075")
 ESIC_EMPLOYER_RATE = Decimal("0.0325")
+
+
+def _pt_slab(state: Optional[str], gender: Optional[str], gross: Decimal) -> Decimal:
+    """Look up monthly Professional Tax for a given state/gender/gross.
+
+    Only the slabs Jaikalki currently operates in are encoded. Unknown
+    states return 0 — the admin can either set `pt_state` to one of the
+    supported codes or extend this table. Codes are upper-cased ISO-like
+    abbreviations (MH, KA, WB, TN, GJ, AP, TS, KL).
+    """
+    if not state:
+        return Decimal(0)
+    code = state.strip().upper()
+    g = (gender or "").strip().lower()
+
+    if code in {"MH", "MAHARASHTRA"}:
+        # Women earning ≤ ₹25,000/m are exempt; everyone else uses
+        # the standard slab. Feb's ₹300 top-up is left to payroll.
+        if g in {"female", "f", "woman"} and gross <= Decimal("25000"):
+            return Decimal(0)
+        if gross <= Decimal("7500"):
+            return Decimal(0)
+        if gross <= Decimal("10000"):
+            return Decimal(175)
+        return Decimal(200)
+    if code in {"KA", "KARNATAKA"}:
+        return Decimal(0) if gross <= Decimal("25000") else Decimal(200)
+    if code in {"WB", "WEST BENGAL"}:
+        if gross <= Decimal("10000"):
+            return Decimal(0)
+        if gross <= Decimal("15000"):
+            return Decimal(110)
+        if gross <= Decimal("25000"):
+            return Decimal(130)
+        if gross <= Decimal("40000"):
+            return Decimal(150)
+        return Decimal(200)
+    if code in {"TN", "TAMIL NADU"}:
+        # TN bills half-yearly; we return the monthly equivalent.
+        if gross <= Decimal("21000"):
+            return Decimal(0)
+        if gross <= Decimal("30000"):
+            return Decimal(135)
+        if gross <= Decimal("45000"):
+            return Decimal(315)
+        if gross <= Decimal("60000"):
+            return Decimal(690)
+        if gross <= Decimal("75000"):
+            return Decimal(1025)
+        return Decimal(1250)
+    if code in {"GJ", "GUJARAT"}:
+        if gross <= Decimal("12000"):
+            return Decimal(0)
+        return Decimal(200)
+    if code in {"AP", "ANDHRA PRADESH", "TS", "TELANGANA"}:
+        if gross <= Decimal("15000"):
+            return Decimal(0)
+        if gross <= Decimal("20000"):
+            return Decimal(150)
+        return Decimal(200)
+    if code in {"KL", "KERALA"}:
+        # Kerala bills half-yearly; monthly equivalent below.
+        if gross <= Decimal("11999"):
+            return Decimal(0)
+        if gross <= Decimal("17999"):
+            return Decimal(120 / 6)
+        if gross <= Decimal("29999"):
+            return Decimal(180 / 6)
+        if gross <= Decimal("44999"):
+            return Decimal(300 / 6)
+        if gross <= Decimal("59999"):
+            return Decimal(450 / 6)
+        if gross <= Decimal("74999"):
+            return Decimal(600 / 6)
+        if gross <= Decimal("99999"):
+            return Decimal(750 / 6)
+        if gross <= Decimal("124999"):
+            return Decimal(1000 / 6)
+        return Decimal(1250 / 6)
+    return Decimal(0)
 
 
 def _round(value: Decimal) -> int:
@@ -105,10 +185,11 @@ class JaikalkiSalaryCalculator:
         self,
         template: SalaryTemplate,
         ctc_annual: Optional[Decimal | int | float] = None,
+        employee: Optional[Employee] = None,
     ) -> SalaryBreakup:
         if template.category == "intern":
             return self._intern(template)
-        return self._standard(template, ctc_annual)
+        return self._standard(template, ctc_annual, employee)
 
     # ── intern ────────────────────────────────────────────────────────
     def _intern(self, t: SalaryTemplate) -> SalaryBreakup:
@@ -130,7 +211,18 @@ class JaikalkiSalaryCalculator:
         self,
         t: SalaryTemplate,
         ctc_annual: Optional[Decimal | int | float],
+        emp: Optional[Employee] = None,
     ) -> SalaryBreakup:
+        # Resolve per-employee statutory overrides up-front. When no
+        # employee is given (template-only preview) the defaults match
+        # legacy behaviour exactly.
+        pf_opt_out = bool(getattr(emp, "pf_opt_out", False))
+        pf_basic_cap = (
+            Decimal(getattr(emp, "pf_basic_cap_override", None) or PF_BASIC_CAP)
+        )
+        esic_force_exempt = bool(getattr(emp, "esic_force_exempt", False))
+        pt_state = getattr(emp, "pt_state", None)
+        gender = getattr(emp, "gender", None)
         # Use the template's explicit components (Pooja's case).
         basic = Decimal(t.basic_amount or 0)
         hra = Decimal(t.hra_amount or 0)
@@ -184,9 +276,15 @@ class JaikalkiSalaryCalculator:
                     basic + hra + other + special + conveyance
                     + medical + lta + food
                 )
-                pf_basic_try = min(basic, PF_BASIC_CAP)
-                pf_er_try = pf_basic_try * PF_EMPLOYER_RATE
-                if gross_try <= ESIC_GROSS_THRESHOLD:
+                if pf_opt_out:
+                    pf_er_try = Decimal(0)
+                else:
+                    pf_basic_try = min(basic, pf_basic_cap)
+                    pf_er_try = pf_basic_try * PF_EMPLOYER_RATE
+                if (
+                    not esic_force_exempt
+                    and gross_try <= ESIC_GROSS_THRESHOLD
+                ):
                     esic_er_try = gross_try * ESIC_EMPLOYER_RATE
                 else:
                     esic_er_try = Decimal(0)
@@ -205,21 +303,25 @@ class JaikalkiSalaryCalculator:
 
         gross = basic + hra + other + special + conveyance + medical + lta + food
 
-        pf_basic = min(basic, PF_BASIC_CAP)
-        pf_employee = pf_basic * PF_EMPLOYEE_RATE
-        pf_employer = pf_basic * PF_EMPLOYER_RATE
+        if pf_opt_out:
+            pf_employee = Decimal(0)
+            pf_employer = Decimal(0)
+        else:
+            pf_basic = min(basic, pf_basic_cap)
+            pf_employee = pf_basic * PF_EMPLOYEE_RATE
+            pf_employer = pf_basic * PF_EMPLOYER_RATE
 
-        if gross <= ESIC_GROSS_THRESHOLD:
+        if not esic_force_exempt and gross <= ESIC_GROSS_THRESHOLD:
             esic_employee = gross * ESIC_EMPLOYEE_RATE
             esic_employer = gross * ESIC_EMPLOYER_RATE
         else:
             esic_employee = Decimal(0)
             esic_employer = Decimal(0)
 
-        # Professional tax is omitted in Jaikalki's offer letter (matches the
-        # validation contract). Higher templates can carry it later via a
-        # dedicated `professional_tax` column.
-        pt = Decimal(0)
+        # Professional tax: zero unless the employee record names a
+        # state. Maharashtra-bound female employees ≤ ₹25k are exempt;
+        # other states slot into their published slabs.
+        pt = _pt_slab(pt_state, gender, gross)
 
         # Round each component first, then sum — so the totals match
         # Jaikalki's offer letter to the rupee (22549 not 22548).

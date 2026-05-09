@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.exceptions import ConflictError, NotFoundError
 from app.core.permissions import require_permission, require_super_admin
 from app.dependencies import get_current_user, get_db
-from app.models import SalaryTemplate, User
+from app.models import Employee, SalaryTemplate, User
 from app.schemas.employee import (
     SalaryBreakupOut,
     SalaryTemplateCreate,
@@ -117,6 +117,10 @@ async def delete_template(
 async def calculate(
     template_id: int,
     ctc: Optional[Decimal] = Query(default=None, description="Optional CTC override"),
+    employee_id: Optional[int] = Query(
+        default=None,
+        description="If provided, applies that employee's statutory overrides (PF opt-out, PT state, etc.)",
+    ),
     db: AsyncSession = Depends(get_db),
     _: User = Depends(require_permission("salary.view.team")),
 ) -> dict:
@@ -126,5 +130,11 @@ async def calculate(
     if not t:
         raise NotFoundError("Salary template not found")
 
+    emp: Optional[Employee] = None
+    if employee_id is not None:
+        emp = (
+            await db.execute(select(Employee).where(Employee.id == employee_id))
+        ).scalar_one_or_none()
+
     calc = JaikalkiSalaryCalculator()
-    return calc.calculate(t, ctc_annual=ctc).as_dict()
+    return calc.calculate(t, ctc_annual=ctc, employee=emp).as_dict()

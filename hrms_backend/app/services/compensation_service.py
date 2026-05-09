@@ -100,7 +100,9 @@ async def propose(
             )
         ).scalar_one_or_none()
         if template:
-            breakup = JaikalkiSalaryCalculator().calculate(template, new_ctc)
+            breakup = JaikalkiSalaryCalculator().calculate(
+                template, new_ctc, employee=emp
+            )
             breakup_snapshot = {
                 "monthly": {
                     "basic": breakup.basic,
