@@ -3,25 +3,41 @@
 Run after seed_employees.py / seed_attendance_leave.py:
 
     python -m scripts.seed_attendance_history
+    python -m scripts.seed_attendance_history --dry-run
+    python -m scripts.seed_attendance_history --gap-days 90
 
 Behaviour
 ---------
-1.  Reads every monthly sheet (`Jan '25` → `Jun '26`).
-2.  Auto-creates any employees from the workbook that don't yet exist
-    in the DB. The first 11 of those (JKT001..JKT011) are slotted into
-    the PERMANENT category with the JKT-PERM-L2 template; JKT012 and
-    onward use the same defaults but can be tuned afterwards by HR.
-3.  Walks days 1..31 for each employee row and upserts an Attendance
-    row keyed on (employee_id, date):
+1.  Drops any leftover demo Employee rows from older seeds
+    (JKT014..JKT018). Their User logins (hr@, manager@, employee@,
+    pooja@) are *kept* — only the Employee profile is removed. The
+    seed_attendance_history flow then re-creates the codes the
+    spreadsheet actually uses (which now extend up to JKT015 and
+    JKT016 = Anurag).
+2.  Reads every monthly sheet (`Jan '25` → `Jun '26`). The workbook
+    uses two layouts (Jan-Nov 2025 and Dec 2025 onwards); the parser
+    auto-detects the column positions per sheet by locating the
+    `Emp. ID`, `Date`, `D O B`, `D O J`, and `D O E` headers.
+3.  Person identity = (normalised name, date of joining). Codes can
+    be reused in the workbook — JKT011 was Pratibha then Ruma,
+    JKT012 was Anupam then Guruprasad. Resolution rule: the LATEST
+    occupant of a reused code keeps it, and earlier persons get
+    synthetic archival codes JKT-X001, JKT-X002, …. Anurag Randive
+    appears without a code in the workbook; we assign him JKT016
+    (the first free numeric slot above the spreadsheet's range).
+4.  For every person, walks days 1..31 and upserts an Attendance row
+    keyed on (employee_id, date):
         P → status='present', source='import'
         L → status='leave',   source='import'
         H → skipped (the Holiday table covers those)
         empty → skipped (we don't fabricate 'absent')
-4.  After the import, any employee whose last 'P' is more than
-    `--gap-days N` days ago (default 60) gets marked
-    `status='resigned'`, `exit_date=last_present_date`, and a
-    Resignation row is created in `cleared` state with the reason
-    "Auto-derived from attendance import — no presence after {date}".
+5.  Resignation pass — for every person, if the workbook gives an
+    explicit Date-of-Exit (column F in 2026 sheets) we use it. Otherwise
+    we fall back to the 60-day-no-presence gap rule (configurable with
+    --gap-days). Each resignation flips Employee.status='resigned',
+    sets exit_date, and creates a Resignation row in `cleared` state
+    with reason "Auto-derived from attendance import — last present
+    {date}" or "(DOE per spreadsheet)".
 
 Idempotent. Re-running adjusts existing rows in place.
 """
@@ -31,6 +47,7 @@ import argparse
 import asyncio
 import re
 import sys
+from collections import defaultdict
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
@@ -50,6 +67,8 @@ from app.models import (
 
 
 XLSX_PATH = Path("attendance_data/Jaikalki - Attendance Sheet 2025.xlsx")
+
+_DEMO_EMPLOYEE_CODES = {"JKT014", "JKT015", "JKT016", "JKT017", "JKT018"}
 
 # Map sheet name → (year, month). Sheet names are like "Jan '25" / "Apr '26".
 _MONTH_NAMES = {
@@ -78,17 +97,19 @@ def _parse_sheet_name(name: str) -> Optional[tuple[int, int]]:
     yr = int(m.group(2))
     if yr < 100:
         yr += 2000
-    return (yr, _MONTH_NAMES.get(mname))
+    mnum = _MONTH_NAMES.get(mname)
+    if mnum is None:
+        return None
+    return (yr, mnum)
 
 
-# ── Date-of-joining string parser  ────────────────────────────────────
-# The spreadsheet stores DOJ as e.g. "14th Sept 2024" or "30th Jan 2025".
 _DOJ_RE = re.compile(
     r"^(\d{1,2})(?:st|nd|rd|th)?\s+([A-Za-z\.]+)\s+(\d{4})$"
 )
 
 
-def _parse_doj(raw: object) -> Optional[date]:
+def _parse_date_string(raw: object) -> Optional[date]:
+    """Handles "14th Sept 2024" / "1st Jan 2026" / native date / native datetime."""
     if raw is None:
         return None
     if isinstance(raw, datetime):
@@ -96,6 +117,8 @@ def _parse_doj(raw: object) -> Optional[date]:
     if isinstance(raw, date):
         return raw
     s = str(raw).strip()
+    if not s:
+        return None
     m = _DOJ_RE.match(s)
     if not m:
         return None
@@ -111,83 +134,294 @@ def _parse_doj(raw: object) -> Optional[date]:
         return None
 
 
-# ── Workbook → in-memory rows ─────────────────────────────────────────
+def _norm_name(n: object) -> str:
+    return re.sub(r"\s+", " ", str(n or "").strip().lower())
+
+
+# ── Sheet column detection ───────────────────────────────────────────
+def _detect_columns(rows: list) -> Optional[dict]:
+    """Locate the relevant columns/rows in a single sheet.
+
+    Returns None if the sheet doesn't have the expected `Emp. ID` /
+    `Date` headers (e.g. an unrelated tab).
+    """
+    id_row = id_col = None
+    for r_idx, row in enumerate(rows[:12]):
+        for c_idx, cell in enumerate(row or []):
+            if cell is None:
+                continue
+            if str(cell).strip().lower() == "emp. id":
+                id_row, id_col = r_idx, c_idx
+                break
+        if id_row is not None:
+            break
+    if id_row is None:
+        return None
+
+    # Name col is the next non-empty header to the right of Emp. ID.
+    name_col = id_col + 1
+    header_row = rows[id_row]
+    while name_col < len(header_row) and (
+        header_row[name_col] is None
+        or str(header_row[name_col]).strip() == ""
+    ):
+        name_col += 1
+    if name_col >= len(header_row):
+        name_col = id_col + 1
+
+    # Find the row that contains the literal "Date" header — usually
+    # 1-3 rows above id_row.
+    date_row = date_col = None
+    search_lo = max(0, id_row - 4)
+    for r_idx in range(search_lo, id_row + 1):
+        row = rows[r_idx] or []
+        for c_idx, cell in enumerate(row):
+            if cell is None:
+                continue
+            if str(cell).strip().lower() == "date":
+                date_row, date_col = r_idx, c_idx
+                break
+        if date_row is not None:
+            break
+    if date_row is None:
+        return None
+
+    day_1_col = date_col + 1
+
+    # Discover DOB / DOJ / DOE columns within date_row.
+    dob_col = doj_col = doe_col = None
+    for c_idx, cell in enumerate(rows[date_row] or []):
+        if cell is None:
+            continue
+        s = re.sub(r"\s+", "", str(cell).strip().lower())
+        if s == "dob":
+            dob_col = c_idx
+        elif s == "doj":
+            doj_col = c_idx
+        elif s == "doj/doe":
+            doj_col = c_idx
+        elif s == "doe":
+            doe_col = c_idx
+
+    return {
+        "id_row": id_row,
+        "id_col": id_col,
+        "name_col": name_col,
+        "dob_col": dob_col,
+        "doj_col": doj_col,
+        "doe_col": doe_col,
+        "day_1_col": day_1_col,
+    }
+
+
+# ── Workbook reader ──────────────────────────────────────────────────
 def read_workbook(path: Path) -> dict:
     """Returns
     {
-        'employees': {code: {'name': str, 'doj': date|None}},
-        'attendance': [(code, year, month, day, marker), ...],
+        'people': {norm_name: {
+                       'name': str, 'doj': date|None, 'doe': date|None,
+                       'sheet_codes': [(sheet_idx, raw_code), ...],
+                   }, ...},
+        'markers': [(norm_name, year, month, day, 'P'|'L'|'H'), ...],
+        'sheet_order': [sheet_name, ...],
     }
+
+    Identity key is the normalised name. Some sheets record a slightly
+    different DOJ for the same person (Soham Roy: Dec '25 sheet says 18
+    Dec, Jan '26 sheet says 29 Dec) — we trust the later sheet because
+    those tabs carry the JKT codes and are kept in sync with payroll.
     """
     try:
         from openpyxl import load_workbook
     except ImportError as e:
         raise RuntimeError(
-            "openpyxl is required to import the attendance workbook. "
-            "Install it with: pip install openpyxl"
+            "openpyxl is required. Install with: pip install openpyxl"
         ) from e
 
     wb = load_workbook(filename=str(path), data_only=True, read_only=True)
-    employees: dict[str, dict] = {}
-    rows: list[tuple[str, int, int, int, str]] = []
+    people: dict[str, dict] = {}
+    markers: list[tuple] = []
 
-    for sheet_name in wb.sheetnames:
+    sheet_order: list[str] = []
+
+    for sheet_idx, sheet_name in enumerate(wb.sheetnames):
         ym = _parse_sheet_name(sheet_name)
-        if ym is None or ym[1] is None:
+        if ym is None:
             print(f"  · skipping unrecognised sheet: {sheet_name!r}")
             continue
         year, month = ym
+        sheet_order.append(sheet_name)
 
         ws = wb[sheet_name]
-        all_rows = list(ws.iter_rows(values_only=True))
-        if len(all_rows) < 8:
+        rows = list(ws.iter_rows(values_only=True))
+        cols = _detect_columns(rows)
+        if cols is None:
+            print(f"  · skipping {sheet_name}: no Emp. ID/Date headers")
             continue
 
-        # Header row 5 (1-indexed) holds the date numbers in cols 6..36.
-        # all_rows is 0-indexed → index 4.
-        date_row = all_rows[4]
-
-        # Build a column → day-of-month mapping.
+        # Determine the date columns by scanning the date_row for ints 1..31
+        date_row_idx = next(
+            (i for i in range(cols["id_row"]) if rows[i] and any(
+                str(c).strip().lower() == "date" for c in rows[i] if c is not None
+            )),
+            None,
+        )
         col_to_day: dict[int, int] = {}
-        for col_idx, cell in enumerate(date_row):
-            if isinstance(cell, int) and 1 <= cell <= 31:
-                col_to_day[col_idx] = cell
+        if date_row_idx is not None:
+            for c_idx, cell in enumerate(rows[date_row_idx]):
+                if isinstance(cell, int) and 1 <= cell <= 31:
+                    col_to_day[c_idx] = cell
 
-        for r in all_rows[7:]:
-            if not r or r[0] is None:
+        # Walk employee rows.
+        for r in rows[cols["id_row"] + 1:]:
+            if not r:
                 continue
-            code = str(r[0]).strip()
-            if not code.startswith("JKT") or len(code) != 6:
-                continue
-            name = (str(r[1]).strip() if r[1] else "")
-            doj = _parse_doj(r[3])
-            if code not in employees:
-                employees[code] = {"name": name, "doj": doj}
-            else:
-                # Keep the earliest non-empty doj/name.
-                if not employees[code].get("name") and name:
-                    employees[code]["name"] = name
-                if not employees[code].get("doj") and doj:
-                    employees[code]["doj"] = doj
+            raw_id = r[cols["id_col"]] if cols["id_col"] < len(r) else None
+            raw_name = r[cols["name_col"]] if cols["name_col"] < len(r) else None
 
+            code = str(raw_id).strip() if raw_id else ""
+            name = str(raw_name).strip() if raw_name else ""
+            if not name:
+                continue
+            if name.lower().startswith("daily attendance"):
+                continue
+
+            # Skip non-JKT codes that are clearly stray text (rare).
+            if code and not re.match(r"^JKT\d+", code, re.IGNORECASE):
+                code = ""
+
+            doj = (
+                _parse_date_string(r[cols["doj_col"]])
+                if cols["doj_col"] is not None and cols["doj_col"] < len(r)
+                else None
+            )
+            doe = (
+                _parse_date_string(r[cols["doe_col"]])
+                if cols["doe_col"] is not None and cols["doe_col"] < len(r)
+                else None
+            )
+
+            key = _norm_name(name)
+            entry = people.setdefault(
+                key,
+                {
+                    "name": name,
+                    "doj": None,
+                    "doe": None,
+                    "sheet_codes": [],
+                },
+            )
+            # Use the longest non-truncated name we see.
+            if len(name) > len(entry["name"]):
+                entry["name"] = name
+            # Trust the latest sheet for DOJ/DOE (chronological order).
+            if doj:
+                entry["doj"] = doj
+            if doe:
+                entry["doe"] = doe
+            entry["sheet_codes"].append((sheet_idx, code or None))
+
+            # Capture day-by-day markers.
             for col_idx, day_n in col_to_day.items():
-                cell = r[col_idx] if col_idx < len(r) else None
+                if col_idx >= len(r):
+                    continue
+                cell = r[col_idx]
                 if cell is None:
                     continue
                 marker = str(cell).strip().upper()
-                if not marker:
+                if marker not in {"P", "L", "H"}:
                     continue
-                # Validate the date is real (Feb 30 etc. just won't roll up).
                 try:
                     _ = date(year, month, day_n)
                 except ValueError:
                     continue
-                rows.append((code, year, month, day_n, marker))
+                markers.append((key, year, month, day_n, marker))
 
-    return {"employees": employees, "attendance": rows}
+    return {
+        "people": people,
+        "markers": markers,
+        "sheet_order": sheet_order,
+    }
+
+
+# ── Code-reuse resolution ────────────────────────────────────────────
+def resolve_canonical_codes(
+    people: dict[str, dict],
+) -> dict[str, str]:
+    """Decide the final employee_code each person gets.
+
+    Algorithm:
+    - For each person, take the latest non-empty code they were ever
+      assigned in the workbook (highest sheet_idx).
+    - For codes claimed by multiple persons, the person whose LATEST
+      sheet_idx with that code is the highest keeps it. Earlier
+      occupants get synthetic JKT-X001, JKT-X002, … codes.
+    - Persons with no code at all get the next free numeric slot
+      starting at JKT016 (the first slot above the spreadsheet's
+      published range).
+    """
+    # Per-person → latest code (or None) and the sheet_idx of that latest claim.
+    latest_claim: dict[str, tuple[Optional[str], int]] = {}
+    for key, info in people.items():
+        latest_code: Optional[str] = None
+        latest_idx = -1
+        for sheet_idx, code in info["sheet_codes"]:
+            if code and sheet_idx > latest_idx:
+                latest_code = code
+                latest_idx = sheet_idx
+        latest_claim[key] = (latest_code, latest_idx)
+
+    # Code → list of (person_key, latest_idx_for_that_code)
+    code_to_claims: dict[str, list[tuple[str, int]]] = defaultdict(list)
+    for key, (code, idx) in latest_claim.items():
+        if code:
+            code_to_claims[code].append((key, idx))
+
+    # Codes claimed by multiple persons need disambiguation.
+    canonical: dict[str, str] = {}
+    displaced: list[str] = []
+    for code, claims in code_to_claims.items():
+        # Sort by latest_idx descending; first wins.
+        claims.sort(key=lambda x: -x[1])
+        winner_key, _ = claims[0]
+        canonical[winner_key] = code
+        for loser_key, _ in claims[1:]:
+            displaced.append(loser_key)
+
+    # Assign synthetic codes to displaced + uncoded persons.
+    # Displaced get JKT-X{nnn} so audit history is obvious.
+    seq = 1
+    for key in displaced:
+        if key in canonical:
+            continue
+        canonical[key] = f"JKT-X{seq:03d}"
+        seq += 1
+
+    # Uncoded persons (e.g. Anurag) get the next free numeric JKT slot.
+    next_numeric = 16
+    used = {c for c in canonical.values() if re.match(r"^JKT\d+$", c)}
+    # Also reserve any numeric codes that were already canonical for
+    # other people (impossible loop but cheap to check).
+    for key in people:
+        if key not in canonical:
+            while f"JKT{next_numeric:03d}" in used:
+                next_numeric += 1
+            code = f"JKT{next_numeric:03d}"
+            canonical[key] = code
+            used.add(code)
+            next_numeric += 1
+
+    return canonical
 
 
 # ── DB-side helpers ──────────────────────────────────────────────────
+def _split_name(name: str, fallback_code: str) -> tuple[str, str]:
+    parts = name.split(maxsplit=1) if name else [fallback_code, ""]
+    first = parts[0] or fallback_code
+    last = parts[1] if len(parts) > 1 else ""
+    return first, last
+
+
 async def _ensure_employee(
     db: AsyncSession,
     *,
@@ -196,20 +430,21 @@ async def _ensure_employee(
     doj: Optional[date],
     permanent_cat_id: int,
     default_template_id: int,
-) -> Employee:
+) -> tuple[Employee, bool]:
+    """Returns (emp, was_existing)."""
     existing = (
         await db.execute(select(Employee).where(Employee.employee_code == code))
     ).scalar_one_or_none()
     if existing is not None:
-        # Backfill DOJ if the seed didn't have one, but never clobber a real value.
-        if doj and not existing.date_of_joining:
+        if name:
+            first, last = _split_name(name, code)
+            existing.first_name = first
+            existing.last_name = last
+        if doj:
             existing.date_of_joining = doj
-        return existing
+        return existing, True
 
-    parts = name.split(maxsplit=1) if name else [code, ""]
-    first = parts[0] or code
-    last = parts[1] if len(parts) > 1 else ""
-
+    first, last = _split_name(name, code)
     emp = Employee(
         employee_code=code,
         first_name=first,
@@ -223,7 +458,24 @@ async def _ensure_employee(
     )
     db.add(emp)
     await db.flush()
-    return emp
+    return emp, False
+
+
+async def _delete_demo_employees(db: AsyncSession) -> list[str]:
+    """Drop the placeholder JKT014..JKT018 employees that older seed runs
+    may have created. The User accounts behind them are kept so the
+    test logins still work. The seed below recreates JKT014/JKT015 with
+    the *real* spreadsheet employees (Pooja Kumawat, Atharv Sachin)."""
+    rows = (
+        await db.execute(
+            select(Employee).where(Employee.employee_code.in_(_DEMO_EMPLOYEE_CODES))
+        )
+    ).scalars().all()
+    deleted: list[str] = []
+    for emp in rows:
+        deleted.append(emp.employee_code)
+        await db.delete(emp)
+    return deleted
 
 
 async def _upsert_attendance(
@@ -251,51 +503,35 @@ async def _upsert_attendance(
             )
         )
     else:
-        # Don't overwrite admin-edited / GPS-punched real rows; only
-        # touch rows whose source is also `import` (or default).
+        # Don't overwrite admin-edited / GPS-punched real rows.
         if existing.source in ("import", "manual"):
             existing.status = status_
             existing.source = "import"
 
 
-async def _maybe_resign(
+async def _resign(
     db: AsyncSession,
     *,
     emp: Employee,
-    last_present: Optional[date],
-    today: date,
-    gap_days: int,
-) -> bool:
-    if emp.status != "active":
-        return False
-    if last_present is None:
-        # Never present in the workbook range — leave them active so HR
-        # can investigate; auto-resigning a no-show is too aggressive.
-        return False
-    gap = (today - last_present).days
-    if gap < gap_days:
-        return False
+    exit_date: date,
+    reason: str,
+) -> None:
+    if emp.status != "resigned":
+        emp.status = "resigned"
+    emp.exit_date = exit_date
 
-    emp.status = "resigned"
-    emp.exit_date = last_present
-
-    # Add or update a Resignation row.
-    existing_resig = (
+    existing = (
         await db.execute(
             select(Resignation).where(Resignation.employee_id == emp.id)
         )
     ).scalar_one_or_none()
-    reason = (
-        "Auto-derived from attendance import — no presence after "
-        f"{last_present.isoformat()}."
-    )
-    if existing_resig is None:
+    if existing is None:
         db.add(
             Resignation(
                 employee_id=emp.id,
-                requested_at=datetime.combine(last_present, datetime.min.time()),
-                proposed_last_working_day=last_present,
-                actual_last_working_day=last_present,
+                requested_at=datetime.combine(exit_date, datetime.min.time()),
+                proposed_last_working_day=exit_date,
+                actual_last_working_day=exit_date,
                 reason=reason,
                 status="cleared",
                 notice_period_days=0,
@@ -303,15 +539,13 @@ async def _maybe_resign(
             )
         )
     else:
-        # Refresh dates if we're already tracking one.
-        existing_resig.actual_last_working_day = last_present
-        existing_resig.proposed_last_working_day = last_present
-        existing_resig.status = "cleared"
-        if not existing_resig.hr_cleared_at:
-            existing_resig.hr_cleared_at = datetime.utcnow()
-        if not existing_resig.reason:
-            existing_resig.reason = reason
-    return True
+        existing.actual_last_working_day = exit_date
+        existing.proposed_last_working_day = exit_date
+        existing.status = "cleared"
+        if not existing.hr_cleared_at:
+            existing.hr_cleared_at = datetime.utcnow()
+        if not existing.reason:
+            existing.reason = reason
 
 
 # ── Main flow ────────────────────────────────────────────────────────
@@ -322,15 +556,27 @@ async def main(*, gap_days: int, dry_run: bool, path: Path) -> None:
 
     print(f"→ Reading {path}")
     wb_data = read_workbook(path)
-    employees_in_wb = wb_data["employees"]
-    attendance_rows = wb_data["attendance"]
+    people = wb_data["people"]
+    markers = wb_data["markers"]
     print(
-        f"  Workbook: {len(employees_in_wb)} employees, "
-        f"{len(attendance_rows)} day-marker rows."
+        f"  Workbook: {len(people)} distinct persons, "
+        f"{len(markers)} day markers."
     )
 
+    canonical = resolve_canonical_codes(people)
+    # Sanity: print the resolved code for each person.
+    print("  Code resolution:")
+    for key, info in sorted(people.items(), key=lambda kv: canonical[kv[0]]):
+        c = canonical[key]
+        doj = info["doj"]
+        doe = info["doe"]
+        print(
+            f"    {c:9s} {info['name']:30s} "
+            f"DOJ={doj if doj else '—':12} "
+            f"DOE={doe if doe else '—':12}"
+        )
+
     async with AsyncSessionLocal() as db:
-        # Resolve PERMANENT category and a default template (JKT-PERM-L2).
         permanent_cat = (
             await db.execute(
                 select(EmployeeCategory).where(EmployeeCategory.code == "PERMANENT")
@@ -351,11 +597,21 @@ async def main(*, gap_days: int, dry_run: bool, path: Path) -> None:
                   file=sys.stderr)
             sys.exit(2)
 
-        # 1. Ensure each spreadsheet employee exists.
-        emp_by_code: dict[str, Employee] = {}
+        # 1. Cleanup leftover demo Employee rows.
+        deleted = await _delete_demo_employees(db)
+        if deleted:
+            print(
+                "  Removed demo employees (User logins preserved): "
+                f"{', '.join(sorted(deleted))}"
+            )
+
+        # 2. Upsert each person.
+        emp_by_key: dict[str, Employee] = {}
         created = 0
-        for code, info in sorted(employees_in_wb.items()):
-            emp = await _ensure_employee(
+        updated = 0
+        for key, info in people.items():
+            code = canonical[key]
+            emp, existed = await _ensure_employee(
                 db,
                 code=code,
                 name=info["name"],
@@ -363,66 +619,77 @@ async def main(*, gap_days: int, dry_run: bool, path: Path) -> None:
                 permanent_cat_id=permanent_cat.id,
                 default_template_id=default_template.id,
             )
-            if emp.id is None:
-                # New row — flush so it gets an id.
-                await db.flush()
-            emp_by_code[code] = emp
-            if emp.id and emp.created_at is None:
+            await db.flush()
+            emp_by_key[key] = emp
+            if existed:
+                updated += 1
+            else:
                 created += 1
-        print(f"  Employees: {created} new, {len(emp_by_code) - created} existing.")
+        print(f"  Employees: {created} new, {updated} updated.")
 
-        # 2. Upsert attendance rows.
-        last_present: dict[str, date] = {}
+        # 3. Import attendance markers.
+        last_present_per_person: dict[str, date] = {}
         upserted = 0
-        skipped = 0
-        for code, year, month, day_n, marker in attendance_rows:
-            emp = emp_by_code.get(code)
+        for key, year, month, day_n, marker in markers:
+            emp = emp_by_key.get(key)
             if emp is None:
-                skipped += 1
                 continue
             try:
                 d = date(year, month, day_n)
             except ValueError:
-                skipped += 1
                 continue
             if marker == "P":
                 await _upsert_attendance(
                     db, employee_id=emp.id, on=d, status_="present"
                 )
                 upserted += 1
-                if code not in last_present or d > last_present[code]:
-                    last_present[code] = d
+                if key not in last_present_per_person or d > last_present_per_person[key]:
+                    last_present_per_person[key] = d
             elif marker == "L":
                 await _upsert_attendance(
                     db, employee_id=emp.id, on=d, status_="leave"
                 )
                 upserted += 1
-            elif marker == "H":
-                # Holiday — already in the Holiday table (or absent from it,
-                # in which case admins can add it).
-                continue
-            else:
-                skipped += 1
-        print(f"  Attendance: {upserted} rows imported, {skipped} skipped.")
+            # H markers are picked up from the Holiday table.
+        print(f"  Attendance: {upserted} rows upserted from P/L markers.")
 
-        # 3. Resignation pass.
+        # 4. Resignation pass.
         today = date.today()
-        resigned = []
-        for code, emp in emp_by_code.items():
-            lp = last_present.get(code)
-            if await _maybe_resign(
-                db, emp=emp, last_present=lp, today=today, gap_days=gap_days
-            ):
-                resigned.append((code, emp.first_name + " " + emp.last_name, lp))
+        resigned_log = []
+        for key, info in people.items():
+            emp = emp_by_key[key]
+            doe = info["doe"]
+            lp = last_present_per_person.get(key)
+            if doe:
+                await _resign(
+                    db,
+                    emp=emp,
+                    exit_date=doe,
+                    reason=(
+                        f"Auto-derived from attendance import — "
+                        f"DOE {doe.isoformat()} per spreadsheet."
+                    ),
+                )
+                resigned_log.append((emp.employee_code, info["name"], doe, "DOE"))
+                continue
+            if lp is not None and (today - lp).days >= gap_days:
+                await _resign(
+                    db,
+                    emp=emp,
+                    exit_date=lp,
+                    reason=(
+                        f"Auto-derived from attendance import — "
+                        f"no presence after {lp.isoformat()}."
+                    ),
+                )
+                resigned_log.append((emp.employee_code, info["name"], lp, "GAP"))
 
-        if resigned:
-            print(
-                f"  Resigned (gap > {gap_days} days, today={today}):"
-            )
-            for code, name, lp in resigned:
-                print(f"    · {code} {name:30s} last_present={lp}")
+        if resigned_log:
+            print("  Resignations:")
+            for code, nm, ex, src in resigned_log:
+                print(f"    · {code:9s} {nm:30s} exit={ex} source={src}")
         else:
-            print(f"  No resignations triggered (gap threshold = {gap_days} days).")
+            print("  No resignations triggered.")
 
         if dry_run:
             print("→ Dry run; rolling back.")

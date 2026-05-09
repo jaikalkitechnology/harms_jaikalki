@@ -222,74 +222,29 @@ DESIGNATIONS = [
 ]
 
 
-# Sample employees. Maps to existing demo users from seed_auth where possible.
+# Sample employees. Only one entry: JKT001 hosts the super-admin login
+# (admin@hrms.com) AND doubles as the real employee profile for
+# Shyamveer Singh from the attendance spreadsheet. The other 11
+# real employees (JKT002..JKT012) are seeded by
+# scripts/seed_attendance_history.py from the spreadsheet — their
+# names, DOJs, etc. live there as the source of truth.
+#
+# Earlier demo employees JKT014..JKT018 (HR Demo, Manager Demo, Employee
+# Demo, Test Intern, Pooja Kumawat) were retired so the directory
+# matches the actual headcount; the seed_attendance_history script
+# cleans up any leftover Employee rows for those codes on first run.
 SAMPLE_EMPLOYEES = [
     dict(
         employee_code="JKT001",
-        first_name="Director", last_name="Demo",
+        first_name="Shyamveer", last_name="Singh",
         category_code="PERMANENT", template_code="JKT-PERM-L5",
         designation_code="DIR", department_code="ENG",
-        date_of_joining=date(2024, 1, 1),
+        date_of_joining=date(2024, 9, 14),
+        date_of_birth=date(1991, 9, 11),
         ctc_annual=Decimal("3600000"),
         is_on_probation=False,
-        confirmation_date=date(2024, 7, 1),
+        confirmation_date=date(2025, 3, 14),
         user_email="admin@hrms.com",
-    ),
-    dict(
-        employee_code="JKT014",
-        first_name="Pooja", last_name="Kumawat",
-        category_code="TRAINEE", template_code="JKT-TRAINEE-L1",
-        designation_code="DEV1", department_code="IT",
-        date_of_joining=date(2026, 4, 1),
-        ctc_annual=Decimal("270588"),
-        is_on_probation=True,
-        manager_code="JKT001",
-        # No matching demo user — will create one if `user_email` is set.
-    ),
-    dict(
-        employee_code="JKT015",
-        first_name="HR", last_name="Demo",
-        category_code="PERMANENT", template_code="JKT-PERM-L4",
-        designation_code="HRMGR", department_code="HR",
-        date_of_joining=date(2024, 3, 1),
-        ctc_annual=Decimal("1800000"),
-        is_on_probation=False,
-        confirmation_date=date(2024, 9, 1),
-        user_email="hr@hrms.com",
-    ),
-    dict(
-        employee_code="JKT016",
-        first_name="Manager", last_name="Demo",
-        category_code="PERMANENT", template_code="JKT-PERM-L4",
-        designation_code="MGR", department_code="ENG",
-        date_of_joining=date(2024, 2, 1),
-        ctc_annual=Decimal("1800000"),
-        is_on_probation=False,
-        confirmation_date=date(2024, 8, 1),
-        manager_code="JKT001",
-        user_email="manager@hrms.com",
-    ),
-    dict(
-        employee_code="JKT017",
-        first_name="Test", last_name="Intern",
-        category_code="INTERN", template_code="JKT-INTERN-001",
-        designation_code="INT", department_code="IT",
-        date_of_joining=date(2026, 5, 1),
-        ctc_annual=Decimal("0"),
-        is_on_probation=False,
-        manager_code="JKT016",
-    ),
-    dict(
-        employee_code="JKT018",
-        first_name="Employee", last_name="Demo",
-        category_code="PERMANENT", template_code="JKT-PERM-L2",
-        designation_code="DEV2", department_code="IT",
-        date_of_joining=date(2025, 8, 1),
-        ctc_annual=Decimal("600000"),
-        is_on_probation=False,
-        confirmation_date=date(2026, 2, 1),
-        manager_code="JKT016",
-        user_email="employee@hrms.com",
     ),
 ]
 
@@ -442,6 +397,7 @@ async def seed_employees(
             employee_code=spec["employee_code"],
             first_name=spec["first_name"],
             last_name=spec["last_name"],
+            date_of_birth=spec.get("date_of_birth"),
             category_id=categories[spec["category_code"]].id,
             designation_id=designations[spec["designation_code"]].id
             if spec.get("designation_code") in designations
