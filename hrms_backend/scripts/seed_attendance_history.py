@@ -66,7 +66,30 @@ from app.models import (
 )
 
 
-XLSX_PATH = Path("attendance_data/Jaikalki - Attendance Sheet 2025.xlsx")
+def _resolve_workbook_path() -> Path:
+    """Find the attendance workbook regardless of CWD.
+
+    The file lives at <repo_root>/attendance_data/. The script is at
+    <repo_root>/hrms_backend/scripts/, so try a few likely positions
+    relative to the script's own location, then fall back to the
+    plain CWD-relative path so explicit --path overrides still work.
+    """
+    here = Path(__file__).resolve()
+    candidates = [
+        here.parent.parent.parent / "attendance_data" / "Jaikalki - Attendance Sheet 2025.xlsx",
+        here.parent.parent / "attendance_data" / "Jaikalki - Attendance Sheet 2025.xlsx",
+        Path("attendance_data") / "Jaikalki - Attendance Sheet 2025.xlsx",
+        Path("../attendance_data") / "Jaikalki - Attendance Sheet 2025.xlsx",
+    ]
+    for c in candidates:
+        if c.exists():
+            return c
+    # No copy on disk — return the canonical relative path so the
+    # error message tells the user where it should live.
+    return candidates[0]
+
+
+XLSX_PATH = _resolve_workbook_path()
 
 _DEMO_EMPLOYEE_CODES = {"JKT014", "JKT015", "JKT016", "JKT017", "JKT018"}
 
