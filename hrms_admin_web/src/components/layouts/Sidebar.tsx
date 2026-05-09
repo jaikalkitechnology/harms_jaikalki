@@ -40,6 +40,7 @@ import {
   DoorOpen,
   ClipboardList as ClipboardIcon,
   Upload,
+  CalendarRange,
   Settings,
   Shield,
   ShieldCheck,
@@ -122,6 +123,12 @@ const SECTIONS: NavSection[] = [
         label: "Attendance",
         to: "/attendance",
         icon: Clock,
+        permission: "attendance.view.all",
+      },
+      {
+        label: "Attendance Calendar",
+        to: "/attendance/calendar",
+        icon: CalendarRange,
         permission: "attendance.view.all",
       },
       {

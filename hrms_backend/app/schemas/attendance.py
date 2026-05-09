@@ -122,3 +122,50 @@ class AttendanceUploadResult(BaseModel):
     rows_updated: int
     rows_skipped: int
     errors: List[AttendanceUploadRowError]
+
+
+class AttendanceUpsertByDate(BaseModel):
+    """Single-day attendance edit by admin from the calendar view."""
+    date: date
+    status: Optional[str] = Field(
+        default=None,
+        pattern="^(present|absent|half_day|wfh|leave|holiday)$",
+    )
+    check_in: Optional[datetime] = None
+    check_out: Optional[datetime] = None
+    work_mode: Optional[str] = Field(
+        default=None, pattern="^(office|wfh|hybrid|field)$"
+    )
+    notes: Optional[str] = None
+
+
+class CalendarDay(BaseModel):
+    date: date
+    weekday: int  # 0 Mon — 6 Sun
+    status: str   # present, absent, half_day, wfh, leave, holiday, week_off, blank
+    is_sunday: bool
+    is_holiday: bool
+    holiday_name: Optional[str] = None
+    is_editable: bool
+    attendance_id: Optional[int] = None
+    check_in: Optional[datetime] = None
+    check_out: Optional[datetime] = None
+    work_mode: Optional[str] = None
+    total_minutes: int = 0
+    notes: Optional[str] = None
+    leave_type: Optional[str] = None
+
+
+class AttendanceCalendar(BaseModel):
+    year: int
+    month: int
+    employee_id: int
+    days: List[CalendarDay]
+    days_present: int
+    days_absent: int
+    days_leave: int
+    days_holiday: int
+    days_weekoff: int
+    days_half_day: int
+    days_wfh: int
+    working_days: int

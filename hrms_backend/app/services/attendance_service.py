@@ -561,6 +561,208 @@ async def bulk_import(
     }
 
 
+async def calendar_for_employee(
+    db: AsyncSession,
+    *,
+    employee_id: int,
+    year: int,
+    month: int,
+) -> dict:
+    """Per-day calendar entries for the (employee, month) pair.
+    Sundays and holidays come back marked is_editable=False."""
+    from calendar import monthrange
+    from datetime import timedelta as _td
+
+    days_in = monthrange(year, month)[1]
+    first = date(year, month, 1)
+    last = date(year, month, days_in)
+
+    holidays = (
+        await db.execute(
+            select(Holiday).where(Holiday.date >= first).where(Holiday.date <= last)
+        )
+    ).scalars().all()
+    holiday_by_date = {h.date: h for h in holidays}
+
+    rows = (
+        await db.execute(
+            select(Attendance)
+            .where(Attendance.employee_id == employee_id)
+            .where(Attendance.date >= first)
+            .where(Attendance.date <= last)
+        )
+    ).scalars().all()
+    by_date = {r.date: r for r in rows}
+
+    leaves = (
+        await db.execute(
+            select(LeaveRequest)
+            .where(LeaveRequest.employee_id == employee_id)
+            .where(LeaveRequest.status == "approved")
+            .where(LeaveRequest.from_date <= last)
+            .where(LeaveRequest.to_date >= first)
+        )
+    ).scalars().all()
+    leave_by_date: dict[date, LeaveRequest] = {}
+    for lr in leaves:
+        d = max(lr.from_date, first)
+        end = min(lr.to_date, last)
+        while d <= end:
+            leave_by_date[d] = lr
+            d = d + _td(days=1)
+
+    days = []
+    counts = dict(
+        present=0, absent=0, leave=0, holiday=0, weekoff=0, half_day=0, wfh=0,
+    )
+    working = 0
+
+    for i in range(days_in):
+        d = first + _td(days=i)
+        wd = d.weekday()
+        is_sunday = wd == 6
+        h = holiday_by_date.get(d)
+        att = by_date.get(d)
+        leave = leave_by_date.get(d)
+
+        is_editable = not (is_sunday or h is not None)
+
+        if is_sunday:
+            status_ = "week_off"
+            counts["weekoff"] += 1
+        elif h is not None:
+            status_ = "holiday"
+            counts["holiday"] += 1
+        elif leave is not None:
+            status_ = "leave"
+            counts["leave"] += 1
+        elif att is not None:
+            status_ = att.status
+            if status_ == "present":
+                counts["present"] += 1
+            elif status_ == "wfh":
+                counts["wfh"] += 1
+            elif status_ == "half_day":
+                counts["half_day"] += 1
+            elif status_ == "absent":
+                counts["absent"] += 1
+        else:
+            status_ = "absent"
+            counts["absent"] += 1
+
+        if is_editable:
+            working += 1
+
+        days.append({
+            "date": d,
+            "weekday": wd,
+            "status": status_,
+            "is_sunday": is_sunday,
+            "is_holiday": h is not None,
+            "holiday_name": h.name if h else None,
+            "is_editable": is_editable,
+            "attendance_id": att.id if att else None,
+            "check_in": att.check_in if att else None,
+            "check_out": att.check_out if att else None,
+            "work_mode": att.work_mode if att else None,
+            "total_minutes": att.total_minutes if att else 0,
+            "notes": att.notes if att else None,
+            "leave_type": leave.leave_type.code if leave and leave.leave_type else None,
+        })
+
+    return {
+        "year": year,
+        "month": month,
+        "employee_id": employee_id,
+        "days": days,
+        "days_present": counts["present"],
+        "days_absent": counts["absent"],
+        "days_leave": counts["leave"],
+        "days_holiday": counts["holiday"],
+        "days_weekoff": counts["weekoff"],
+        "days_half_day": counts["half_day"],
+        "days_wfh": counts["wfh"],
+        "working_days": working,
+    }
+
+
+async def upsert_by_date(
+    db: AsyncSession,
+    *,
+    employee_id: int,
+    on_date: date,
+    status_: Optional[str],
+    check_in: Optional[datetime],
+    check_out: Optional[datetime],
+    work_mode: Optional[str],
+    notes: Optional[str],
+    actor_user_id: Optional[int] = None,
+) -> Attendance:
+    """Admin-side single-day upsert. Refuses Sundays and holidays so
+    payroll's working-days denominator stays clean."""
+    if on_date.weekday() == 6:
+        raise ValidationError(
+            "Sunday is a non-working day. Mark the leave from the Leaves "
+            "screen if needed instead of overriding attendance."
+        )
+    is_holiday = (
+        await db.execute(
+            select(Holiday).where(Holiday.date == on_date).limit(1)
+        )
+    ).scalar_one_or_none()
+    if is_holiday is not None:
+        raise ValidationError(
+            f"{on_date} is a public holiday ({is_holiday.name}); "
+            "attendance updates are blocked."
+        )
+
+    if check_in and check_out and check_out < check_in:
+        raise ValidationError("check_out is before check_in")
+
+    existing = (
+        await db.execute(
+            select(Attendance)
+            .where(Attendance.employee_id == employee_id)
+            .where(Attendance.date == on_date)
+        )
+    ).scalar_one_or_none()
+
+    if existing is None:
+        att = Attendance(
+            employee_id=employee_id,
+            date=on_date,
+            status=status_ or ("present" if (check_in or check_out) else "absent"),
+            work_mode=work_mode or "office",
+            source="admin",
+            check_in=check_in,
+            check_out=check_out,
+            notes=notes,
+        )
+        db.add(att)
+    else:
+        att = existing
+        if status_ is not None:
+            att.status = status_
+        if work_mode is not None:
+            att.work_mode = work_mode
+        if check_in is not None:
+            att.check_in = check_in
+        if check_out is not None:
+            att.check_out = check_out
+        if notes is not None:
+            att.notes = notes
+        att.source = "admin"
+
+    if att.check_in and att.check_out:
+        att.total_minutes = int(
+            (att.check_out - att.check_in).total_seconds() // 60
+        )
+
+    await db.commit()
+    await db.refresh(att)
+    return att
+
+
 async def reject_regularization(
     db: AsyncSession,
     reg_id: int,

@@ -66,6 +66,14 @@ class AttendanceApi {
     return AttendanceRecord.fromJson(res.data!);
   }
 
+  Future<AttendanceCalendar> myCalendar({required int year, required int month}) async {
+    final res = await _dio.get<Map<String, dynamic>>(
+      '/api/v1/attendance/me/calendar',
+      queryParameters: {'year': year, 'month': month},
+    );
+    return AttendanceCalendar.fromJson(res.data!);
+  }
+
   Future<List<AttendanceRecord>> myRecords({String? from, String? to}) async {
     final res = await _dio.get<List<dynamic>>(
       '/api/v1/attendance/me',

@@ -39,3 +39,102 @@ class AttendanceRecord extends Equatable {
   @override
   List<Object?> get props => [id, status];
 }
+
+class CalendarDay extends Equatable {
+  const CalendarDay({
+    required this.date,
+    required this.weekday,
+    required this.status,
+    required this.isSunday,
+    required this.isHoliday,
+    this.holidayName,
+    required this.isEditable,
+    this.checkIn,
+    this.checkOut,
+    this.workMode,
+    this.totalMinutes = 0,
+    this.notes,
+    this.leaveType,
+  });
+
+  final String date;       // YYYY-MM-DD
+  final int weekday;       // 0 Mon — 6 Sun
+  final String status;
+  final bool isSunday;
+  final bool isHoliday;
+  final String? holidayName;
+  final bool isEditable;
+  final String? checkIn;
+  final String? checkOut;
+  final String? workMode;
+  final int totalMinutes;
+  final String? notes;
+  final String? leaveType;
+
+  factory CalendarDay.fromJson(Map<String, dynamic> j) => CalendarDay(
+        date: j['date'] as String,
+        weekday: (j['weekday'] as int?) ?? 0,
+        status: (j['status'] as String?) ?? 'absent',
+        isSunday: j['is_sunday'] as bool? ?? false,
+        isHoliday: j['is_holiday'] as bool? ?? false,
+        holidayName: j['holiday_name'] as String?,
+        isEditable: j['is_editable'] as bool? ?? true,
+        checkIn: j['check_in'] as String?,
+        checkOut: j['check_out'] as String?,
+        workMode: j['work_mode'] as String?,
+        totalMinutes: (j['total_minutes'] as int?) ?? 0,
+        notes: j['notes'] as String?,
+        leaveType: j['leave_type'] as String?,
+      );
+
+  @override
+  List<Object?> get props => [date, status, isHoliday, isSunday];
+}
+
+class AttendanceCalendar extends Equatable {
+  const AttendanceCalendar({
+    required this.year,
+    required this.month,
+    required this.days,
+    required this.daysPresent,
+    required this.daysAbsent,
+    required this.daysLeave,
+    required this.daysHoliday,
+    required this.daysWeekoff,
+    required this.daysHalfDay,
+    required this.daysWfh,
+    required this.workingDays,
+  });
+
+  final int year;
+  final int month;
+  final List<CalendarDay> days;
+  final int daysPresent;
+  final int daysAbsent;
+  final int daysLeave;
+  final int daysHoliday;
+  final int daysWeekoff;
+  final int daysHalfDay;
+  final int daysWfh;
+  final int workingDays;
+
+  factory AttendanceCalendar.fromJson(Map<String, dynamic> j) =>
+      AttendanceCalendar(
+        year: j['year'] as int,
+        month: j['month'] as int,
+        days: ((j['days'] as List?) ?? const [])
+            .map((d) => CalendarDay.fromJson(d as Map<String, dynamic>))
+            .toList(),
+        daysPresent: (j['days_present'] as int?) ?? 0,
+        daysAbsent: (j['days_absent'] as int?) ?? 0,
+        daysLeave: (j['days_leave'] as int?) ?? 0,
+        daysHoliday: (j['days_holiday'] as int?) ?? 0,
+        daysWeekoff: (j['days_weekoff'] as int?) ?? 0,
+        daysHalfDay: (j['days_half_day'] as int?) ?? 0,
+        daysWfh: (j['days_wfh'] as int?) ?? 0,
+        workingDays: (j['working_days'] as int?) ?? 0,
+      );
+
+  @override
+  List<Object?> get props => [year, month, days];
+}

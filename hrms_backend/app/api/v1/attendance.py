@@ -10,12 +10,14 @@ from app.core.permissions import require_permission
 from app.dependencies import get_current_user, get_db
 from app.models import Attendance, AttendanceRegularization, LeaveRequest, User
 from app.schemas.attendance import (
+    AttendanceCalendar,
     AttendanceCheckIn,
     AttendanceCheckOut,
     AttendanceOut,
     AttendanceSummary,
     AttendanceUpdate,
     AttendanceUploadResult,
+    AttendanceUpsertByDate,
     RegularizationCreate,
     RegularizationDecision,
     RegularizationOut,
@@ -319,6 +321,69 @@ async def update_attendance(
     await db.commit()
     await db.refresh(att)
     return att
+
+
+# ── Calendar (self) ────────────────────────────────────────────────
+@router.get("/me/calendar", response_model=AttendanceCalendar)
+async def my_calendar(
+    year: Optional[int] = None,
+    month: Optional[int] = None,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    today = date.today()
+    emp = await _self_employee(db, user)
+    return await att_svc.calendar_for_employee(
+        db,
+        employee_id=emp.id,
+        year=year or today.year,
+        month=month or today.month,
+    )
+
+
+# ── Calendar (admin / manager scoped) ──────────────────────────────
+@router.get(
+    "/employee/{employee_id}/calendar",
+    response_model=AttendanceCalendar,
+)
+async def employee_calendar(
+    employee_id: int,
+    year: Optional[int] = None,
+    month: Optional[int] = None,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_permission("attendance.view.all")),
+):
+    today = date.today()
+    return await att_svc.calendar_for_employee(
+        db,
+        employee_id=employee_id,
+        year=year or today.year,
+        month=month or today.month,
+    )
+
+
+# ── Admin upsert single day from calendar editor ───────────────────
+@router.put(
+    "/employee/{employee_id}/by-date",
+    response_model=AttendanceOut,
+)
+async def upsert_attendance_by_date(
+    employee_id: int,
+    payload: AttendanceUpsertByDate,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_permission("attendance.view.all")),
+):
+    return await att_svc.upsert_by_date(
+        db,
+        employee_id=employee_id,
+        on_date=payload.date,
+        status_=payload.status,
+        check_in=payload.check_in,
+        check_out=payload.check_out,
+        work_mode=payload.work_mode,
+        notes=payload.notes,
+        actor_user_id=user.id,
+    )
 
 
 # ── Admin: bulk upload from CSV / Excel ─────────────────────────────
