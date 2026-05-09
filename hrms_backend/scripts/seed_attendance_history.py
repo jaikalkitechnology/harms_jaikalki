@@ -488,13 +488,39 @@ async def _delete_demo_employees(db: AsyncSession) -> list[str]:
     """Drop the placeholder JKT014..JKT018 employees that older seed runs
     may have created. The User accounts behind them are kept so the
     test logins still work. The seed below recreates JKT014/JKT015 with
-    the *real* spreadsheet employees (Pooja Kumawat, Atharv Sachin)."""
+    the *real* spreadsheet employees (Pooja Kumawat, Atharv Sachin).
+
+    Trainer profiles linked to the demo employees are *detached* (their
+    `employee_id` is set to NULL) instead of cascading away — that
+    avoids the FK chain `employees → trainer_profiles → trainer_sessions
+    (RESTRICT)` blocking the delete when training sessions exist.
+    """
+    from sqlalchemy import update
+
     rows = (
         await db.execute(
             select(Employee).where(Employee.employee_code.in_(_DEMO_EMPLOYEE_CODES))
         )
     ).scalars().all()
     deleted: list[str] = []
+    if not rows:
+        return deleted
+
+    demo_ids = [e.id for e in rows]
+
+    # Lazy-import so the script runs even on environments where the
+    # trainer module isn't loaded eagerly.
+    try:
+        from app.models import TrainerProfile
+
+        await db.execute(
+            update(TrainerProfile)
+            .where(TrainerProfile.employee_id.in_(demo_ids))
+            .values(employee_id=None)
+        )
+    except ImportError:
+        pass
+
     for emp in rows:
         deleted.append(emp.employee_code)
         await db.delete(emp)
