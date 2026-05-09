@@ -26,83 +26,29 @@ ESIC_EMPLOYER_RATE = Decimal("0.0325")
 
 
 def _pt_slab(state: Optional[str], gender: Optional[str], gross: Decimal) -> Decimal:
-    """Look up monthly Professional Tax for a given state/gender/gross.
+    """Maharashtra-only Professional Tax slab.
 
-    Only the slabs Jaikalki currently operates in are encoded. Unknown
-    states return 0 — the admin can either set `pt_state` to one of the
-    supported codes or extend this table. Codes are upper-cased ISO-like
-    abbreviations (MH, KA, WB, TN, GJ, AP, TS, KL).
+    Jaikalki operates out of Mira Road, Thane, so only the MH schedule
+    is encoded. Anything else (or no state set) returns 0 — opt-in by
+    setting `pt_state` to MH on the employee record.
+
+    Women earning ≤ ₹25,000/m are exempt; everyone else uses the
+    standard slab. Feb's ₹300 top-up is left to payroll.
     """
     if not state:
         return Decimal(0)
     code = state.strip().upper()
-    g = (gender or "").strip().lower()
+    if code not in {"MH", "MAHARASHTRA"}:
+        return Decimal(0)
 
-    if code in {"MH", "MAHARASHTRA"}:
-        # Women earning ≤ ₹25,000/m are exempt; everyone else uses
-        # the standard slab. Feb's ₹300 top-up is left to payroll.
-        if g in {"female", "f", "woman"} and gross <= Decimal("25000"):
-            return Decimal(0)
-        if gross <= Decimal("7500"):
-            return Decimal(0)
-        if gross <= Decimal("10000"):
-            return Decimal(175)
-        return Decimal(200)
-    if code in {"KA", "KARNATAKA"}:
-        return Decimal(0) if gross <= Decimal("25000") else Decimal(200)
-    if code in {"WB", "WEST BENGAL"}:
-        if gross <= Decimal("10000"):
-            return Decimal(0)
-        if gross <= Decimal("15000"):
-            return Decimal(110)
-        if gross <= Decimal("25000"):
-            return Decimal(130)
-        if gross <= Decimal("40000"):
-            return Decimal(150)
-        return Decimal(200)
-    if code in {"TN", "TAMIL NADU"}:
-        # TN bills half-yearly; we return the monthly equivalent.
-        if gross <= Decimal("21000"):
-            return Decimal(0)
-        if gross <= Decimal("30000"):
-            return Decimal(135)
-        if gross <= Decimal("45000"):
-            return Decimal(315)
-        if gross <= Decimal("60000"):
-            return Decimal(690)
-        if gross <= Decimal("75000"):
-            return Decimal(1025)
-        return Decimal(1250)
-    if code in {"GJ", "GUJARAT"}:
-        if gross <= Decimal("12000"):
-            return Decimal(0)
-        return Decimal(200)
-    if code in {"AP", "ANDHRA PRADESH", "TS", "TELANGANA"}:
-        if gross <= Decimal("15000"):
-            return Decimal(0)
-        if gross <= Decimal("20000"):
-            return Decimal(150)
-        return Decimal(200)
-    if code in {"KL", "KERALA"}:
-        # Kerala bills half-yearly; monthly equivalent below.
-        if gross <= Decimal("11999"):
-            return Decimal(0)
-        if gross <= Decimal("17999"):
-            return Decimal(120 / 6)
-        if gross <= Decimal("29999"):
-            return Decimal(180 / 6)
-        if gross <= Decimal("44999"):
-            return Decimal(300 / 6)
-        if gross <= Decimal("59999"):
-            return Decimal(450 / 6)
-        if gross <= Decimal("74999"):
-            return Decimal(600 / 6)
-        if gross <= Decimal("99999"):
-            return Decimal(750 / 6)
-        if gross <= Decimal("124999"):
-            return Decimal(1000 / 6)
-        return Decimal(1250 / 6)
-    return Decimal(0)
+    g = (gender or "").strip().lower()
+    if g in {"female", "f", "woman"} and gross <= Decimal("25000"):
+        return Decimal(0)
+    if gross <= Decimal("7500"):
+        return Decimal(0)
+    if gross <= Decimal("10000"):
+        return Decimal(175)
+    return Decimal(200)
 
 
 def _round(value: Decimal) -> int:

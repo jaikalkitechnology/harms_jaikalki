@@ -629,16 +629,10 @@ function StatutoryOverridesCard({
           >
             <option value="">— No PT —</option>
             <option value="MH">Maharashtra</option>
-            <option value="KA">Karnataka</option>
-            <option value="WB">West Bengal</option>
-            <option value="TN">Tamil Nadu</option>
-            <option value="GJ">Gujarat</option>
-            <option value="AP">Andhra Pradesh</option>
-            <option value="TS">Telangana</option>
-            <option value="KL">Kerala</option>
           </select>
           <p className="text-xs text-brand-brown-light mt-1">
-            Slabs follow the state's published Professional Tax schedule.
+            Maharashtra slab: ₹175 (₹7,501–₹10,000), ₹200 above. Women
+            up to ₹25,000/m are exempt.
           </p>
         </div>
         <div className="md:col-span-2 flex justify-end">
