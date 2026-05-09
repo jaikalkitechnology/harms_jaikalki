@@ -29,9 +29,16 @@ import {
 // strings ("") or sometimes undefined when the field is empty. If we
 // pipe those straight into `z.coerce.number()` we get NaN which fails
 // validation with "Expected number, received nan" even on optional
-// fields. Preprocess: anything blank → null *before* coercion.
-const blankToNull = (v: unknown) =>
-  v === "" || v === null || v === undefined ? null : v;
+// fields. Preprocess: anything blank → null *before* coercion. We also
+// guard against literal "NaN" / actual NaN so a stale form state can't
+// re-trip the validator.
+function _blank(v: unknown): boolean {
+  if (v === "" || v === null || v === undefined) return true;
+  if (typeof v === "number" && Number.isNaN(v)) return true;
+  if (typeof v === "string" && v.trim() === "") return true;
+  return false;
+}
+const blankToNull = (v: unknown) => (_blank(v) ? null : v);
 
 const optionalPositiveIntFk = z.preprocess(
   blankToNull,
@@ -42,11 +49,20 @@ const optionalNonNegativeNumber = z.preprocess(
   z.coerce.number().nonnegative().nullable(),
 );
 
+// `category_id` is required, but if the user submits before picking
+// one we want a friendly "Choose a category" error — not Zod's default
+// "Expected number, received nan". Preprocess blanks → 0 so the
+// `.positive()` rule fires the right message.
+const requiredPositiveIntFk = z.preprocess(
+  (v) => (_blank(v) ? 0 : v),
+  z.coerce.number().int().positive("Choose a category"),
+);
+
 const schema = z
   .object({
     first_name: z.string().min(1, "Required"),
     last_name: z.string().min(1, "Required"),
-    category_id: z.coerce.number().int().positive("Choose a category"),
+    category_id: requiredPositiveIntFk,
     designation_id: optionalPositiveIntFk,
     department_id: optionalPositiveIntFk,
     salary_template_id: optionalPositiveIntFk,
