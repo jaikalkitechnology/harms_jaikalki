@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { forwardRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
@@ -104,14 +104,18 @@ export default function EmployeeCreatePage() {
 
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
+    // Note: empty strings (not 0/null) for the select-backed numeric
+    // fields so the rendered <option value=""> placeholder stays
+    // selected. RHF then captures the user's real pick on change. The
+    // schema's preprocess turns "" → 0/null at validation time.
     defaultValues: {
       first_name: "",
       last_name: "",
-      category_id: 0,
-      designation_id: null,
-      department_id: null,
-      salary_template_id: null,
-      ctc_annual: null,
+      category_id: "" as unknown as number,
+      designation_id: "" as unknown as number,
+      department_id: "" as unknown as number,
+      salary_template_id: "" as unknown as number,
+      ctc_annual: "" as unknown as number,
       date_of_joining: new Date().toISOString().slice(0, 10),
       personal_email: "",
       personal_phone: "",
@@ -323,12 +327,14 @@ function Field({
   );
 }
 
-const Select = ({
-  className = "",
-  ...props
-}: React.SelectHTMLAttributes<HTMLSelectElement>) => (
+const Select = forwardRef<
+  HTMLSelectElement,
+  React.SelectHTMLAttributes<HTMLSelectElement>
+>(({ className = "", ...props }, ref) => (
   <select
     {...props}
+    ref={ref}
     className={`flex h-10 w-full rounded-md border border-input bg-card px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${className}`}
   />
-);
+));
+Select.displayName = "Select";
