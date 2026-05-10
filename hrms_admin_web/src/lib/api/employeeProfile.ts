@@ -53,6 +53,45 @@ export interface FamilyMember {
 
 export type FamilyMemberInput = Omit<FamilyMember, "id" | "employee_id">;
 
+// ── Attendance cycles ──────────────────────────────────────────────
+export interface AttendanceCycle {
+  id: number;
+  code: string;
+  name: string;
+  start_day: number;
+  description: string | null;
+  is_default: boolean;
+  is_active: boolean;
+}
+
+export type AttendanceCycleInput = Omit<AttendanceCycle, "id">;
+
+export const attendanceCyclesApi = {
+  async list(activeOnly = true): Promise<AttendanceCycle[]> {
+    const { data } = await apiClient.get(`${v1}/attendance-cycles`, {
+      params: { active_only: activeOnly },
+    });
+    return data;
+  },
+  async create(payload: AttendanceCycleInput): Promise<AttendanceCycle> {
+    const { data } = await apiClient.post(`${v1}/attendance-cycles`, payload);
+    return data;
+  },
+  async update(
+    id: number,
+    payload: Partial<AttendanceCycleInput>,
+  ): Promise<AttendanceCycle> {
+    const { data } = await apiClient.put(
+      `${v1}/attendance-cycles/${id}`,
+      payload,
+    );
+    return data;
+  },
+  async remove(id: number): Promise<void> {
+    await apiClient.delete(`${v1}/attendance-cycles/${id}`);
+  },
+};
+
 export const employeeProfileApi = {
   // photo
   async uploadPhoto(employeeId: number, file: File): Promise<{ photo_url: string }> {

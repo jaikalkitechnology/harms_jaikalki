@@ -562,3 +562,32 @@ class FamilyMemberOut(BaseModel):
     relation: str
     dob: Optional[date]
     is_dependent: bool
+
+
+# ── Attendance cycles ──────────────────────────────────────────────────
+class AttendanceCycleCreate(BaseModel):
+    code: str = Field(min_length=2, max_length=16)
+    name: str = Field(min_length=2, max_length=96)
+    start_day: int = Field(ge=1, le=28)
+    description: Optional[str] = None
+    is_default: bool = False
+    is_active: bool = True
+
+
+class AttendanceCycleUpdate(BaseModel):
+    name: Optional[str] = Field(default=None, min_length=2, max_length=96)
+    start_day: Optional[int] = Field(default=None, ge=1, le=28)
+    description: Optional[str] = None
+    is_default: Optional[bool] = None
+    is_active: Optional[bool] = None
+
+
+class AttendanceCycleOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    code: str
+    name: str
+    start_day: int
+    description: Optional[str] = None
+    is_default: bool
+    is_active: bool

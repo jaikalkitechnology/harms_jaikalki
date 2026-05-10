@@ -434,3 +434,24 @@ class EmployeeNominee(Base, TimestampMixin):
     id_proof_url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
     is_minor: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     guardian_name: Mapped[Optional[str]] = mapped_column(String(96), nullable=True)
+
+
+class AttendanceCycle(Base, TimestampMixin):
+    """Catalog of attendance / payroll cycles the company runs.
+
+    Employees pick one via `Employee.attendance_cycle_start_day`. The
+    table is here so HR can add new cycles (e.g. 11→10) without
+    code changes; the integer column on Employee stays the source of
+    truth at runtime.
+    """
+
+    __tablename__ = "attendance_cycles"
+    __table_args__ = mysql_table_args
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    code: Mapped[str] = mapped_column(String(16), unique=True, nullable=False)
+    name: Mapped[str] = mapped_column(String(96), nullable=False)
+    start_day: Mapped[int] = mapped_column(Integer, nullable=False)
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    is_default: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
