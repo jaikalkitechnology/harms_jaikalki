@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Plus, Save, Trash2, Upload } from "lucide-react";
+import { Pencil, Plus, Save, Trash2, Upload, X } from "lucide-react";
 
 import {
   Card,
@@ -18,7 +18,10 @@ import {
   type EmployeeDetail,
 } from "@/lib/api/employees";
 import {
+  attendanceCyclesApi,
   employeeProfileApi,
+  type AttendanceCycle,
+  type AttendanceCycleInput,
   type FamilyMember,
   type FamilyMemberInput,
   type Nominee,
@@ -38,6 +41,27 @@ export function StatutoryIdsCard({ employee }: { employee: EmployeeDetail }) {
   const [cycleStart, setCycleStart] = useState<number>(
     employee.attendance_cycle_start_day || 1,
   );
+  const [manageCyclesOpen, setManageCyclesOpen] = useState(false);
+
+  const { data: cycles = [] } = useQuery({
+    queryKey: ["attendance-cycles"],
+    queryFn: () => attendanceCyclesApi.list(),
+  });
+
+  // If the employee's saved cycle isn't in the active list (e.g. it
+  // was deactivated later), surface it anyway so it doesn't silently
+  // disappear from the dropdown.
+  const cyclesById = new Map(cycles.map((c) => [c.start_day, c]));
+  const optionsToShow: { start_day: number; label: string }[] = cycles.map(
+    (c) => ({ start_day: c.start_day, label: c.name }),
+  );
+  if (!cyclesById.has(cycleStart)) {
+    optionsToShow.push({
+      start_day: cycleStart,
+      label: `Day ${cycleStart} (legacy / inactive)`,
+    });
+  }
+  optionsToShow.sort((a, b) => a.start_day - b.start_day);
 
   const dirty =
     pf !== (employee.pf_number ?? "") ||
@@ -100,18 +124,31 @@ export function StatutoryIdsCard({ employee }: { employee: EmployeeDetail }) {
           />
         </Field>
         <Field label="Attendance cycle">
-          <select
-            value={cycleStart}
-            onChange={(e) => setCycleStart(Number(e.target.value))}
-            className="flex h-10 w-full rounded-md border border-input bg-card px-3 py-2 text-sm"
-          >
-            <option value={1}>1st → last day (calendar month)</option>
-            <option value={21}>21st of prev → 20th of current</option>
-            <option value={26}>26th of prev → 25th of current</option>
-            <option value={16}>16th of prev → 15th of current</option>
-          </select>
+          <div className="flex gap-2">
+            <select
+              value={cycleStart}
+              onChange={(e) => setCycleStart(Number(e.target.value))}
+              className="flex h-10 flex-1 rounded-md border border-input bg-card px-3 py-2 text-sm"
+            >
+              {optionsToShow.map((o) => (
+                <option key={o.start_day} value={o.start_day}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="gap-1"
+              onClick={() => setManageCyclesOpen(true)}
+            >
+              <Pencil className="h-3.5 w-3.5" /> Manage
+            </Button>
+          </div>
           <p className="text-xs text-brand-brown-light mt-1">
-            Drives the calendar slice and payroll cut-off for this employee.
+            Drives the calendar slice and payroll cut-off for this
+            employee. Manage to add/disable cycles for the whole company.
           </p>
         </Field>
         <div className="md:col-span-2 flex justify-end">
@@ -125,7 +162,204 @@ export function StatutoryIdsCard({ employee }: { employee: EmployeeDetail }) {
           </Button>
         </div>
       </CardContent>
+      {manageCyclesOpen && (
+        <ManageCyclesModal onClose={() => setManageCyclesOpen(false)} />
+      )}
     </Card>
+  );
+}
+
+function ManageCyclesModal({ onClose }: { onClose: () => void }) {
+  const qc = useQueryClient();
+  const { data: cycles = [] } = useQuery({
+    queryKey: ["attendance-cycles", "all"],
+    queryFn: () => attendanceCyclesApi.list(false),
+  });
+  const [adding, setAdding] = useState<AttendanceCycleInput | null>(null);
+
+  const create = useMutation({
+    mutationFn: (input: AttendanceCycleInput) => attendanceCyclesApi.create(input),
+    onSuccess: () => {
+      toast.success("Cycle added");
+      qc.invalidateQueries({ queryKey: ["attendance-cycles"] });
+      qc.invalidateQueries({ queryKey: ["attendance-cycles", "all"] });
+      setAdding(null);
+    },
+    onError: (e: unknown) => {
+      const detail =
+        (e as { response?: { data?: { detail?: string } } })?.response?.data
+          ?.detail ?? "Could not add";
+      toast.error(detail);
+    },
+  });
+  const update = useMutation({
+    mutationFn: ({
+      id,
+      body,
+    }: {
+      id: number;
+      body: Partial<AttendanceCycleInput>;
+    }) => attendanceCyclesApi.update(id, body),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["attendance-cycles"] });
+      qc.invalidateQueries({ queryKey: ["attendance-cycles", "all"] });
+    },
+  });
+  const del = useMutation({
+    mutationFn: (id: number) => attendanceCyclesApi.remove(id),
+    onSuccess: () => {
+      toast.success("Cycle removed");
+      qc.invalidateQueries({ queryKey: ["attendance-cycles"] });
+      qc.invalidateQueries({ queryKey: ["attendance-cycles", "all"] });
+    },
+    onError: (e: unknown) => {
+      const detail =
+        (e as { response?: { data?: { detail?: string } } })?.response?.data
+          ?.detail ?? "Could not delete";
+      toast.error(detail);
+    },
+  });
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+      <Card className="w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+        <CardHeader className="flex flex-row items-center justify-between">
+          <div>
+            <CardTitle>Manage attendance cycles</CardTitle>
+            <CardDescription>
+              Cycles are shared across the company. Disable instead of
+              deleting if a cycle is in use.
+            </CardDescription>
+          </div>
+          <Button variant="ghost" size="sm" onClick={onClose}>
+            <X className="size-4" />
+          </Button>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {cycles.map((c) => (
+            <CycleRow
+              key={c.id}
+              cycle={c}
+              onSave={(body) => update.mutate({ id: c.id, body })}
+              onDelete={() => del.mutate(c.id)}
+            />
+          ))}
+          {adding && (
+            <CycleRow
+              cycle={{ id: -1, ...adding }}
+              isNew
+              onSave={(body) => create.mutate(body as AttendanceCycleInput)}
+              onDelete={() => setAdding(null)}
+            />
+          )}
+          {!adding && (
+            <div className="flex justify-between pt-2">
+              <Button
+                variant="outline"
+                className="gap-2"
+                onClick={() =>
+                  setAdding({
+                    code: "",
+                    name: "",
+                    start_day: 1,
+                    description: null,
+                    is_default: false,
+                    is_active: true,
+                  })
+                }
+              >
+                <Plus className="h-4 w-4" /> Add cycle
+              </Button>
+              <Button onClick={onClose}>Done</Button>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+function CycleRow({
+  cycle,
+  isNew = false,
+  onSave,
+  onDelete,
+}: {
+  cycle: AttendanceCycle;
+  isNew?: boolean;
+  onSave: (body: Partial<AttendanceCycleInput>) => void;
+  onDelete: () => void;
+}) {
+  const [draft, setDraft] = useState<AttendanceCycleInput>({
+    code: cycle.code,
+    name: cycle.name,
+    start_day: cycle.start_day,
+    description: cycle.description,
+    is_default: cycle.is_default,
+    is_active: cycle.is_active,
+  });
+  return (
+    <div className="rounded-md border border-brand-brown-100/60 p-3 grid grid-cols-1 md:grid-cols-[1fr_2fr_5rem_auto_auto_auto] gap-2 items-end">
+      <Field label="Code">
+        <Input
+          value={draft.code}
+          disabled={!isNew}
+          onChange={(e) => setDraft({ ...draft, code: e.target.value })}
+          placeholder="C11_10"
+        />
+      </Field>
+      <Field label="Name">
+        <Input
+          value={draft.name}
+          onChange={(e) => setDraft({ ...draft, name: e.target.value })}
+          placeholder="11th of prev → 10th of current"
+        />
+      </Field>
+      <Field label="Start day">
+        <Input
+          type="number"
+          min={1}
+          max={28}
+          value={draft.start_day}
+          onChange={(e) =>
+            setDraft({ ...draft, start_day: Number(e.target.value) })
+          }
+        />
+      </Field>
+      <label className="flex items-center gap-1 text-xs">
+        <input
+          type="checkbox"
+          checked={draft.is_default}
+          onChange={(e) => setDraft({ ...draft, is_default: e.target.checked })}
+        />
+        Default
+      </label>
+      <label className="flex items-center gap-1 text-xs">
+        <input
+          type="checkbox"
+          checked={draft.is_active}
+          onChange={(e) => setDraft({ ...draft, is_active: e.target.checked })}
+        />
+        Active
+      </label>
+      <div className="flex gap-1">
+        <Button
+          size="sm"
+          onClick={() => onSave(draft)}
+          disabled={!draft.code || !draft.name}
+        >
+          {isNew ? "Add" : "Save"}
+        </Button>
+        <Button
+          size="sm"
+          variant="outline"
+          className="text-destructive"
+          onClick={onDelete}
+        >
+          <Trash2 className="h-3.5 w-3.5" />
+        </Button>
+      </div>
+    </div>
   );
 }
 

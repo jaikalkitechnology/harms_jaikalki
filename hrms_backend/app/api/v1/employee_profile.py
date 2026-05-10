@@ -15,6 +15,7 @@ from app.core.exceptions import (
 from app.core.permissions import require_permission
 from app.dependencies import get_current_user, get_db
 from app.models import (
+    AttendanceCycle,
     Employee,
     EmployeeNominee,
     EmployeePassport,
@@ -22,6 +23,9 @@ from app.models import (
     User,
 )
 from app.schemas.employee import (
+    AttendanceCycleCreate,
+    AttendanceCycleOut,
+    AttendanceCycleUpdate,
     FamilyMemberCreate,
     FamilyMemberOut,
     FamilyMemberUpdate,
@@ -281,3 +285,139 @@ async def delete_family(
     if f:
         await db.delete(f)
         await db.commit()
+
+
+# ── Attendance cycles ─────────────────────────────────────────────────
+DEFAULT_CYCLES = [
+    ("CAL", "1st → last day (calendar month)", 1, True),
+    ("C21_20", "21st of prev → 20th of current", 21, False),
+    ("C26_25", "26th of prev → 25th of current", 26, False),
+    ("C16_15", "16th of prev → 15th of current", 16, False),
+]
+
+
+async def _ensure_default_cycles(db: AsyncSession) -> None:
+    existing = (
+        await db.execute(select(AttendanceCycle))
+    ).scalars().all()
+    if existing:
+        return
+    for code, name, start_day, is_default in DEFAULT_CYCLES:
+        db.add(
+            AttendanceCycle(
+                code=code,
+                name=name,
+                start_day=start_day,
+                is_default=is_default,
+                is_active=True,
+            )
+        )
+    await db.commit()
+
+
+@router.get("/attendance-cycles", response_model=list[AttendanceCycleOut])
+async def list_cycles(
+    active_only: bool = True,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(get_current_user),
+):
+    await _ensure_default_cycles(db)
+    stmt = select(AttendanceCycle).order_by(AttendanceCycle.start_day)
+    if active_only:
+        stmt = stmt.where(AttendanceCycle.is_active.is_(True))
+    return (await db.execute(stmt)).scalars().all()
+
+
+@router.post(
+    "/attendance-cycles",
+    response_model=AttendanceCycleOut,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_cycle(
+    payload: AttendanceCycleCreate,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_permission("employee.update")),
+):
+    dup = (
+        await db.execute(
+            select(AttendanceCycle).where(AttendanceCycle.code == payload.code)
+        )
+    ).scalar_one_or_none()
+    if dup is not None:
+        raise ValidationError(f"Cycle code {payload.code!r} already exists")
+    c = AttendanceCycle(**payload.model_dump())
+    db.add(c)
+    if c.is_default:
+        # Demote any other default.
+        from sqlalchemy import update as sa_update
+
+        await db.execute(
+            sa_update(AttendanceCycle)
+            .where(AttendanceCycle.code != payload.code)
+            .values(is_default=False)
+        )
+    await db.commit()
+    await db.refresh(c)
+    return c
+
+
+@router.put("/attendance-cycles/{cycle_id}", response_model=AttendanceCycleOut)
+async def update_cycle(
+    cycle_id: int,
+    payload: AttendanceCycleUpdate,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_permission("employee.update")),
+):
+    c = (
+        await db.execute(
+            select(AttendanceCycle).where(AttendanceCycle.id == cycle_id)
+        )
+    ).scalar_one_or_none()
+    if not c:
+        raise NotFoundError("Cycle not found")
+    for k, v in payload.model_dump(exclude_unset=True).items():
+        setattr(c, k, v)
+    if c.is_default:
+        from sqlalchemy import update as sa_update
+
+        await db.execute(
+            sa_update(AttendanceCycle)
+            .where(AttendanceCycle.id != cycle_id)
+            .values(is_default=False)
+        )
+    await db.commit()
+    await db.refresh(c)
+    return c
+
+
+@router.delete(
+    "/attendance-cycles/{cycle_id}", status_code=status.HTTP_204_NO_CONTENT
+)
+async def delete_cycle(
+    cycle_id: int,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_permission("employee.update")),
+):
+    c = (
+        await db.execute(
+            select(AttendanceCycle).where(AttendanceCycle.id == cycle_id)
+        )
+    ).scalar_one_or_none()
+    if not c:
+        return
+    # Refuse to delete a cycle that's still referenced by employees;
+    # admin should retire it (`is_active=false`) or migrate the
+    # employees first.
+    in_use = (
+        await db.execute(
+            select(Employee.id)
+            .where(Employee.attendance_cycle_start_day == c.start_day)
+            .limit(1)
+        )
+    ).scalar_one_or_none()
+    if in_use is not None:
+        raise ValidationError(
+            f"Cycle {c.code} is still in use; mark inactive instead of deleting."
+        )
+    await db.delete(c)
+    await db.commit()

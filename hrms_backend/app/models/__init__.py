@@ -26,6 +26,7 @@ from .exam import (
     QuestionOption,
 )
 from .employee import (
+    AttendanceCycle,
     EmergencyContact,
     Employee,
     EmployeeAddress,
@@ -168,6 +169,7 @@ __all__ = [
     "FamilyMember",
     "EmployeeNominee",
     "EmployeePassport",
+    "AttendanceCycle",
     "InternTravelExpense",
     "Shift",
     "EmployeeShift",
