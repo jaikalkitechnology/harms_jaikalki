@@ -11,6 +11,7 @@ from app.api.v1.dashboard import router as v1_dashboard_router
 from app.api.v1.documents import router as v1_documents_router
 from app.api.v1.dwp import router as v1_dwp_router
 from app.api.v1.employees import router as v1_employees_router
+from app.api.v1.employee_profile import router as v1_employee_profile_router
 from app.api.v1.field_force import router as v1_field_router
 from app.api.v1.health import router as v1_health_router
 from app.api.v1.intern_expenses import router as v1_intern_expenses_router
@@ -39,6 +40,7 @@ v1_router.include_router(v1_organization_router)
 v1_router.include_router(v1_salary_templates_router)
 v1_router.include_router(v1_intern_expenses_router)
 v1_router.include_router(v1_documents_router)
+v1_router.include_router(v1_employee_profile_router)
 v1_router.include_router(v1_attendance_router)
 v1_router.include_router(v1_leaves_router)
 v1_router.include_router(v1_approvals_router)

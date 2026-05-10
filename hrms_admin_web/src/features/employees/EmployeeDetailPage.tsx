@@ -43,6 +43,13 @@ import { payrollApi, type GeneratedDocument } from "@/lib/api/payroll";
 import { launchApi } from "@/lib/api/launch";
 import { CategoryBadge } from "./CategoryBadge";
 import { OnboardingDocsCard } from "./OnboardingDocsCard";
+import {
+  FamilyCard,
+  NomineesCard,
+  PassportCard,
+  PhotoUploadButton,
+  StatutoryIdsCard,
+} from "./EmployeeProfileExtras";
 import { fmtIstDate } from "@/lib/datetime";
 
 export default function EmployeeDetailPage() {
@@ -183,6 +190,7 @@ export default function EmployeeDetailPage() {
             >
               <Pencil className="size-4" /> Edit
             </Button>
+            <PhotoUploadButton employeeId={employee.id} />
             <Button
               variant="outline"
               className="gap-2"
@@ -273,6 +281,22 @@ export default function EmployeeDetailPage() {
 
         <PermissionGate permission="salary.view.team">
           <StatutoryOverridesCard employee={employee} />
+        </PermissionGate>
+
+        <PermissionGate permission="employee.update">
+          <StatutoryIdsCard employee={employee} />
+        </PermissionGate>
+
+        <PermissionGate permission="employee.update">
+          <FamilyCard employeeId={employee.id} />
+        </PermissionGate>
+
+        <PermissionGate permission="employee.update">
+          <NomineesCard employeeId={employee.id} />
+        </PermissionGate>
+
+        <PermissionGate permission="employee.update">
+          <PassportCard employeeId={employee.id} />
         </PermissionGate>
 
         <PermissionGate permission="employee.update">

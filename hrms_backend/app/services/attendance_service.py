@@ -569,13 +569,36 @@ async def calendar_for_employee(
     month: int,
 ) -> dict:
     """Per-day calendar entries for the (employee, month) pair.
-    Sundays and holidays come back marked is_editable=False."""
+    Sundays and holidays come back marked is_editable=False.
+
+    Honours `Employee.attendance_cycle_start_day`: a value of N>1 slices
+    the visible period from N of the previous month → (N-1) of the
+    current month, so payslips line up with custom cut-off cycles
+    (e.g. 21st → 20th).
+    """
     from calendar import monthrange
     from datetime import timedelta as _td
 
-    days_in = monthrange(year, month)[1]
-    first = date(year, month, 1)
-    last = date(year, month, days_in)
+    emp = (
+        await db.execute(select(Employee).where(Employee.id == employee_id))
+    ).scalar_one_or_none()
+    cycle_start = max(1, getattr(emp, "attendance_cycle_start_day", 1) or 1)
+
+    if cycle_start == 1:
+        days_in = monthrange(year, month)[1]
+        first = date(year, month, 1)
+        last = date(year, month, days_in)
+    else:
+        prev_year = year if month > 1 else year - 1
+        prev_month = month - 1 if month > 1 else 12
+        # Clamp the start day to the previous month's actual length so
+        # cycle_start=31 doesn't blow up on Februaries.
+        start_day = min(cycle_start, monthrange(prev_year, prev_month)[1])
+        first = date(prev_year, prev_month, start_day)
+        end_day = cycle_start - 1
+        end_day = min(end_day, monthrange(year, month)[1])
+        last = date(year, month, end_day)
+        days_in = (last - first).days + 1
 
     holidays = (
         await db.execute(

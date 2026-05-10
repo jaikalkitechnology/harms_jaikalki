@@ -122,6 +122,12 @@ export interface EmployeeDetail extends EmployeeListItem {
   pf_basic_cap_override: string | null;
   esic_force_exempt: boolean;
   pt_state: string | null;
+  pf_number: string | null;
+  uan_number: string | null;
+  esic_number: string | null;
+  insurance_company: string | null;
+  insurance_policy_no: string | null;
+  attendance_cycle_start_day: number;
 }
 
 export interface ExpiringProbation {
