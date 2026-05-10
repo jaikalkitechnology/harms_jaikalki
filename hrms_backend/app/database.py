@@ -108,6 +108,17 @@ _PENDING_COLUMNS: list[tuple[str, str, str, str | None]] = [
         None,
     ),
     ("employees", "pt_state", "VARCHAR(64) NULL", None),
+    ("employees", "pf_number", "VARCHAR(32) NULL", None),
+    ("employees", "uan_number", "VARCHAR(20) NULL", None),
+    ("employees", "esic_number", "VARCHAR(20) NULL", None),
+    ("employees", "insurance_company", "VARCHAR(160) NULL", None),
+    ("employees", "insurance_policy_no", "VARCHAR(64) NULL", None),
+    (
+        "employees",
+        "attendance_cycle_start_day",
+        "INT NOT NULL DEFAULT 1",
+        None,
+    ),
     (
         "leave_types",
         "is_paid",

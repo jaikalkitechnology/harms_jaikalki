@@ -310,6 +310,15 @@ class EmployeeUpdate(BaseModel):
     pf_basic_cap_override: Optional[Decimal] = None
     esic_force_exempt: Optional[bool] = None
     pt_state: Optional[str] = Field(default=None, max_length=64)
+    # Statutory IDs
+    pf_number: Optional[str] = Field(default=None, max_length=32)
+    uan_number: Optional[str] = Field(default=None, max_length=20)
+    esic_number: Optional[str] = Field(default=None, max_length=20)
+    # Insurance
+    insurance_company: Optional[str] = Field(default=None, max_length=160)
+    insurance_policy_no: Optional[str] = Field(default=None, max_length=64)
+    # Attendance / payroll cycle
+    attendance_cycle_start_day: Optional[int] = Field(default=None, ge=1, le=28)
 
 
 class EmployeeListItem(BaseModel):
@@ -361,6 +370,12 @@ class EmployeeOut(BaseModel):
     pf_basic_cap_override: Optional[Decimal] = None
     esic_force_exempt: bool = False
     pt_state: Optional[str] = None
+    pf_number: Optional[str] = None
+    uan_number: Optional[str] = None
+    esic_number: Optional[str] = None
+    insurance_company: Optional[str] = None
+    insurance_policy_no: Optional[str] = None
+    attendance_cycle_start_day: int = 1
     created_at: datetime
 
 
@@ -454,3 +469,96 @@ class OrgChartNode(BaseModel):
 
 
 OrgChartNode.model_rebuild()
+
+
+# ── Passport / visa ─────────────────────────────────────────────────────
+class PassportUpsert(BaseModel):
+    passport_no: str = Field(min_length=4, max_length=32)
+    passport_country: str = Field(default="India", max_length=64)
+    passport_issue_date: Optional[date] = None
+    passport_expiry_date: Optional[date] = None
+    passport_place_of_issue: Optional[str] = Field(default=None, max_length=96)
+    visa_no: Optional[str] = Field(default=None, max_length=48)
+    visa_type: Optional[str] = Field(default=None, max_length=48)
+    visa_country: Optional[str] = Field(default=None, max_length=64)
+    visa_issue_date: Optional[date] = None
+    visa_expiry_date: Optional[date] = None
+
+
+class PassportOut(PassportUpsert):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    employee_id: int
+    created_at: datetime
+
+
+# ── Nominees ────────────────────────────────────────────────────────────
+class NomineeCreate(BaseModel):
+    name: str = Field(min_length=2, max_length=96)
+    relation: str = Field(min_length=2, max_length=32)
+    date_of_birth: Optional[date] = None
+    share_pct: Decimal = Field(default=Decimal("100"), ge=0, le=100)
+    nominee_type: str = Field(
+        default="general", pattern="^(pf|gratuity|insurance|general)$"
+    )
+    address: Optional[str] = None
+    phone: Optional[str] = Field(default=None, max_length=32)
+    id_proof_url: Optional[str] = Field(default=None, max_length=500)
+    is_minor: bool = False
+    guardian_name: Optional[str] = Field(default=None, max_length=96)
+
+
+class NomineeUpdate(BaseModel):
+    name: Optional[str] = Field(default=None, min_length=2, max_length=96)
+    relation: Optional[str] = Field(default=None, min_length=2, max_length=32)
+    date_of_birth: Optional[date] = None
+    share_pct: Optional[Decimal] = Field(default=None, ge=0, le=100)
+    nominee_type: Optional[str] = Field(
+        default=None, pattern="^(pf|gratuity|insurance|general)$"
+    )
+    address: Optional[str] = None
+    phone: Optional[str] = Field(default=None, max_length=32)
+    id_proof_url: Optional[str] = Field(default=None, max_length=500)
+    is_minor: Optional[bool] = None
+    guardian_name: Optional[str] = Field(default=None, max_length=96)
+
+
+class NomineeOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    employee_id: int
+    name: str
+    relation: str
+    date_of_birth: Optional[date]
+    share_pct: Decimal
+    nominee_type: str
+    address: Optional[str]
+    phone: Optional[str]
+    id_proof_url: Optional[str]
+    is_minor: bool
+    guardian_name: Optional[str]
+
+
+# ── Family ──────────────────────────────────────────────────────────────
+class FamilyMemberCreate(BaseModel):
+    name: str = Field(min_length=2, max_length=96)
+    relation: str = Field(min_length=2, max_length=32)
+    dob: Optional[date] = None
+    is_dependent: bool = False
+
+
+class FamilyMemberUpdate(BaseModel):
+    name: Optional[str] = Field(default=None, min_length=2, max_length=96)
+    relation: Optional[str] = Field(default=None, min_length=2, max_length=32)
+    dob: Optional[date] = None
+    is_dependent: Optional[bool] = None
+
+
+class FamilyMemberOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    employee_id: int
+    name: str
+    relation: str
+    dob: Optional[date]
+    is_dependent: bool

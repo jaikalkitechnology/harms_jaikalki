@@ -161,6 +161,26 @@ class Employee(Base, TimestampMixin):
     )
     pt_state: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
 
+    # Statutory IDs (issued externally; we just record them).
+    pf_number: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
+    uan_number: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    esic_number: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+
+    # Group health / accident insurance (Mediclaim, GPA, etc.)
+    insurance_company: Mapped[Optional[str]] = mapped_column(
+        String(160), nullable=True
+    )
+    insurance_policy_no: Mapped[Optional[str]] = mapped_column(
+        String(64), nullable=True
+    )
+
+    # Per-employee attendance / payroll cycle. 1 = calendar month
+    # (1→last day). 21 = 21st of prev month → 20th of current month, etc.
+    # Calendar + payroll services read this when slicing the period.
+    attendance_cycle_start_day: Mapped[int] = mapped_column(
+        Integer, default=1, nullable=False
+    )
+
     work_location: Mapped[str] = mapped_column(
         String(200), default="Mira Road, Thane", nullable=False
     )
@@ -343,3 +363,74 @@ class InternTravelExpense(Base, TimestampMixin):
     approved_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     reimbursed_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     rejection_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+
+class EmployeePassport(Base, TimestampMixin):
+    """Passport + visa held against the employee.
+
+    One row per employee — the same passport often carries multiple
+    visas, but the active one is captured here. Older visas live in
+    `employee_documents` as scanned uploads.
+    """
+
+    __tablename__ = "employee_passports"
+    __table_args__ = mysql_table_args
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    employee_id: Mapped[int] = mapped_column(
+        ForeignKey("employees.id", ondelete="CASCADE"),
+        unique=True,
+        nullable=False,
+        index=True,
+    )
+    passport_no: Mapped[str] = mapped_column(String(32), nullable=False)
+    passport_country: Mapped[str] = mapped_column(
+        String(64), default="India", nullable=False
+    )
+    passport_issue_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    passport_expiry_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    passport_place_of_issue: Mapped[Optional[str]] = mapped_column(
+        String(96), nullable=True
+    )
+    visa_no: Mapped[Optional[str]] = mapped_column(String(48), nullable=True)
+    visa_type: Mapped[Optional[str]] = mapped_column(String(48), nullable=True)
+    visa_country: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    visa_issue_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    visa_expiry_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+
+
+class EmployeeNominee(Base, TimestampMixin):
+    """PF / Gratuity / Insurance nominee. Up to 4 per employee — share %
+    must total 100 across them when set."""
+
+    __tablename__ = "employee_nominees"
+    __table_args__ = mysql_table_args
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    employee_id: Mapped[int] = mapped_column(
+        ForeignKey("employees.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    name: Mapped[str] = mapped_column(String(96), nullable=False)
+    relation: Mapped[str] = mapped_column(String(32), nullable=False)
+    date_of_birth: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    share_pct: Mapped[Decimal] = mapped_column(
+        Numeric(5, 2), default=Decimal("100"), nullable=False
+    )
+    nominee_type: Mapped[str] = mapped_column(
+        Enum(
+            "pf",
+            "gratuity",
+            "insurance",
+            "general",
+            name="nominee_type",
+        ),
+        default="general",
+        nullable=False,
+    )
+    address: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    phone: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
+    id_proof_url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    is_minor: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    guardian_name: Mapped[Optional[str]] = mapped_column(String(96), nullable=True)
