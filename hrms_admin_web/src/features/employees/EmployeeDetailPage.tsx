@@ -43,6 +43,7 @@ import { payrollApi, type GeneratedDocument } from "@/lib/api/payroll";
 import { launchApi } from "@/lib/api/launch";
 import { CategoryBadge } from "./CategoryBadge";
 import { OnboardingDocsCard } from "./OnboardingDocsCard";
+import { AttendanceLeaveCard } from "./AttendanceLeaveCard";
 import {
   BankCard,
   FamilyCard,
@@ -282,6 +283,10 @@ export default function EmployeeDetailPage() {
 
         <PermissionGate permission="salary.view.team">
           <StatutoryOverridesCard employee={employee} />
+        </PermissionGate>
+
+        <PermissionGate permission="attendance.view.all">
+          <AttendanceLeaveCard employeeId={employee.id} />
         </PermissionGate>
 
         <PermissionGate permission="employee.update">

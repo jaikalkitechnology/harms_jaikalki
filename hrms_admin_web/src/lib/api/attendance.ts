@@ -51,6 +51,32 @@ export interface AttendanceCalendar {
   working_days: number;
 }
 
+export interface YearMonthSummary {
+  month: number;
+  days_present: number;
+  days_absent: number;
+  days_leave: number;
+  days_holiday: number;
+  days_weekoff: number;
+  days_half_day: number;
+  days_wfh: number;
+  working_days: number;
+}
+
+export interface AttendanceYearSummary {
+  employee_id: number;
+  year: number;
+  months: YearMonthSummary[];
+  total_present: number;
+  total_absent: number;
+  total_leave: number;
+  total_holiday: number;
+  total_weekoff: number;
+  total_half_day: number;
+  total_wfh: number;
+  total_working_days: number;
+}
+
 export interface AttendanceUpsertByDate {
   date: string;
   status?: AttendanceRecord["status"] | null;
@@ -137,6 +163,16 @@ export const attendanceApi = {
     const { data } = await apiClient.get(
       `${v1}/attendance/employee/${employeeId}/calendar`,
       { params: { year, month } },
+    );
+    return data;
+  },
+  async employeeYearSummary(
+    employeeId: number,
+    year: number,
+  ): Promise<AttendanceYearSummary> {
+    const { data } = await apiClient.get(
+      `${v1}/attendance/employee/${employeeId}/year-summary`,
+      { params: { year } },
     );
     return data;
   },

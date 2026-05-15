@@ -715,6 +715,61 @@ async def calendar_for_employee(
     }
 
 
+async def year_summary_for_employee(
+    db: AsyncSession,
+    *,
+    employee_id: int,
+    year: int,
+) -> dict:
+    """12-month roll-up of attendance for the year. Each month carries
+    the same counters the per-month calendar returns, so the UI can
+    render a year strip and drill into any month."""
+    months = []
+    totals = dict(
+        present=0, absent=0, leave=0, holiday=0,
+        weekoff=0, half_day=0, wfh=0, working=0,
+    )
+    for m in range(1, 13):
+        cal = await calendar_for_employee(
+            db, employee_id=employee_id, year=year, month=m
+        )
+        months.append(
+            {
+                "month": m,
+                "days_present": cal["days_present"],
+                "days_absent": cal["days_absent"],
+                "days_leave": cal["days_leave"],
+                "days_holiday": cal["days_holiday"],
+                "days_weekoff": cal["days_weekoff"],
+                "days_half_day": cal["days_half_day"],
+                "days_wfh": cal["days_wfh"],
+                "working_days": cal["working_days"],
+            }
+        )
+        totals["present"] += cal["days_present"]
+        totals["absent"] += cal["days_absent"]
+        totals["leave"] += cal["days_leave"]
+        totals["holiday"] += cal["days_holiday"]
+        totals["weekoff"] += cal["days_weekoff"]
+        totals["half_day"] += cal["days_half_day"]
+        totals["wfh"] += cal["days_wfh"]
+        totals["working"] += cal["working_days"]
+
+    return {
+        "employee_id": employee_id,
+        "year": year,
+        "months": months,
+        "total_present": totals["present"],
+        "total_absent": totals["absent"],
+        "total_leave": totals["leave"],
+        "total_holiday": totals["holiday"],
+        "total_weekoff": totals["weekoff"],
+        "total_half_day": totals["half_day"],
+        "total_wfh": totals["wfh"],
+        "total_working_days": totals["working"],
+    }
+
+
 async def upsert_by_date(
     db: AsyncSession,
     *,

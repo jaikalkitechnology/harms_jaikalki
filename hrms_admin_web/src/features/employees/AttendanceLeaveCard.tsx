@@ -1,0 +1,541 @@
+import { useMemo, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
+import { ChevronLeft, ChevronRight, X } from "lucide-react";
+
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  attendanceApi,
+  type CalendarDay,
+} from "@/lib/api/attendance";
+import { leavesApi } from "@/lib/api/leaves";
+
+const MONTHS = [
+  "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+  "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+];
+const MONTHS_FULL = [
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December",
+];
+
+export function AttendanceLeaveCard({ employeeId }: { employeeId: number }) {
+  const thisYear = new Date().getFullYear();
+  const [year, setYear] = useState(thisYear);
+  const [openMonth, setOpenMonth] = useState<number | null>(null);
+
+  const { data: summary } = useQuery({
+    queryKey: ["attendance-year", employeeId, year],
+    queryFn: () => attendanceApi.employeeYearSummary(employeeId, year),
+  });
+
+  const { data: balances = [] } = useQuery({
+    queryKey: ["leave-balance", employeeId, year],
+    queryFn: () => leavesApi.employeeBalance(employeeId, year),
+  });
+
+  return (
+    <Card className="lg:col-span-2">
+      <CardHeader className="flex flex-row items-start justify-between">
+        <div>
+          <CardTitle>
+            Attendance &amp; <span className="display-em">leave</span>
+          </CardTitle>
+          <CardDescription>
+            Leave balance, plus a month-by-month roll-up. Click any month
+            to open it and edit attendance.
+          </CardDescription>
+        </div>
+        <div className="flex items-center gap-1 shrink-0">
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => setYear((y) => y - 1)}
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </Button>
+          <div className="px-3 py-1.5 rounded border border-brand-brown-50 bg-card text-sm font-medium min-w-[4.5rem] text-center">
+            {year}
+          </div>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => setYear((y) => Math.min(thisYear + 1, y + 1))}
+          >
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-6">
+        {/* ── Leave balances ── */}
+        <div>
+          <div className="text-[10px] font-mono uppercase tracking-[0.2em] text-brand-gold-dark mb-2">
+            Leave balance · {year}
+          </div>
+          {balances.length === 0 ? (
+            <p className="text-sm text-brand-brown-light">
+              No leave balances allocated for this year.
+            </p>
+          ) : (
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
+              {balances.map((b) => {
+                const remaining = Number(b.balance);
+                const used = Number(b.used);
+                const alloc =
+                  Number(b.allocated) + Number(b.carried_forward);
+                return (
+                  <div
+                    key={b.id}
+                    className="rounded-md border border-brand-brown-100 p-3"
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-semibold text-brand-brown-darker">
+                        {b.leave_type?.code ?? "—"}
+                      </span>
+                      <span className="text-[10px] font-mono uppercase tracking-[0.15em] text-brand-brown-light">
+                        {b.leave_type?.name ?? ""}
+                      </span>
+                    </div>
+                    <div className="mt-2 flex items-end justify-between">
+                      <div>
+                        <div className="text-[10px] text-brand-brown-light uppercase tracking-wide">
+                          Remaining
+                        </div>
+                        <div
+                          className={`text-xl font-bold ${
+                            remaining > 0 ? "text-success" : "text-error"
+                          }`}
+                        >
+                          {remaining}
+                        </div>
+                      </div>
+                      <div className="text-right text-[11px] text-brand-brown-light leading-tight">
+                        <div>
+                          used <span className="text-warning font-semibold">{used}</span>
+                        </div>
+                        <div>of {alloc}</div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* ── Year totals ── */}
+        {summary && (
+          <div className="flex flex-wrap gap-2">
+            <Pill label="Present" value={summary.total_present} tone="success" />
+            <Pill label="WFH" value={summary.total_wfh} tone="info" />
+            <Pill label="Half-day" value={summary.total_half_day} tone="warning" />
+            <Pill label="Leave" value={summary.total_leave} tone="error" />
+            <Pill label="Absent" value={summary.total_absent} tone="error" />
+            <Pill label="Holiday" value={summary.total_holiday} tone="muted" />
+            <Pill label="Working days" value={summary.total_working_days} tone="muted" />
+          </div>
+        )}
+
+        {/* ── 12-month grid ── */}
+        <div>
+          <div className="text-[10px] font-mono uppercase tracking-[0.2em] text-brand-gold-dark mb-2">
+            Monthly breakdown · {year}
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
+            {(summary?.months ?? []).map((m) => {
+              const flagged = m.days_absent > 0 || m.days_leave > 0;
+              const isOpen = openMonth === m.month;
+              return (
+                <button
+                  key={m.month}
+                  type="button"
+                  onClick={() =>
+                    setOpenMonth(isOpen ? null : m.month)
+                  }
+                  className={`text-left rounded-lg border p-3 transition-colors ${
+                    isOpen
+                      ? "border-brand-gold-dark bg-brand-gold/10"
+                      : flagged
+                        ? "border-error/30 bg-error/5 hover:border-error/50"
+                        : "border-brand-brown-100 bg-card hover:border-brand-gold-dark/50"
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="font-semibold text-brand-brown-darker">
+                      {MONTHS[m.month - 1]}
+                    </span>
+                    <span className="text-[10px] font-mono text-brand-brown-light">
+                      {m.working_days} wd
+                    </span>
+                  </div>
+                  <div className="mt-2 flex flex-wrap gap-1.5 text-[11px]">
+                    <span className="px-1.5 py-0.5 rounded bg-success/15 text-success font-semibold">
+                      P {m.days_present}
+                    </span>
+                    {m.days_absent > 0 && (
+                      <span className="px-1.5 py-0.5 rounded bg-error/15 text-error font-semibold">
+                        A {m.days_absent}
+                      </span>
+                    )}
+                    {m.days_leave > 0 && (
+                      <span className="px-1.5 py-0.5 rounded bg-error/15 text-error font-semibold">
+                        L {m.days_leave}
+                      </span>
+                    )}
+                    {m.days_half_day > 0 && (
+                      <span className="px-1.5 py-0.5 rounded bg-warning/15 text-warning font-semibold">
+                        ½ {m.days_half_day}
+                      </span>
+                    )}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {openMonth !== null && (
+          <MonthEditor
+            employeeId={employeeId}
+            year={year}
+            month={openMonth}
+            onClose={() => setOpenMonth(null)}
+          />
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function Pill({
+  label,
+  value,
+  tone,
+}: {
+  label: string;
+  value: number;
+  tone: "success" | "info" | "warning" | "error" | "muted";
+}) {
+  const cls =
+    tone === "success"
+      ? "text-success"
+      : tone === "info"
+        ? "text-info"
+        : tone === "warning"
+          ? "text-warning"
+          : tone === "error"
+            ? "text-error"
+            : "text-brand-brown-darker";
+  return (
+    <div className="rounded-md border border-brand-brown-50 px-3 py-1.5 text-sm">
+      <span className="text-[10px] font-mono uppercase tracking-[0.2em] text-brand-brown-light">
+        {label}
+      </span>
+      <span className={`ml-2 font-semibold ${cls}`}>{value}</span>
+    </div>
+  );
+}
+
+// ── Inline editable month calendar ─────────────────────────────────────
+const STATUS_LABEL: Record<string, string> = {
+  present: "P",
+  absent: "A",
+  half_day: "½",
+  wfh: "WFH",
+  leave: "L",
+  holiday: "HOL",
+  week_off: "SUN",
+  upcoming: "",
+  blank: "",
+};
+
+function MonthEditor({
+  employeeId,
+  year,
+  month,
+  onClose,
+}: {
+  employeeId: number;
+  year: number;
+  month: number;
+  onClose: () => void;
+}) {
+  const qc = useQueryClient();
+  const [editing, setEditing] = useState<CalendarDay | null>(null);
+
+  const { data: cal, isLoading } = useQuery({
+    queryKey: ["attendance-calendar", employeeId, year, month],
+    queryFn: () => attendanceApi.employeeCalendar(employeeId, year, month),
+  });
+
+  const grid = useMemo(() => {
+    if (!cal) return [];
+    const first = new Date(cal.year, cal.month - 1, 1);
+    const firstWd = (first.getDay() + 6) % 7; // Mon=0
+    const out: Array<CalendarDay | null> = [];
+    for (let i = 0; i < firstWd; i++) out.push(null);
+    out.push(...cal.days);
+    while (out.length % 7 !== 0) out.push(null);
+    return out;
+  }, [cal]);
+
+  return (
+    <div className="rounded-xl border border-brand-gold-dark/40 bg-brand-gold/5 p-4">
+      <div className="flex items-center justify-between mb-3">
+        <div className="font-display text-lg font-bold text-brand-brown-darker">
+          {MONTHS_FULL[month - 1]} {year}
+        </div>
+        <Button size="sm" variant="ghost" onClick={onClose}>
+          <X className="h-4 w-4" />
+        </Button>
+      </div>
+
+      {isLoading || !cal ? (
+        <div className="py-8 text-center text-sm text-brand-brown-light">
+          Loading…
+        </div>
+      ) : (
+        <>
+          <div className="grid grid-cols-7 gap-1 text-[10px] font-mono uppercase tracking-[0.2em] text-brand-brown-light mb-1">
+            {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((d) => (
+              <div key={d} className="text-center">
+                {d}
+              </div>
+            ))}
+          </div>
+          <div className="grid grid-cols-7 gap-1">
+            {grid.map((d, i) =>
+              d === null ? (
+                <div key={`pad-${i}`} className="aspect-square" />
+              ) : (
+                <DayCell
+                  key={d.date}
+                  day={d}
+                  onClick={() => d.is_editable && setEditing(d)}
+                />
+              ),
+            )}
+          </div>
+          <p className="mt-3 text-xs text-brand-brown-light">
+            Sundays &amp; holidays are red and locked. Click any working
+            day to add or correct attendance.
+          </p>
+        </>
+      )}
+
+      {editing && (
+        <DayEditModal
+          day={editing}
+          employeeId={employeeId}
+          onClose={() => setEditing(null)}
+          onSaved={() => {
+            setEditing(null);
+            qc.invalidateQueries({
+              queryKey: ["attendance-calendar", employeeId, year, month],
+            });
+            qc.invalidateQueries({
+              queryKey: ["attendance-year", employeeId, year],
+            });
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+function DayCell({
+  day,
+  onClick,
+}: {
+  day: CalendarDay;
+  onClick: () => void;
+}) {
+  const dayNum = Number(day.date.slice(8, 10));
+  const off = day.is_sunday || day.is_holiday;
+  const upcoming = day.status === "upcoming";
+  const tone = off
+    ? "bg-error/10 border-error/30 text-error cursor-not-allowed"
+    : upcoming
+      ? "bg-brand-brown-50/40 border-brand-brown-50 text-brand-brown-light cursor-not-allowed"
+      : day.status === "present" || day.status === "wfh"
+        ? "bg-success/10 border-success/30 text-success cursor-pointer hover:border-success"
+        : day.status === "absent"
+          ? "bg-error/10 border-error/30 text-error cursor-pointer hover:border-error"
+          : day.status === "leave"
+            ? "bg-error/10 border-error/30 text-error cursor-pointer hover:border-error"
+            : day.status === "half_day"
+              ? "bg-warning/10 border-warning/30 text-warning cursor-pointer hover:border-warning"
+              : "bg-card border-brand-brown-50 cursor-pointer hover:border-brand-gold-dark";
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={!day.is_editable}
+      className={`aspect-square rounded-md border p-1 text-left transition-colors ${tone}`}
+      title={
+        day.is_holiday
+          ? `Holiday: ${day.holiday_name ?? ""}`
+          : day.is_sunday
+            ? "Sunday — week off"
+            : day.status
+      }
+    >
+      <div className="text-xs font-semibold">{dayNum}</div>
+      {!upcoming && (
+        <div className="text-[10px] font-bold mt-0.5">
+          {day.is_holiday
+            ? "HOL"
+            : day.is_sunday
+              ? "SUN"
+              : STATUS_LABEL[day.status] ?? day.status}
+        </div>
+      )}
+    </button>
+  );
+}
+
+function DayEditModal({
+  day,
+  employeeId,
+  onClose,
+  onSaved,
+}: {
+  day: CalendarDay;
+  employeeId: number;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const [status_, setStatus] = useState<string>(
+    day.status === "blank" ||
+      day.status === "week_off" ||
+      day.status === "holiday" ||
+      day.status === "upcoming"
+      ? "present"
+      : day.status,
+  );
+  const [workMode, setWorkMode] = useState<string>(day.work_mode ?? "office");
+  const [checkIn, setCheckIn] = useState<string>(
+    day.check_in ? toTimeInput(day.check_in) : "",
+  );
+  const [checkOut, setCheckOut] = useState<string>(
+    day.check_out ? toTimeInput(day.check_out) : "",
+  );
+  const [notes, setNotes] = useState<string>(day.notes ?? "");
+
+  const save = useMutation({
+    mutationFn: () =>
+      attendanceApi.upsertByDate(employeeId, {
+        date: day.date,
+        status: status_ as never,
+        work_mode: workMode,
+        check_in: checkIn ? `${day.date}T${checkIn}:00` : null,
+        check_out: checkOut ? `${day.date}T${checkOut}:00` : null,
+        notes: notes || null,
+      }),
+    onSuccess: () => {
+      toast.success("Attendance updated");
+      onSaved();
+    },
+    onError: (e: unknown) => {
+      const detail =
+        (e as { response?: { data?: { detail?: string } } })?.response?.data
+          ?.detail ?? "Could not save";
+      toast.error(detail);
+    },
+  });
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+      <Card className="w-full max-w-md">
+        <CardHeader className="flex flex-row items-center justify-between">
+          <div>
+            <CardTitle>{day.date}</CardTitle>
+            <CardDescription>Update attendance for this day.</CardDescription>
+          </div>
+          <Button variant="ghost" size="sm" onClick={onClose}>
+            <X className="size-4" />
+          </Button>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div>
+            <Label>Status</Label>
+            <select
+              value={status_}
+              onChange={(e) => setStatus(e.target.value)}
+              className="flex h-10 w-full rounded-md border border-input bg-card px-3 py-2 text-sm"
+            >
+              <option value="present">Present</option>
+              <option value="wfh">Work from home</option>
+              <option value="half_day">Half day</option>
+              <option value="leave">Leave</option>
+              <option value="absent">Absent</option>
+            </select>
+          </div>
+          <div>
+            <Label>Work mode</Label>
+            <select
+              value={workMode}
+              onChange={(e) => setWorkMode(e.target.value)}
+              className="flex h-10 w-full rounded-md border border-input bg-card px-3 py-2 text-sm"
+            >
+              <option value="office">Office</option>
+              <option value="wfh">WFH</option>
+              <option value="hybrid">Hybrid</option>
+              <option value="field">Field</option>
+            </select>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label>Check-in</Label>
+              <Input
+                type="time"
+                value={checkIn}
+                onChange={(e) => setCheckIn(e.target.value)}
+              />
+            </div>
+            <div>
+              <Label>Check-out</Label>
+              <Input
+                type="time"
+                value={checkOut}
+                onChange={(e) => setCheckOut(e.target.value)}
+              />
+            </div>
+          </div>
+          <div>
+            <Label>Notes</Label>
+            <Input
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="Optional"
+            />
+          </div>
+          <div className="flex justify-end gap-2 pt-2">
+            <Button variant="outline" onClick={onClose}>
+              Cancel
+            </Button>
+            <Button disabled={save.isPending} onClick={() => save.mutate()}>
+              {save.isPending ? "Saving…" : "Save"}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+function toTimeInput(iso: string): string {
+  const d = new Date(iso);
+  return `${String(d.getHours()).padStart(2, "0")}:${String(
+    d.getMinutes(),
+  ).padStart(2, "0")}`;
+}
