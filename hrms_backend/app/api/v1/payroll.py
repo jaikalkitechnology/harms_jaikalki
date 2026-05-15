@@ -191,6 +191,34 @@ async def generate_confirmation_letter(
     return doc
 
 
+@router.delete(
+    "/confirmation-letter/{employee_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def delete_confirmation_letter(
+    employee_id: int,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_permission("employee.update")),
+):
+    """Delete the most-recent confirmation letter and revert the
+    employee: clears confirmation_date, puts them back on probation,
+    and restores the originally-planned probation end date."""
+    emp = await emp_svc.get_employee(db, employee_id)
+    doc = (
+        await db.execute(
+            select(GeneratedDocument)
+            .where(GeneratedDocument.employee_id == employee_id)
+            .where(GeneratedDocument.doc_type == "confirmation_letter")
+            .order_by(GeneratedDocument.created_at.desc())
+        )
+    ).scalars().first()
+    if doc is None:
+        raise NotFoundError("No confirmation letter to delete")
+    await db.delete(doc)
+    await db.commit()
+    await emp_svc.revert_confirmation(db, emp)
+
+
 @router.get(
     "/documents/{employee_id}",
     response_model=list[GeneratedDocumentOut],

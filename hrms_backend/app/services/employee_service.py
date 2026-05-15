@@ -336,22 +336,56 @@ async def confirm_employee(
     db: AsyncSession,
     emp: Employee,
     *,
-    by_user: User,
+    by_user: Optional[User] = None,
     confirmation_letter_url: Optional[str] = None,
+    on_date: Optional[date] = None,
 ) -> EmployeeProbation:
     p = await get_active_probation(db, emp.id)
     if not p:
         raise ValidationError("No active probation to confirm")
-    today = date.today()
+    when = on_date or date.today()
     p.status = "confirmed"
-    p.confirmed_date = today
-    p.confirmed_by = by_user.id
+    p.confirmed_date = when
+    p.confirmed_by = by_user.id if by_user else None
     p.confirmation_letter_url = confirmation_letter_url
 
     emp.is_on_probation = False
-    emp.confirmation_date = today
+    emp.confirmation_date = when
+    # Probation effectively ends the day the employee is confirmed.
+    emp.probation_end_date = when
     await db.commit()
     await db.refresh(p)
+    return p
+
+
+async def revert_confirmation(
+    db: AsyncSession, emp: Employee
+) -> Optional[EmployeeProbation]:
+    """Undo a confirmation: clear the employee's confirmation_date,
+    put them back on probation, and reset the probation record to its
+    pre-confirmation state (restoring the originally-planned end date).
+    Used when a confirmation letter is deleted."""
+    p = (
+        await db.execute(
+            select(EmployeeProbation)
+            .where(EmployeeProbation.employee_id == emp.id)
+            .where(EmployeeProbation.status == "confirmed")
+            .order_by(EmployeeProbation.id.desc())
+        )
+    ).scalars().first()
+
+    emp.is_on_probation = True
+    emp.confirmation_date = None
+    if p is not None:
+        # Restore the planned end (extension end wins if it was extended).
+        emp.probation_end_date = p.extension_end_date or p.probation_end_date
+        p.status = "extended" if p.is_extended else "in_progress"
+        p.confirmed_date = None
+        p.confirmed_by = None
+        p.confirmation_letter_url = None
+    await db.commit()
+    if p is not None:
+        await db.refresh(p)
     return p
 
 

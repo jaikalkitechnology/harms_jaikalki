@@ -719,10 +719,40 @@ function DocumentsCard({ employeeId }: { employeeId: number }) {
     mutationFn: () =>
       payrollApi.generateConfirmationLetter(employeeId, letterDate),
     onSuccess: (doc) => {
-      toast.success(`Confirmation letter ${doc.letter_number} generated`);
+      toast.success(
+        `Confirmation letter ${doc.letter_number} generated — employee confirmed`,
+      );
       queryClient.invalidateQueries({ queryKey: ["employee-documents"] });
+      queryClient.invalidateQueries({ queryKey: ["employee", employeeId] });
+      queryClient.invalidateQueries({ queryKey: ["employees"] });
+    },
+    onError: (err: unknown) => {
+      const detail =
+        (err as { response?: { data?: { detail?: string } } })?.response?.data
+          ?.detail ?? "Could not generate confirmation letter";
+      toast.error(detail);
     },
   });
+  const deleteConfirmation = useMutation({
+    mutationFn: () => payrollApi.deleteConfirmationLetter(employeeId),
+    onSuccess: () => {
+      toast.success(
+        "Confirmation letter deleted — employee back on probation",
+      );
+      queryClient.invalidateQueries({ queryKey: ["employee-documents"] });
+      queryClient.invalidateQueries({ queryKey: ["employee", employeeId] });
+      queryClient.invalidateQueries({ queryKey: ["employees"] });
+    },
+    onError: (err: unknown) => {
+      const detail =
+        (err as { response?: { data?: { detail?: string } } })?.response?.data
+          ?.detail ?? "Could not delete confirmation letter";
+      toast.error(detail);
+    },
+  });
+  const hasConfirmation = documents.some(
+    (d) => d.doc_type === "confirmation_letter",
+  );
 
   return (
     <Card className="lg:col-span-2">
@@ -775,7 +805,30 @@ function DocumentsCard({ employeeId }: { employeeId: number }) {
           >
             Generate confirmation
           </Button>
+          {hasConfirmation && (
+            <Button
+              onClick={() => {
+                if (
+                  confirm(
+                    "Delete the confirmation letter? This puts the employee back on probation and clears their confirmation date.",
+                  )
+                )
+                  deleteConfirmation.mutate();
+              }}
+              disabled={deleteConfirmation.isPending}
+              variant="outline"
+              className="text-destructive"
+            >
+              Delete confirmation
+            </Button>
+          )}
         </div>
+        <p className="text-xs text-brand-brown-light">
+          Generating a confirmation letter also marks the employee
+          confirmed: it sets the confirmation date and probation-end
+          date to the letter date and ends probation. Deleting it
+          reverts all three.
+        </p>
         {documents.length > 0 && (
           <div className="space-y-1">
             {documents.map((d) => (

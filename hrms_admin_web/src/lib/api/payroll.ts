@@ -151,6 +151,9 @@ export const payrollApi = {
     );
     return data;
   },
+  async deleteConfirmationLetter(employeeId: number): Promise<void> {
+    await apiClient.delete(`${v1}/payroll/confirmation-letter/${employeeId}`);
+  },
   async listEmployeeDocuments(
     employeeId: number,
   ): Promise<GeneratedDocument[]> {

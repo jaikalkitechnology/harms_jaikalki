@@ -674,6 +674,7 @@ async def generate_confirmation_letter(
     generated_by: Optional[User] = None,
     upload_to_storage: bool = True,
     on_date: Optional[date] = None,
+    confirm: bool = True,
 ) -> tuple[bytes, GeneratedDocument]:
     letter_date = on_date or date.today()
     letter_no = await _next_letter_number(
@@ -707,6 +708,42 @@ async def generate_confirmation_letter(
     db.add(doc)
     await db.commit()
     await db.refresh(doc)
+
+    # Generating the confirmation letter also confirms the employee:
+    # set confirmation_date + probation_end_date to the letter date and
+    # mark the active probation record confirmed. Skipped only when an
+    # explicit confirm=False is passed (e.g. a reprint). Idempotent —
+    # if there's no active probation we just attach the letter URL.
+    if confirm:
+        from app.services import employee_service as _emp_svc
+
+        try:
+            p = await _emp_svc.get_active_probation(db, employee.id)
+            if p is not None:
+                await _emp_svc.confirm_employee(
+                    db,
+                    employee,
+                    by_user=generated_by,
+                    confirmation_letter_url=doc.file_url,
+                    on_date=letter_date,
+                )
+            else:
+                # Already confirmed (or never on probation) — keep the
+                # confirmation date in sync with the letter and stamp
+                # the URL on the existing probation row if present.
+                employee.is_on_probation = False
+                if employee.confirmation_date is None:
+                    employee.confirmation_date = letter_date
+                    employee.probation_end_date = (
+                        employee.probation_end_date or letter_date
+                    )
+                await db.commit()
+                await db.refresh(employee)
+        except Exception:
+            # Never let a confirmation-state hiccup lose the generated
+            # PDF; the letter row is already committed above.
+            await db.rollback()
+
     return pdf_bytes, doc
 
 
