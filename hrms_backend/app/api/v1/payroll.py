@@ -137,23 +137,29 @@ async def download_payslip(
 )
 async def generate_offer_letter(
     employee_id: int,
+    on_date: Optional[date] = Query(
+        default=None, description="Letter date (defaults to today)"
+    ),
     db: AsyncSession = Depends(get_db),
     user: User = Depends(require_permission("employee.create")),
 ):
     emp = await emp_svc.get_employee(db, employee_id)
-    _, doc = await docs.generate_offer_letter(db, emp, generated_by=user)
+    _, doc = await docs.generate_offer_letter(
+        db, emp, generated_by=user, on_date=on_date
+    )
     return doc
 
 
 @router.get("/offer-letter/{employee_id}/preview")
 async def preview_offer_letter(
     employee_id: int,
+    on_date: Optional[date] = Query(default=None),
     db: AsyncSession = Depends(get_db),
     user: User = Depends(require_permission("employee.create")),
 ):
     emp = await emp_svc.get_employee(db, employee_id)
     pdf, _doc = await docs.generate_offer_letter(
-        db, emp, generated_by=user, upload_to_storage=False
+        db, emp, generated_by=user, upload_to_storage=False, on_date=on_date
     )
     return Response(
         content=pdf,
@@ -172,11 +178,16 @@ async def preview_offer_letter(
 )
 async def generate_confirmation_letter(
     employee_id: int,
+    on_date: Optional[date] = Query(
+        default=None, description="Letter date (defaults to today)"
+    ),
     db: AsyncSession = Depends(get_db),
     user: User = Depends(require_permission("employee.update")),
 ):
     emp = await emp_svc.get_employee(db, employee_id)
-    _, doc = await docs.generate_confirmation_letter(db, emp, generated_by=user)
+    _, doc = await docs.generate_confirmation_letter(
+        db, emp, generated_by=user, on_date=on_date
+    )
     return doc
 
 
