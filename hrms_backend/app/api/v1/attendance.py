@@ -11,6 +11,7 @@ from app.dependencies import get_current_user, get_db
 from app.models import Attendance, AttendanceRegularization, LeaveRequest, User
 from app.schemas.attendance import (
     AttendanceCalendar,
+    AttendanceYearSummary,
     AttendanceCheckIn,
     AttendanceCheckOut,
     AttendanceOut,
@@ -359,6 +360,24 @@ async def employee_calendar(
         employee_id=employee_id,
         year=year or today.year,
         month=month or today.month,
+    )
+
+
+@router.get(
+    "/employee/{employee_id}/year-summary",
+    response_model=AttendanceYearSummary,
+)
+async def employee_year_summary(
+    employee_id: int,
+    year: Optional[int] = None,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_permission("attendance.view.all")),
+):
+    today = date.today()
+    return await att_svc.year_summary_for_employee(
+        db,
+        employee_id=employee_id,
+        year=year or today.year,
     )
 
 

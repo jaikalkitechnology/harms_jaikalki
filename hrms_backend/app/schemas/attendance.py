@@ -169,3 +169,29 @@ class AttendanceCalendar(BaseModel):
     days_half_day: int
     days_wfh: int
     working_days: int
+
+
+class YearMonthSummary(BaseModel):
+    month: int
+    days_present: int
+    days_absent: int
+    days_leave: int
+    days_holiday: int
+    days_weekoff: int
+    days_half_day: int
+    days_wfh: int
+    working_days: int
+
+
+class AttendanceYearSummary(BaseModel):
+    employee_id: int
+    year: int
+    months: List[YearMonthSummary]
+    total_present: int
+    total_absent: int
+    total_leave: int
+    total_holiday: int
+    total_weekoff: int
+    total_half_day: int
+    total_wfh: int
+    total_working_days: int
