@@ -18,6 +18,8 @@ import {
   type CalendarDay,
 } from "@/lib/api/attendance";
 import { leavesApi } from "@/lib/api/leaves";
+import { employeesApi } from "@/lib/api/employees";
+import { attendanceCyclesApi } from "@/lib/api/employeeProfile";
 
 const MONTHS = [
   "Jan", "Feb", "Mar", "Apr", "May", "Jun",
@@ -29,12 +31,54 @@ const MONTHS_FULL = [
 ];
 
 export function AttendanceLeaveCard({ employeeId }: { employeeId: number }) {
+  const qc = useQueryClient();
   const thisYear = new Date().getFullYear();
   const [year, setYear] = useState(thisYear);
   const [openMonth, setOpenMonth] = useState<number | null>(null);
 
+  const { data: employee } = useQuery({
+    queryKey: ["employee", employeeId],
+    queryFn: () => employeesApi.get(employeeId),
+  });
+  const { data: cycles = [] } = useQuery({
+    queryKey: ["attendance-cycles"],
+    queryFn: () => attendanceCyclesApi.list(),
+  });
+
+  const cycleStart = employee?.attendance_cycle_start_day ?? 1;
+
+  const setCycle = useMutation({
+    mutationFn: (startDay: number) =>
+      employeesApi.update(employeeId, {
+        attendance_cycle_start_day: startDay,
+      } as Partial<import("@/lib/api/employees").EmployeeDetail>),
+    onSuccess: () => {
+      toast.success("Attendance cycle updated");
+      qc.invalidateQueries({ queryKey: ["employee", employeeId] });
+      qc.invalidateQueries({ queryKey: ["attendance-year", employeeId] });
+      qc.invalidateQueries({ queryKey: ["attendance-calendar", employeeId] });
+    },
+    onError: () => toast.error("Could not update cycle"),
+  });
+
+  // Active cycle list + the employee's current value even if it was
+  // since deactivated, so the dropdown never loses the saved choice.
+  const cycleOptions: { start_day: number; label: string }[] = cycles.map(
+    (c) => ({ start_day: c.start_day, label: c.name }),
+  );
+  if (!cycleOptions.some((o) => o.start_day === cycleStart)) {
+    cycleOptions.push({
+      start_day: cycleStart,
+      label:
+        cycleStart === 1
+          ? "1st → last day (calendar month)"
+          : `Day ${cycleStart} cycle`,
+    });
+  }
+  cycleOptions.sort((a, b) => a.start_day - b.start_day);
+
   const { data: summary } = useQuery({
-    queryKey: ["attendance-year", employeeId, year],
+    queryKey: ["attendance-year", employeeId, year, cycleStart],
     queryFn: () => attendanceApi.employeeYearSummary(employeeId, year),
   });
 
@@ -45,34 +89,53 @@ export function AttendanceLeaveCard({ employeeId }: { employeeId: number }) {
 
   return (
     <Card className="lg:col-span-2">
-      <CardHeader className="flex flex-row items-start justify-between">
+      <CardHeader className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
         <div>
           <CardTitle>
-            Attendance &amp; <span className="display-em">leave</span>
+            Attendance &amp; <span className="display-em">Leave</span>
           </CardTitle>
           <CardDescription>
-            Leave balance, plus a month-by-month roll-up. Click any month
-            to open it and edit attendance.
+            Leave balance, plus a roll-up sliced by the chosen cycle.
+            Click any period to open and edit attendance.
           </CardDescription>
         </div>
-        <div className="flex items-center gap-1 shrink-0">
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => setYear((y) => y - 1)}
-          >
-            <ChevronLeft className="h-4 w-4" />
-          </Button>
-          <div className="px-3 py-1.5 rounded border border-brand-brown-50 bg-card text-sm font-medium min-w-[4.5rem] text-center">
-            {year}
+        <div className="flex flex-wrap items-center gap-2 shrink-0">
+          <div className="space-y-1">
+            <Label className="text-[10px] uppercase tracking-[0.2em] text-brand-brown-light">
+              Cycle calendar
+            </Label>
+            <select
+              value={cycleStart}
+              onChange={(e) => setCycle.mutate(Number(e.target.value))}
+              disabled={setCycle.isPending}
+              className="flex h-9 rounded-md border border-input bg-card px-2 py-1.5 text-sm"
+            >
+              {cycleOptions.map((o) => (
+                <option key={o.start_day} value={o.start_day}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
           </div>
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => setYear((y) => Math.min(thisYear + 1, y + 1))}
-          >
-            <ChevronRight className="h-4 w-4" />
-          </Button>
+          <div className="flex items-center gap-1">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setYear((y) => y - 1)}
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            <div className="px-3 py-1.5 rounded border border-brand-brown-50 bg-card text-sm font-medium min-w-[4.5rem] text-center">
+              {year}
+            </div>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setYear((y) => Math.min(thisYear + 1, y + 1))}
+            >
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
         </div>
       </CardHeader>
       <CardContent className="space-y-6">
@@ -177,6 +240,11 @@ export function AttendanceLeaveCard({ employeeId }: { employeeId: number }) {
                       {m.working_days} wd
                     </span>
                   </div>
+                  {cycleStart !== 1 && (
+                    <div className="text-[10px] text-brand-brown-light mt-0.5">
+                      {cycleRangeLabel(year, m.month, cycleStart)}
+                    </div>
+                  )}
                   <div className="mt-2 flex flex-wrap gap-1.5 text-[11px]">
                     <span className="px-1.5 py-0.5 rounded bg-success/15 text-success font-semibold">
                       P {m.days_present}
@@ -538,4 +606,27 @@ function toTimeInput(iso: string): string {
   return `${String(d.getHours()).padStart(2, "0")}:${String(
     d.getMinutes(),
   ).padStart(2, "0")}`;
+}
+
+// For a cycle whose start day is N (>1), the period that "belongs to"
+// month m in year y runs from N of the previous month to N-1 of month m.
+function cycleRangeLabel(y: number, m: number, startDay: number): string {
+  const fmt = (d: Date) =>
+    `${d.getDate()} ${MONTHS[d.getMonth()]}`;
+  const prevMonthDate = new Date(y, m - 2, 1); // m is 1-based; m-2 = prev month
+  const lastOfPrev = new Date(
+    prevMonthDate.getFullYear(),
+    prevMonthDate.getMonth() + 1,
+    0,
+  ).getDate();
+  const startDom = Math.min(startDay, lastOfPrev);
+  const start = new Date(
+    prevMonthDate.getFullYear(),
+    prevMonthDate.getMonth(),
+    startDom,
+  );
+  const lastOfThis = new Date(y, m, 0).getDate();
+  const endDom = Math.min(startDay - 1, lastOfThis);
+  const end = new Date(y, m - 1, endDom);
+  return `${fmt(start)} – ${fmt(end)}`;
 }
