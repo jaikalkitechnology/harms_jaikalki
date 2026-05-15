@@ -129,17 +129,25 @@ export const payrollApi = {
     );
     return data;
   },
-  async generateOfferLetter(employeeId: number): Promise<GeneratedDocument> {
+  async generateOfferLetter(
+    employeeId: number,
+    onDate?: string,
+  ): Promise<GeneratedDocument> {
     const { data } = await apiClient.post(
       `${v1}/payroll/offer-letter/${employeeId}`,
+      undefined,
+      { params: onDate ? { on_date: onDate } : undefined },
     );
     return data;
   },
   async generateConfirmationLetter(
     employeeId: number,
+    onDate?: string,
   ): Promise<GeneratedDocument> {
     const { data } = await apiClient.post(
       `${v1}/payroll/confirmation-letter/${employeeId}`,
+      undefined,
+      { params: onDate ? { on_date: onDate } : undefined },
     );
     return data;
   },
@@ -151,8 +159,9 @@ export const payrollApi = {
     );
     return data;
   },
-  offerLetterPreviewUrl(employeeId: number): string {
-    return `${API_BASE_URL}${v1}/payroll/offer-letter/${employeeId}/preview`;
+  offerLetterPreviewUrl(employeeId: number, onDate?: string): string {
+    const base = `${API_BASE_URL}${v1}/payroll/offer-letter/${employeeId}/preview`;
+    return onDate ? `${base}?on_date=${onDate}` : base;
   },
   payslipPdfUrl(payslipId: number): string {
     return `${API_BASE_URL}${v1}/payroll/payslips/${payslipId}/pdf`;

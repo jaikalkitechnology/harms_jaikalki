@@ -53,6 +53,39 @@ export interface FamilyMember {
 
 export type FamilyMemberInput = Omit<FamilyMember, "id" | "employee_id">;
 
+// ── Bank account ───────────────────────────────────────────────────
+export interface BankDetails {
+  id: number;
+  employee_id: number;
+  account_no: string;
+  ifsc: string;
+  bank_name: string;
+  branch: string | null;
+  account_holder_name: string | null;
+}
+
+export type BankDetailsInput = Omit<BankDetails, "id" | "employee_id">;
+
+export const bankApi = {
+  async get(employeeId: number): Promise<BankDetails | null> {
+    const { data } = await apiClient.get(`${v1}/employees/${employeeId}/bank`);
+    return data;
+  },
+  async upsert(
+    employeeId: number,
+    payload: BankDetailsInput,
+  ): Promise<BankDetails> {
+    const { data } = await apiClient.put(
+      `${v1}/employees/${employeeId}/bank`,
+      payload,
+    );
+    return data;
+  },
+  async remove(employeeId: number): Promise<void> {
+    await apiClient.delete(`${v1}/employees/${employeeId}/bank`);
+  },
+};
+
 // ── Attendance cycles ──────────────────────────────────────────────
 export interface AttendanceCycle {
   id: number;

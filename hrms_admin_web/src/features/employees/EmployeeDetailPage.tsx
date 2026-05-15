@@ -44,6 +44,7 @@ import { launchApi } from "@/lib/api/launch";
 import { CategoryBadge } from "./CategoryBadge";
 import { OnboardingDocsCard } from "./OnboardingDocsCard";
 import {
+  BankCard,
   FamilyCard,
   NomineesCard,
   PassportCard,
@@ -281,6 +282,10 @@ export default function EmployeeDetailPage() {
 
         <PermissionGate permission="salary.view.team">
           <StatutoryOverridesCard employee={employee} />
+        </PermissionGate>
+
+        <PermissionGate permission="employee.update">
+          <BankCard employeeId={employee.id} />
         </PermissionGate>
 
         <PermissionGate permission="employee.update">
@@ -684,13 +689,16 @@ function StatutoryOverridesCard({
 
 function DocumentsCard({ employeeId }: { employeeId: number }) {
   const queryClient = useQueryClient();
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const [letterDate, setLetterDate] = useState(todayStr);
+
   const { data: documents = [] } = useQuery({
     queryKey: ["employee-documents", employeeId],
     queryFn: () => payrollApi.listEmployeeDocuments(employeeId),
   });
 
   const generateOffer = useMutation({
-    mutationFn: () => payrollApi.generateOfferLetter(employeeId),
+    mutationFn: () => payrollApi.generateOfferLetter(employeeId, letterDate),
     onSuccess: (doc) => {
       toast.success(`Offer letter ${doc.letter_number} generated`);
       queryClient.invalidateQueries({ queryKey: ["employee-documents"] });
@@ -703,7 +711,8 @@ function DocumentsCard({ employeeId }: { employeeId: number }) {
     },
   });
   const generateConfirmation = useMutation({
-    mutationFn: () => payrollApi.generateConfirmationLetter(employeeId),
+    mutationFn: () =>
+      payrollApi.generateConfirmationLetter(employeeId, letterDate),
     onSuccess: (doc) => {
       toast.success(`Confirmation letter ${doc.letter_number} generated`);
       queryClient.invalidateQueries({ queryKey: ["employee-documents"] });
@@ -718,10 +727,21 @@ function DocumentsCard({ employeeId }: { employeeId: number }) {
         </CardTitle>
         <CardDescription>
           Offer letter follows the Jaikalki <code className="font-mono">JKT/HR/AL/&lt;seq&gt;/&lt;year&gt;</code> format.
+          The letter date below is printed on the PDF and saved with the
+          document.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap items-end gap-3">
+          <div className="space-y-1.5">
+            <Label>Letter date</Label>
+            <Input
+              type="date"
+              value={letterDate}
+              onChange={(e) => setLetterDate(e.target.value)}
+              className="w-44"
+            />
+          </div>
           <Button
             onClick={() => generateOffer.mutate()}
             disabled={generateOffer.isPending}
@@ -735,7 +755,7 @@ function DocumentsCard({ employeeId }: { employeeId: number }) {
             variant="outline"
           >
             <a
-              href={payrollApi.offerLetterPreviewUrl(employeeId)}
+              href={payrollApi.offerLetterPreviewUrl(employeeId, letterDate)}
               target="_blank"
               rel="noreferrer"
             >

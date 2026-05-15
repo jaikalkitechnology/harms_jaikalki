@@ -119,15 +119,16 @@ async def generate_offer_letter(
     *,
     generated_by: Optional[User] = None,
     upload_to_storage: bool = True,
+    on_date: Optional[date] = None,
 ) -> tuple[bytes, GeneratedDocument]:
     if not employee.salary_template:
         raise ValidationError(
             "Employee has no salary template — cannot generate offer letter"
         )
 
-    today = date.today()
+    letter_date = on_date or date.today()
     letter_no = await _next_letter_number(
-        db, doc_type="offer_letter", year=today.year
+        db, doc_type="offer_letter", year=letter_date.year
     )
     breakup = JaikalkiSalaryCalculator().calculate(
         employee.salary_template,
@@ -136,7 +137,7 @@ async def generate_offer_letter(
     ).as_dict()
 
     pdf_bytes = _render_offer_letter(
-        employee, letter_no=letter_no, on_date=today, breakup=breakup
+        employee, letter_no=letter_no, on_date=letter_date, breakup=breakup
     )
 
     file_url = ""
@@ -158,7 +159,11 @@ async def generate_offer_letter(
         doc_type="offer_letter",
         letter_number=letter_no,
         file_url=file_url or f"local://offer-letters/{letter_no}.pdf",
-        payload={"breakup": breakup, "ctc_annual": str(employee.ctc_annual or 0)},
+        payload={
+            "breakup": breakup,
+            "ctc_annual": str(employee.ctc_annual or 0),
+            "letter_date": letter_date.isoformat(),
+        },
         generated_by=generated_by.id if generated_by else None,
     )
     db.add(doc)
@@ -668,14 +673,15 @@ async def generate_confirmation_letter(
     *,
     generated_by: Optional[User] = None,
     upload_to_storage: bool = True,
+    on_date: Optional[date] = None,
 ) -> tuple[bytes, GeneratedDocument]:
-    today = date.today()
+    letter_date = on_date or date.today()
     letter_no = await _next_letter_number(
-        db, doc_type="confirmation_letter", year=today.year
+        db, doc_type="confirmation_letter", year=letter_date.year
     )
 
     pdf_bytes = _render_confirmation_letter(
-        employee, letter_no=letter_no, on_date=today
+        employee, letter_no=letter_no, on_date=letter_date
     )
 
     file_url = ""
@@ -695,7 +701,7 @@ async def generate_confirmation_letter(
         doc_type="confirmation_letter",
         letter_number=letter_no,
         file_url=file_url or f"local://confirmation-letters/{letter_no}.pdf",
-        payload=None,
+        payload={"letter_date": letter_date.isoformat()},
         generated_by=generated_by.id if generated_by else None,
     )
     db.add(doc)

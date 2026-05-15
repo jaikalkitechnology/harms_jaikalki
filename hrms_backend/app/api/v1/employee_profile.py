@@ -17,6 +17,7 @@ from app.dependencies import get_current_user, get_db
 from app.models import (
     AttendanceCycle,
     Employee,
+    EmployeeBankDetails,
     EmployeeNominee,
     EmployeePassport,
     FamilyMember,
@@ -26,6 +27,8 @@ from app.schemas.employee import (
     AttendanceCycleCreate,
     AttendanceCycleOut,
     AttendanceCycleUpdate,
+    BankDetailsOut,
+    BankDetailsUpsert,
     FamilyMemberCreate,
     FamilyMemberOut,
     FamilyMemberUpdate,
@@ -284,6 +287,75 @@ async def delete_family(
     ).scalar_one_or_none()
     if f:
         await db.delete(f)
+        await db.commit()
+
+
+# ── Bank account ──────────────────────────────────────────────────────
+@router.get(
+    "/employees/{employee_id}/bank", response_model=Optional[BankDetailsOut]
+)
+async def get_bank(
+    employee_id: int,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    emp = await svc.get_employee(db, employee_id)
+    allowed = await svc.visible_employee_ids(db, user)
+    svc.assert_can_view(user, emp, allowed)
+    return (
+        await db.execute(
+            select(EmployeeBankDetails).where(
+                EmployeeBankDetails.employee_id == employee_id
+            )
+        )
+    ).scalar_one_or_none()
+
+
+@router.put("/employees/{employee_id}/bank", response_model=BankDetailsOut)
+async def upsert_bank(
+    employee_id: int,
+    payload: BankDetailsUpsert,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_permission("employee.update")),
+):
+    emp = await svc.get_employee(db, employee_id)
+    existing = (
+        await db.execute(
+            select(EmployeeBankDetails).where(
+                EmployeeBankDetails.employee_id == employee_id
+            )
+        )
+    ).scalar_one_or_none()
+    data = payload.model_dump()
+    if existing is None:
+        bank = EmployeeBankDetails(employee_id=emp.id, **data)
+        db.add(bank)
+    else:
+        bank = existing
+        for k, v in data.items():
+            setattr(bank, k, v)
+    await db.commit()
+    await db.refresh(bank)
+    return bank
+
+
+@router.delete(
+    "/employees/{employee_id}/bank", status_code=status.HTTP_204_NO_CONTENT
+)
+async def delete_bank(
+    employee_id: int,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_permission("employee.update")),
+):
+    existing = (
+        await db.execute(
+            select(EmployeeBankDetails).where(
+                EmployeeBankDetails.employee_id == employee_id
+            )
+        )
+    ).scalar_one_or_none()
+    if existing:
+        await db.delete(existing)
         await db.commit()
 
 

@@ -19,9 +19,11 @@ import {
 } from "@/lib/api/employees";
 import {
   attendanceCyclesApi,
+  bankApi,
   employeeProfileApi,
   type AttendanceCycle,
   type AttendanceCycleInput,
+  type BankDetailsInput,
   type FamilyMember,
   type FamilyMemberInput,
   type Nominee,
@@ -360,6 +362,141 @@ function CycleRow({
         </Button>
       </div>
     </div>
+  );
+}
+
+// ── Bank account card ──────────────────────────────────────────────────
+export function BankCard({ employeeId }: { employeeId: number }) {
+  const qc = useQueryClient();
+  const { data, isLoading } = useQuery({
+    queryKey: ["employee-bank", employeeId],
+    queryFn: () => bankApi.get(employeeId),
+  });
+  const [draft, setDraft] = useState<BankDetailsInput>({
+    account_no: "",
+    ifsc: "",
+    bank_name: "",
+    branch: null,
+    account_holder_name: null,
+  });
+
+  useEffect(() => {
+    if (data) {
+      setDraft({
+        account_no: data.account_no,
+        ifsc: data.ifsc,
+        bank_name: data.bank_name,
+        branch: data.branch,
+        account_holder_name: data.account_holder_name,
+      });
+    }
+  }, [data]);
+
+  const save = useMutation({
+    mutationFn: () => bankApi.upsert(employeeId, draft),
+    onSuccess: () => {
+      toast.success("Bank account saved");
+      qc.invalidateQueries({ queryKey: ["employee-bank", employeeId] });
+    },
+    onError: (e: unknown) => {
+      const detail =
+        (e as { response?: { data?: { detail?: string } } })?.response?.data
+          ?.detail ?? "Could not save";
+      toast.error(detail);
+    },
+  });
+  const remove = useMutation({
+    mutationFn: () => bankApi.remove(employeeId),
+    onSuccess: () => {
+      toast.success("Bank account removed");
+      qc.invalidateQueries({ queryKey: ["employee-bank", employeeId] });
+      setDraft({
+        account_no: "",
+        ifsc: "",
+        bank_name: "",
+        branch: null,
+        account_holder_name: null,
+      });
+    },
+  });
+
+  if (isLoading) return null;
+
+  return (
+    <Card className="lg:col-span-2">
+      <CardHeader>
+        <CardTitle>
+          Bank <span className="display-em">account</span>
+        </CardTitle>
+        <CardDescription>
+          Salary credit account. Used by the payroll bank-file export.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="grid md:grid-cols-2 gap-4">
+        <Field label="Account holder name">
+          <Input
+            value={draft.account_holder_name ?? ""}
+            onChange={(e) =>
+              setDraft({ ...draft, account_holder_name: e.target.value || null })
+            }
+          />
+        </Field>
+        <Field label="Account number">
+          <Input
+            value={draft.account_no}
+            onChange={(e) => setDraft({ ...draft, account_no: e.target.value })}
+          />
+        </Field>
+        <Field label="IFSC">
+          <Input
+            value={draft.ifsc}
+            onChange={(e) =>
+              setDraft({ ...draft, ifsc: e.target.value.toUpperCase() })
+            }
+            placeholder="HDFC0001234"
+          />
+        </Field>
+        <Field label="Bank name">
+          <Input
+            value={draft.bank_name}
+            onChange={(e) => setDraft({ ...draft, bank_name: e.target.value })}
+          />
+        </Field>
+        <Field label="Branch">
+          <Input
+            value={draft.branch ?? ""}
+            onChange={(e) =>
+              setDraft({ ...draft, branch: e.target.value || null })
+            }
+          />
+        </Field>
+        <div className="md:col-span-2 flex justify-end gap-2">
+          {data && (
+            <Button
+              variant="outline"
+              className="text-destructive"
+              onClick={() => remove.mutate()}
+              disabled={remove.isPending}
+            >
+              Remove
+            </Button>
+          )}
+          <Button
+            disabled={
+              !draft.account_no ||
+              !draft.ifsc ||
+              !draft.bank_name ||
+              save.isPending
+            }
+            onClick={() => save.mutate()}
+            className="gap-2"
+          >
+            <Save className="h-4 w-4" />
+            {save.isPending ? "Saving…" : "Save"}
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 

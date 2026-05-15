@@ -564,6 +564,26 @@ class FamilyMemberOut(BaseModel):
     is_dependent: bool
 
 
+# ── Bank details ───────────────────────────────────────────────────────
+class BankDetailsUpsert(BaseModel):
+    account_no: str = Field(min_length=5, max_length=32)
+    ifsc: str = Field(min_length=4, max_length=16)
+    bank_name: str = Field(min_length=2, max_length=96)
+    branch: Optional[str] = Field(default=None, max_length=96)
+    account_holder_name: Optional[str] = Field(default=None, max_length=128)
+
+
+class BankDetailsOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    employee_id: int
+    account_no: str
+    ifsc: str
+    bank_name: str
+    branch: Optional[str]
+    account_holder_name: Optional[str]
+
+
 # ── Attendance cycles ──────────────────────────────────────────────────
 class AttendanceCycleCreate(BaseModel):
     code: str = Field(min_length=2, max_length=16)
