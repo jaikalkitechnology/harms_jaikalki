@@ -23,6 +23,7 @@ from app.models import (
     LeaveType,
     User,
 )
+from app.utils.leave_year import financial_year_start
 
 
 def _today() -> date:
@@ -91,7 +92,7 @@ async def get_or_create_balance(
 async def list_balances(
     db: AsyncSession, employee_id: int, year: Optional[int] = None
 ) -> Sequence[LeaveBalance]:
-    year = year or _today().year
+    year = year or financial_year_start(_today())
     types = (
         await db.execute(
             select(LeaveType).where(LeaveType.is_active.is_(True))
@@ -173,8 +174,8 @@ async def apply_leave(
             f"{lt.name} of {days} days requires a supporting document"
         )
 
-    # Balance check.
-    year = from_date.year
+    # Balance check. Leave-year is the Apr–Mar financial year.
+    year = financial_year_start(from_date)
     bal = await get_or_create_balance(db, employee.id, lt, year)
     if bal.balance < days:
         raise ValidationError(
@@ -246,7 +247,10 @@ async def cancel_leave(
     # Release balance if it had been deducted.
     if req.status == "approved":
         bal = await get_or_create_balance(
-            db, req.employee_id, req.leave_type, req.from_date.year
+            db,
+            req.employee_id,
+            req.leave_type,
+            financial_year_start(req.from_date),
         )
         bal.used = max(Decimal("0"), bal.used - req.days)
 
@@ -311,7 +315,10 @@ async def decide_leave(
 
     if approve:
         bal = await get_or_create_balance(
-            db, req.employee_id, req.leave_type, req.from_date.year
+            db,
+            req.employee_id,
+            req.leave_type,
+            financial_year_start(req.from_date),
         )
         if bal.balance < req.days:
             raise ValidationError(

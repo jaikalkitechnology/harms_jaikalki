@@ -34,19 +34,23 @@ SHIFTS = [
 
 # (code, name, days/year, carry_forward, max_cf, requires_attachment_after_days,
 #  description, is_paid, applies_sandwich_rule)
+# Leave year runs APRIL → MARCH (Indian financial year). Carry-forward
+# is allowed for PL only.
 LEAVE_TYPES = [
-    ("CL", "Casual Leave", Decimal("12"), False, Decimal("0"), 0,
-     "12 days/year. Resets each Jan.", True, False),
-    ("SL", "Sick Leave", Decimal("12"), False, Decimal("0"), 3,
-     "Doctor's note required for 3+ consecutive days.", True, False),
-    ("PL", "Privilege Leave", Decimal("18"), True, Decimal("30"), 0,
-     "Earned leave. Carries forward up to 30 days.", True, False),
-    ("ML", "Maternity Leave", Decimal("182"), False, Decimal("0"), 0,
-     "26 weeks per the Maternity Benefit Act.", True, False),
-    ("PTL", "Paternity Leave", Decimal("15"), False, Decimal("0"), 0,
-     "15 days within 6 months of childbirth.", True, False),
-    ("BL", "Bereavement Leave", Decimal("5"), False, Decimal("0"), 0,
-     "Up to 5 days for immediate family.", True, False),
+    ("CL", "Casual Leave", Decimal("6"), False, Decimal("0"), 0,
+     "6 days per leave-year (Apr–Mar). No carry forward.", True, False),
+    ("SL", "Sick Leave", Decimal("8"), False, Decimal("0"), 3,
+     "8 days per leave-year. Doctor's note for 3+ consecutive days.",
+     True, False),
+    ("PL", "Privilege Leave", Decimal("18"), True, Decimal("18"), 0,
+     "18 days per leave-year. Earned leave — carries forward (cap 18).",
+     True, False),
+    ("ML", "Maternity Leave", Decimal("180"), False, Decimal("0"), 0,
+     "180 days as per the Maternity Benefit Act.", True, False),
+    ("PTL", "Paternity Leave", Decimal("7"), False, Decimal("0"), 0,
+     "7 days within 6 months of childbirth.", True, False),
+    ("BL", "Bereavement Leave", Decimal("0"), False, Decimal("0"), 0,
+     "Granted ad-hoc by HR; no standing allocation.", True, False),
     ("LWP", "Leave Without Pay", Decimal("0"), False, Decimal("0"), 0,
      "Unpaid leave. Sandwich rule applies — Sundays/holidays falling "
      "between two LWP days are also unpaid.", False, True),
@@ -108,10 +112,18 @@ async def seed_leave_types(db: AsyncSession) -> dict[str, LeaveType]:
             db.add(t)
             existing[code] = t
         else:
-            # Keep paid/sandwich flags in sync if seed evolves.
+            # Keep day counts / carry-forward / flags in sync when the
+            # seed evolves (e.g. CL 12→6, FY April–March policy change).
             t = existing[code]
+            t.name = name
+            t.days_per_year = days
+            t.carry_forward = cf
+            t.max_carry_forward = max_cf
+            t.requires_attachment_after_days = attach_after
+            t.description = desc
             t.is_paid = is_paid
             t.applies_sandwich_rule = sandwich
+            t.is_active = True
     await db.flush()
     return existing
 
