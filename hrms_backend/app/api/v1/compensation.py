@@ -136,3 +136,15 @@ async def apply(
     user: User = Depends(require_permission("payroll.run")),
 ):
     return await svc.apply(db, revision_id, actor=user)
+
+
+@router.post(
+    "/revisions/{revision_id}/undo-apply",
+    response_model=SalaryRevisionOut,
+)
+async def undo_apply(
+    revision_id: int,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_permission("payroll.run")),
+):
+    return await svc.undo_apply(db, revision_id)

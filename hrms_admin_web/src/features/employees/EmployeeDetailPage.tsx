@@ -1654,12 +1654,22 @@ function RevisionRow({
     },
     onError: (e) => err(e, "Could not cancel"),
   });
+  const undo = useMutation({
+    mutationFn: () => compensationApi.undoApply(rev.id),
+    onSuccess: () => {
+      toast.success("Revision undone — CTC restored");
+      onChanged();
+    },
+    onError: (e) => err(e, "Could not undo"),
+  });
+  const [editOpen, setEditOpen] = useState(false);
 
   const busy =
     approve.isPending ||
     apply.isPending ||
     reject.isPending ||
-    cancel.isPending;
+    cancel.isPending ||
+    undo.isPending;
 
   return (
     <tr className="border-t border-brand-brown-100/60">
@@ -1720,6 +1730,18 @@ function RevisionRow({
             </Button>
           )}
           {(rev.status === "draft" ||
+            rev.status === "pending_approval") && (
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-7"
+              disabled={busy}
+              onClick={() => setEditOpen(true)}
+            >
+              Edit
+            </Button>
+          )}
+          {(rev.status === "draft" ||
             rev.status === "pending_approval" ||
             rev.status === "approved") && (
             <Button
@@ -1732,14 +1754,146 @@ function RevisionRow({
               Cancel
             </Button>
           )}
-          {(rev.status === "applied" ||
-            rev.status === "rejected" ||
+          {rev.status === "applied" && (
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-7 text-destructive"
+              disabled={busy}
+              onClick={() => {
+                if (
+                  confirm(
+                    "Undo this applied revision? The employee's CTC / template / designation will be restored to their pre-revision values.",
+                  )
+                )
+                  undo.mutate();
+              }}
+            >
+              Undo
+            </Button>
+          )}
+          {(rev.status === "rejected" ||
             rev.status === "cancelled") && (
             <span className="text-[11px] text-brand-brown-light">—</span>
           )}
         </div>
       </td>
+      {editOpen && (
+        <EditRevisionModal
+          rev={rev}
+          onClose={() => setEditOpen(false)}
+          onDone={() => {
+            setEditOpen(false);
+            onChanged();
+          }}
+        />
+      )}
     </tr>
+  );
+}
+
+function EditRevisionModal({
+  rev,
+  onClose,
+  onDone,
+}: {
+  rev: SalaryRevision;
+  onClose: () => void;
+  onDone: () => void;
+}) {
+  const [newCtc, setNewCtc] = useState(String(rev.new_ctc_annual));
+  const [effective, setEffective] = useState(rev.effective_date);
+  const [reason, setReason] = useState(rev.reason);
+  const [notes, setNotes] = useState(rev.notes ?? "");
+
+  const save = useMutation({
+    mutationFn: () =>
+      compensationApi.update(rev.id, {
+        new_ctc_annual: Number(newCtc),
+        effective_date: effective,
+        reason,
+        notes: notes || undefined,
+      }),
+    onSuccess: () => {
+      toast.success("Revision updated");
+      onDone();
+    },
+    onError: (e: unknown) => {
+      const detail =
+        (e as { response?: { data?: { detail?: string } } })?.response?.data
+          ?.detail ?? "Could not update";
+      toast.error(detail);
+    },
+  });
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+      <Card className="w-full max-w-md">
+        <CardHeader className="flex flex-row items-center justify-between">
+          <div>
+            <CardTitle>Edit revision</CardTitle>
+            <CardDescription>
+              Only draft / pending revisions can be edited.
+            </CardDescription>
+          </div>
+          <Button variant="ghost" size="sm" onClick={onClose}>
+            <X className="size-4" />
+          </Button>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div>
+            <Label>New CTC (₹/yr)</Label>
+            <Input
+              type="number"
+              min={0}
+              value={newCtc}
+              onChange={(e) => setNewCtc(e.target.value)}
+            />
+          </div>
+          <div>
+            <Label>Effective date</Label>
+            <Input
+              type="date"
+              value={effective}
+              onChange={(e) => setEffective(e.target.value)}
+            />
+          </div>
+          <div>
+            <Label>Reason</Label>
+            <select
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+            >
+              {REVISION_REASONS.map((r) => (
+                <option key={r.value} value={r.value}>
+                  {r.label}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <Label>Notes</Label>
+            <Input
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="Optional"
+            />
+          </div>
+          <div className="flex justify-end gap-2 pt-2">
+            <Button variant="outline" onClick={onClose}>
+              Cancel
+            </Button>
+            <Button
+              disabled={!Number(newCtc) || !effective || save.isPending}
+              onClick={() => save.mutate()}
+            >
+              {save.isPending ? "Saving…" : "Save"}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
   );
 }
 
