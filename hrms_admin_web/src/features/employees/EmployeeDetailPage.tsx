@@ -1524,6 +1524,7 @@ function CompensationHistoryCard({
                     "Increment",
                     "Reason",
                     "Status",
+                    "Actions",
                   ].map((h) => (
                     <th
                       key={h}
@@ -1536,7 +1537,19 @@ function CompensationHistoryCard({
               </thead>
               <tbody>
                 {sorted.map((r) => (
-                  <RevisionRow key={r.id} rev={r} />
+                  <RevisionRow
+                    key={r.id}
+                    rev={r}
+                    onChanged={() => {
+                      qc.invalidateQueries({
+                        queryKey: ["compensation-revisions", employee.id],
+                      });
+                      qc.invalidateQueries({
+                        queryKey: ["employee", employee.id],
+                      });
+                      qc.invalidateQueries({ queryKey: ["salary-breakup"] });
+                    }}
+                  />
                 ))}
               </tbody>
             </table>
@@ -1588,7 +1601,13 @@ function CompStat({
   );
 }
 
-function RevisionRow({ rev }: { rev: SalaryRevision }) {
+function RevisionRow({
+  rev,
+  onChanged,
+}: {
+  rev: SalaryRevision;
+  onChanged: () => void;
+}) {
   const inr = (n: number) => `₹${n.toLocaleString("en-IN")}`;
   const old = Number(rev.previous_ctc_annual);
   const neu = Number(rev.new_ctc_annual);
@@ -1596,6 +1615,52 @@ function RevisionRow({ rev }: { rev: SalaryRevision }) {
   const tone =
     REVISION_STATUS_TONE[rev.status] ??
     "bg-brand-brown-50 text-brand-brown-darker";
+
+  const err = (e: unknown, fb: string) =>
+    toast.error(
+      (e as { response?: { data?: { detail?: string } } })?.response?.data
+        ?.detail ?? fb,
+    );
+
+  const approve = useMutation({
+    mutationFn: () => compensationApi.approve(rev.id),
+    onSuccess: () => {
+      toast.success("Revision approved");
+      onChanged();
+    },
+    onError: (e) => err(e, "Could not approve"),
+  });
+  const apply = useMutation({
+    mutationFn: () => compensationApi.apply(rev.id),
+    onSuccess: () => {
+      toast.success("Revision applied — CTC updated");
+      onChanged();
+    },
+    onError: (e) => err(e, "Could not apply"),
+  });
+  const reject = useMutation({
+    mutationFn: () => compensationApi.reject(rev.id),
+    onSuccess: () => {
+      toast.success("Revision rejected");
+      onChanged();
+    },
+    onError: (e) => err(e, "Could not reject"),
+  });
+  const cancel = useMutation({
+    mutationFn: () => compensationApi.cancel(rev.id),
+    onSuccess: () => {
+      toast.success("Revision cancelled");
+      onChanged();
+    },
+    onError: (e) => err(e, "Could not cancel"),
+  });
+
+  const busy =
+    approve.isPending ||
+    apply.isPending ||
+    reject.isPending ||
+    cancel.isPending;
+
   return (
     <tr className="border-t border-brand-brown-100/60">
       <td className="px-3 py-2 font-mono text-xs">{rev.effective_date}</td>
@@ -1618,6 +1683,61 @@ function RevisionRow({ rev }: { rev: SalaryRevision }) {
         >
           {rev.status.replace("_", " ")}
         </span>
+      </td>
+      <td className="px-3 py-2">
+        <div className="flex flex-wrap gap-1.5">
+          {(rev.status === "draft" ||
+            rev.status === "pending_approval") && (
+            <Button
+              size="sm"
+              className="h-7"
+              disabled={busy}
+              onClick={() => approve.mutate()}
+            >
+              Approve
+            </Button>
+          )}
+          {rev.status === "approved" && (
+            <Button
+              size="sm"
+              className="h-7"
+              disabled={busy}
+              onClick={() => apply.mutate()}
+            >
+              Apply
+            </Button>
+          )}
+          {(rev.status === "draft" ||
+            rev.status === "pending_approval") && (
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-7 text-destructive"
+              disabled={busy}
+              onClick={() => reject.mutate()}
+            >
+              Reject
+            </Button>
+          )}
+          {(rev.status === "draft" ||
+            rev.status === "pending_approval" ||
+            rev.status === "approved") && (
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-7"
+              disabled={busy}
+              onClick={() => cancel.mutate()}
+            >
+              Cancel
+            </Button>
+          )}
+          {(rev.status === "applied" ||
+            rev.status === "rejected" ||
+            rev.status === "cancelled") && (
+            <span className="text-[11px] text-brand-brown-light">—</span>
+          )}
+        </div>
       </td>
     </tr>
   );
