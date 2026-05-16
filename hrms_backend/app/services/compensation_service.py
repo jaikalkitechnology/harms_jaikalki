@@ -24,6 +24,7 @@ from app.core.exceptions import (
 from app.models import (
     Designation,
     Employee,
+    PayrollRun,
     SalaryRevision,
     SalaryTemplate,
     User,
@@ -84,8 +85,38 @@ async def propose(
     prev_ctc = _two(emp.ctc_annual or 0)
     if new_ctc <= 0:
         raise ValidationError("new_ctc_annual must be positive")
+    # Back-dating is allowed (record a raise that took effect earlier),
+    # EXCEPT into a period whose payroll has already been finalized or
+    # disbursed — that salary is paid and can't be retroactively
+    # rewritten here. Block if any finalized/disbursed run covers the
+    # effective month or a later one.
     if effective_date < date.today():
-        raise ValidationError("effective_date must be today or later")
+        eff_period = effective_date.year * 12 + effective_date.month
+        runs = (
+            await db.execute(
+                select(PayrollRun).where(
+                    PayrollRun.status.in_(["finalized"])
+                    | (PayrollRun.disbursed.is_(True))
+                )
+            )
+        ).scalars().all()
+        clash = [
+            r
+            for r in runs
+            if (r.year * 12 + r.month) >= eff_period
+        ]
+        if clash:
+            clash.sort(key=lambda r: (r.year, r.month))
+            periods = ", ".join(
+                f"{r.year}-{r.month:02d}"
+                + (" (paid)" if r.disbursed else " (finalized)")
+                for r in clash
+            )
+            raise ValidationError(
+                "Cannot back-date this revision — payroll is already "
+                f"locked for: {periods}. Pick an effective date after "
+                "the last paid period, or revert that payroll first."
+            )
     increment_pct = _three(
         (new_ctc - prev_ctc) / prev_ctc * 100 if prev_ctc > 0 else 0
     )

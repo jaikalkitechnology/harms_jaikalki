@@ -1746,6 +1746,12 @@ function ProposeRevisionModal({
                 value={effective}
                 onChange={(e) => setEffective(e.target.value)}
               />
+              {effective < todayStr && (
+                <p className="text-xs text-brand-brown-light mt-1">
+                  Back-dated — allowed unless payroll for that period is
+                  already finalized/paid.
+                </p>
+              )}
             </div>
             <div>
               <Label>Reason</Label>
