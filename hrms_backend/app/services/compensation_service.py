@@ -179,10 +179,17 @@ async def approve(
     rev = await get(db, revision_id)
     if rev.status != "pending_approval":
         raise ValidationError(f"Cannot approve a revision in {rev.status!r}")
+    # Segregation of duties: the proposer can't approve their own
+    # revision — UNLESS they hold a privileged role (Super Admin /
+    # Director / HR / Admin), which covers small orgs where the same
+    # person runs the whole compensation flow.
     if rev.proposed_by == approver.id:
-        raise ForbiddenError(
-            "An approver cannot also be the proposer of the revision"
-        )
+        from app.services.employee_service import can_see_all
+
+        if not can_see_all(approver):
+            raise ForbiddenError(
+                "An approver cannot also be the proposer of the revision"
+            )
     rev.status = "approved"
     rev.approved_by = approver.id
     rev.approved_at = _now()
