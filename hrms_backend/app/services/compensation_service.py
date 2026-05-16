@@ -109,16 +109,16 @@ async def propose(
                     "hra": breakup.hra,
                     "other_allowance": breakup.other_allowance,
                     "conveyance": breakup.conveyance,
-                    "gross": breakup.gross_monthly,
+                    "gross": breakup.gross,
                     "pf_employee": breakup.pf_employee,
                     "esic_employee": breakup.esic_employee,
                     "professional_tax": breakup.professional_tax,
-                    "net": breakup.net_monthly,
+                    "net": breakup.net_salary,
                 },
                 "annual": {
                     "ctc": int(new_ctc),
-                    "gross": breakup.gross_annual,
-                    "net": breakup.net_annual,
+                    "gross": breakup.gross * 12,
+                    "net": breakup.net_salary * 12,
                 },
             }
 

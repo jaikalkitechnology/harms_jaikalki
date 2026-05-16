@@ -70,6 +70,8 @@ export const compensationApi = {
     effective_date: string;
     reason: string;
     notes?: string;
+    new_salary_template_id?: number | null;
+    new_designation_id?: number | null;
   }) => {
     const { data } = await apiClient.post<SalaryRevision>(
       `${v1}/compensation/revisions`,

@@ -1638,10 +1638,21 @@ function ProposeRevisionModal({
   const [reason, setReason] = useState("annual_review");
   const [notes, setNotes] = useState("");
   const [autoApply, setAutoApply] = useState(true);
+  const [templateId, setTemplateId] = useState<string>(
+    employee.salary_template?.id ? String(employee.salary_template.id) : "",
+  );
+
+  const { data: templates = [] } = useQuery({
+    queryKey: ["salary-templates"],
+    queryFn: () => salaryTemplatesApi.list(),
+  });
 
   const oldCtc = Number(employee.ctc_annual);
   const newCtcNum = Number(newCtc);
   const pct = oldCtc > 0 ? ((newCtcNum - oldCtc) / oldCtc) * 100 : 0;
+  const currentTemplateId = employee.salary_template?.id ?? null;
+  const templateChanged =
+    !!templateId && Number(templateId) !== currentTemplateId;
 
   const submit = useMutation({
     mutationFn: async () => {
@@ -1651,6 +1662,9 @@ function ProposeRevisionModal({
         effective_date: effective,
         reason,
         notes: notes || undefined,
+        new_salary_template_id: templateChanged
+          ? Number(templateId)
+          : undefined,
       });
       if (autoApply) {
         try {
@@ -1747,6 +1761,27 @@ function ProposeRevisionModal({
                 ))}
               </select>
             </div>
+          </div>
+          <div>
+            <Label>Salary template</Label>
+            <select
+              value={templateId}
+              onChange={(e) => setTemplateId(e.target.value)}
+              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+            >
+              <option value="">Keep current template</option>
+              {templates.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.template_code} · {t.template_name}
+                  {t.id === currentTemplateId ? " (current)" : ""}
+                </option>
+              ))}
+            </select>
+            <p className="text-xs text-brand-brown-light mt-1">
+              {templateChanged
+                ? "Template will switch when this revision is applied. The old template stays on every prior payslip/revision record."
+                : "Leave as current unless this revision also changes the salary structure."}
+            </p>
           </div>
           <div>
             <Label>Notes</Label>
