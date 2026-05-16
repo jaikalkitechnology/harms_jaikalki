@@ -138,6 +138,17 @@ _PENDING_COLUMNS: list[tuple[str, str, str, str | None]] = [
     ("payslips", "days_holiday", "DECIMAL(5,2) NOT NULL DEFAULT 0", None),
     ("payslips", "days_weekoff", "DECIMAL(5,2) NOT NULL DEFAULT 0", None),
     ("payslips", "days_sandwich", "DECIMAL(5,2) NOT NULL DEFAULT 0", None),
+    ("payroll_runs", "cycle_start_day", "INT NOT NULL DEFAULT 1", None),
+    (
+        "payroll_runs",
+        "disbursed",
+        "BOOLEAN NOT NULL DEFAULT FALSE",
+        None,
+    ),
+    ("payroll_runs", "disbursed_at", "DATETIME NULL", None),
+    ("payroll_runs", "disbursed_by", "INT NULL", None),
+    ("attendance", "is_late", "BOOLEAN NOT NULL DEFAULT FALSE", None),
+    ("attendance", "late_remark", "VARCHAR(255) NULL", None),
     ("departments", "enabled_modules", "JSON NULL", None),
 ]
 

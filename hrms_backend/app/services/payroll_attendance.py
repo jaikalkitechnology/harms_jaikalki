@@ -81,10 +81,20 @@ async def compute_attendance_month(
     *,
     year: int,
     month: int,
+    cycle_start_day: int = 1,
 ) -> AttendanceMonth:
-    days_in_month = monthrange(year, month)[1]
-    first = date(year, month, 1)
-    last = date(year, month, days_in_month)
+    if cycle_start_day and cycle_start_day > 1:
+        prev_year = year if month > 1 else year - 1
+        prev_month = month - 1 if month > 1 else 12
+        start_day = min(cycle_start_day, monthrange(prev_year, prev_month)[1])
+        first = date(prev_year, prev_month, start_day)
+        end_day = min(cycle_start_day - 1, monthrange(year, month)[1])
+        last = date(year, month, end_day)
+        days_in_month = (last - first).days + 1
+    else:
+        days_in_month = monthrange(year, month)[1]
+        first = date(year, month, 1)
+        last = date(year, month, days_in_month)
 
     # Holidays for the month — match by date (any location).
     holidays: set[date] = {

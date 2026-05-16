@@ -457,7 +457,15 @@ function DayCell({
             : day.status
       }
     >
-      <div className="text-xs font-semibold">{dayNum}</div>
+      <div className="flex items-center justify-between">
+        <span className="text-xs font-semibold">{dayNum}</span>
+        {day.is_late && (
+          <span
+            title={day.late_remark ?? "Late arrival"}
+            className="h-1.5 w-1.5 rounded-full bg-warning"
+          />
+        )}
+      </div>
       {!upcoming && (
         <div className="text-[10px] font-bold mt-0.5">
           {day.is_holiday
@@ -498,6 +506,10 @@ function DayEditModal({
     day.check_out ? toTimeInput(day.check_out) : "",
   );
   const [notes, setNotes] = useState<string>(day.notes ?? "");
+  const [isLate, setIsLate] = useState<boolean>(day.is_late ?? false);
+  const [lateRemark, setLateRemark] = useState<string>(
+    day.late_remark ?? "",
+  );
 
   const save = useMutation({
     mutationFn: () =>
@@ -508,6 +520,8 @@ function DayEditModal({
         check_in: checkIn ? `${day.date}T${checkIn}:00` : null,
         check_out: checkOut ? `${day.date}T${checkOut}:00` : null,
         notes: notes || null,
+        is_late: isLate,
+        late_remark: lateRemark || null,
       }),
     onSuccess: () => {
       toast.success("Attendance updated");
@@ -579,6 +593,25 @@ function DayEditModal({
               />
             </div>
           </div>
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              className="accent-brand-gold-dark"
+              checked={isLate}
+              onChange={(e) => setIsLate(e.target.checked)}
+            />
+            Mark as late arrival
+          </label>
+          {isLate && (
+            <div>
+              <Label>Late remark</Label>
+              <Input
+                value={lateRemark}
+                onChange={(e) => setLateRemark(e.target.value)}
+                placeholder="e.g. Reported at 10:45 — traffic"
+              />
+            </div>
+          )}
           <div>
             <Label>Notes</Label>
             <Input

@@ -137,6 +137,8 @@ class AttendanceUpsertByDate(BaseModel):
         default=None, pattern="^(office|wfh|hybrid|field)$"
     )
     notes: Optional[str] = None
+    is_late: Optional[bool] = None
+    late_remark: Optional[str] = Field(default=None, max_length=255)
 
 
 class CalendarDay(BaseModel):
@@ -154,6 +156,8 @@ class CalendarDay(BaseModel):
     total_minutes: int = 0
     notes: Optional[str] = None
     leave_type: Optional[str] = None
+    is_late: bool = False
+    late_remark: Optional[str] = None
 
 
 class AttendanceCalendar(BaseModel):

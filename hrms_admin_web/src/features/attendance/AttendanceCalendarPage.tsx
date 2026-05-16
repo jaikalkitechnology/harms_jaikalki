@@ -272,7 +272,15 @@ function DayCell({
               : STATUS_LABEL[day.status] ?? day.status
       }
     >
-      <div className={`text-sm font-semibold ${numTone}`}>{dayNum}</div>
+      <div className="flex items-center justify-between">
+        <span className={`text-sm font-semibold ${numTone}`}>{dayNum}</span>
+        {day.is_late && (
+          <span
+            title={day.late_remark ?? "Late arrival"}
+            className="h-2 w-2 rounded-full bg-warning"
+          />
+        )}
+      </div>
       {day.is_holiday ? (
         <div className="text-[9px] text-error font-medium truncate mt-0.5">
           {day.holiday_name}
@@ -313,6 +321,10 @@ function DayEditModal({
     day.check_out ? toLocalTimeInput(day.check_out) : "",
   );
   const [notes, setNotes] = useState<string>(day.notes ?? "");
+  const [isLate, setIsLate] = useState<boolean>(day.is_late ?? false);
+  const [lateRemark, setLateRemark] = useState<string>(
+    day.late_remark ?? "",
+  );
 
   const save = useMutation({
     mutationFn: () =>
@@ -323,6 +335,8 @@ function DayEditModal({
         check_in: checkIn ? combineDateTime(day.date, checkIn) : null,
         check_out: checkOut ? combineDateTime(day.date, checkOut) : null,
         notes: notes || null,
+        is_late: isLate,
+        late_remark: lateRemark || null,
       }),
     onSuccess: () => {
       toast.success("Attendance updated");
@@ -399,6 +413,25 @@ function DayEditModal({
               />
             </div>
           </div>
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              className="accent-brand-gold-dark"
+              checked={isLate}
+              onChange={(e) => setIsLate(e.target.checked)}
+            />
+            Mark as late arrival
+          </label>
+          {isLate && (
+            <div>
+              <Label>Late remark</Label>
+              <Input
+                value={lateRemark}
+                onChange={(e) => setLateRemark(e.target.value)}
+                placeholder="e.g. Reported at 10:45 — traffic"
+              />
+            </div>
+          )}
           <div>
             <Label>Notes</Label>
             <Input

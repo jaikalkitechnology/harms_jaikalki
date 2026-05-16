@@ -34,6 +34,8 @@ export interface CalendarDay {
   total_minutes: number;
   notes: string | null;
   leave_type: string | null;
+  is_late: boolean;
+  late_remark: string | null;
 }
 
 export interface AttendanceCalendar {
@@ -84,6 +86,8 @@ export interface AttendanceUpsertByDate {
   check_out?: string | null;
   work_mode?: string | null;
   notes?: string | null;
+  is_late?: boolean | null;
+  late_remark?: string | null;
 }
 
 export interface AttendanceUploadRowError {
