@@ -252,6 +252,14 @@ async def apply(
             select(Employee).where(Employee.id == rev.employee_id)
         )
     ).scalar_one()
+    # Stash the pre-apply state so undo_apply can restore it exactly.
+    snap = dict(rev.breakup_snapshot or {})
+    snap["_prev"] = {
+        "ctc_annual": str(emp.ctc_annual or 0),
+        "salary_template_id": emp.salary_template_id,
+        "designation_id": emp.designation_id,
+    }
+    rev.breakup_snapshot = snap
     emp.ctc_annual = rev.new_ctc_annual
     if rev.new_salary_template_id:
         emp.salary_template_id = rev.new_salary_template_id
@@ -283,6 +291,61 @@ async def apply(
         content_type="application/pdf",
     )
     rev.increment_letter_url = url
+    await db.commit()
+    await db.refresh(rev)
+    return rev
+
+
+async def undo_apply(
+    db: AsyncSession, revision_id: int
+) -> SalaryRevision:
+    """Reverse an *applied* revision: restore the employee's CTC /
+    template / designation to the pre-apply state and mark the
+    revision cancelled. Blocked if payroll for the effective period
+    (or later) is already finalized/disbursed — that pay is locked."""
+    rev = await get(db, revision_id)
+    if rev.status != "applied":
+        raise ValidationError("Only an applied revision can be undone")
+
+    eff_period = rev.effective_date.year * 12 + rev.effective_date.month
+    runs = (
+        await db.execute(
+            select(PayrollRun).where(
+                PayrollRun.status.in_(["finalized"])
+                | (PayrollRun.disbursed.is_(True))
+            )
+        )
+    ).scalars().all()
+    clash = [r for r in runs if (r.year * 12 + r.month) >= eff_period]
+    if clash:
+        clash.sort(key=lambda r: (r.year, r.month))
+        periods = ", ".join(
+            f"{r.year}-{r.month:02d}"
+            + (" (paid)" if r.disbursed else " (finalized)")
+            for r in clash
+        )
+        raise ValidationError(
+            "Cannot undo — payroll is already locked for: "
+            f"{periods}. Revert that payroll first."
+        )
+
+    emp = (
+        await db.execute(
+            select(Employee).where(Employee.id == rev.employee_id)
+        )
+    ).scalar_one()
+    prev = (rev.breakup_snapshot or {}).get("_prev") or {}
+    emp.ctc_annual = Decimal(
+        str(prev.get("ctc_annual") or rev.previous_ctc_annual or 0)
+    )
+    if rev.new_salary_template_id and prev.get("salary_template_id"):
+        emp.salary_template_id = prev["salary_template_id"]
+    if rev.new_designation_id and prev.get("designation_id"):
+        emp.designation_id = prev["designation_id"]
+
+    rev.status = "cancelled"
+    rev.applied_at = None
+    rev.increment_letter_url = None
     await db.commit()
     await db.refresh(rev)
     return rev
