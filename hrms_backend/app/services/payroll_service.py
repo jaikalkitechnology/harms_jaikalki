@@ -52,9 +52,16 @@ async def process_payroll(
     *,
     year: int,
     month: int,
+    cycle_start_day: Optional[int] = None,
     run_by: Optional[User] = None,
 ) -> PayrollRun:
-    """Compute payslips for every active, salary-bearing employee."""
+    """Compute payslips for every active, salary-bearing employee.
+
+    `cycle_start_day` controls the attendance window: 1 (or None) =
+    plain calendar month; N>1 = N-of-previous-month → (N-1)-of-this
+    month. When None, each employee's own attendance_cycle_start_day
+    is used so mixed cycles in one run still work.
+    """
     existing = (
         await db.execute(
             select(PayrollRun)
@@ -64,6 +71,8 @@ async def process_payroll(
     ).scalar_one_or_none()
     if existing and existing.status == "finalized":
         raise ConflictError("Payroll already finalized for this period")
+    if existing and existing.disbursed:
+        raise ConflictError("Payroll already disbursed for this period")
 
     if existing:
         # Re-process: clear payslips and reuse run record.
@@ -71,11 +80,13 @@ async def process_payroll(
             await db.delete(p)
         run = existing
         run.status = "draft"
+        run.cycle_start_day = cycle_start_day or 1
     else:
         run = PayrollRun(
             year=year,
             month=month,
             status="draft",
+            cycle_start_day=cycle_start_day or 1,
             run_by=run_by.id if run_by else None,
         )
         db.add(run)
@@ -111,8 +122,13 @@ async def process_payroll(
         # Per-day class breakdown: holidays + Sundays drop out of the
         # divisor; LOP = unpaid leave (incl. sandwich days) + absent.
         # Paid leave keeps the day's gross intact.
+        eff_cycle = (
+            cycle_start_day
+            if cycle_start_day is not None
+            else (emp.attendance_cycle_start_day or 1)
+        )
         att = await compute_attendance_month(
-            db, emp.id, year=year, month=month
+            db, emp.id, year=year, month=month, cycle_start_day=eff_cycle
         )
         working = att.working_days
         lop = att.days_lop
@@ -237,6 +253,156 @@ async def revert_run(db: AsyncSession, run_id: int) -> PayrollRun:
     await db.commit()
     await db.refresh(run)
     return run
+
+
+async def delete_run(db: AsyncSession, run_id: int) -> None:
+    """Hard-delete a payroll run + its payslips. Blocked once the
+    salary has been disbursed (the money already moved — keep the
+    audit trail). Any reimbursements paid in the run are released."""
+    run = await get_run(db, run_id)
+    if run.disbursed:
+        raise ConflictError(
+            "Run is marked disbursed — cannot delete. Revert the "
+            "disbursement first if this was a mistake."
+        )
+    rb = (
+        await db.execute(
+            select(Reimbursement).where(Reimbursement.paid_in_run_id == run_id)
+        )
+    ).scalars().all()
+    for r in rb:
+        r.status = "approved"
+        r.paid_in_run_id = None
+    await db.delete(run)  # payslips cascade
+    await db.commit()
+
+
+async def mark_disbursed(
+    db: AsyncSession, run_id: int, *, by_user: Optional[User] = None
+) -> PayrollRun:
+    """Flag the run as salary-distributed/completed. Only a finalized
+    run can be disbursed."""
+    run = await get_run(db, run_id)
+    if run.status != "finalized":
+        raise ValidationError(
+            "Finalize the run before marking salary distributed"
+        )
+    if run.disbursed:
+        raise ConflictError("Run already marked disbursed")
+    run.disbursed = True
+    run.disbursed_at = _now()
+    run.disbursed_by = by_user.id if by_user else None
+    await db.commit()
+    await db.refresh(run)
+    return run
+
+
+async def undo_disbursed(db: AsyncSession, run_id: int) -> PayrollRun:
+    run = await get_run(db, run_id)
+    run.disbursed = False
+    run.disbursed_at = None
+    run.disbursed_by = None
+    await db.commit()
+    await db.refresh(run)
+    return run
+
+
+def build_run_csv(
+    run: PayrollRun,
+    payslips: Sequence[Payslip],
+    employees: dict[int, "Employee"],
+) -> str:
+    """Full payroll-run export — one row per employee with the salary
+    breakup, statutory deductions, day counts and net pay."""
+    import csv as _csv
+    import io as _io
+
+    buf = _io.StringIO()
+    w = _csv.writer(buf)
+    w.writerow([
+        "employee_code", "name", "pf_number", "uan", "esic_number",
+        "basic", "hra", "other_allowance", "gross",
+        "pf_employee", "esic_employee", "professional_tax", "tds",
+        "other_deductions", "total_deductions", "net_pay",
+        "pf_employer", "esic_employer",
+        "days_present", "days_paid_leave", "days_unpaid_leave",
+        "days_absent", "days_paid", "days_lop", "working_days",
+    ])
+    for p in payslips:
+        e = employees.get(p.employee_id)
+        w.writerow([
+            e.employee_code if e else p.employee_id,
+            f"{e.first_name} {e.last_name}" if e else "",
+            (e.pf_number if e else "") or "",
+            (e.uan_number if e else "") or "",
+            (e.esic_number if e else "") or "",
+            p.basic, p.hra, p.other_allowance, p.gross,
+            p.pf_employee, p.esic_employee, p.professional_tax, p.tds,
+            p.other_deductions, p.total_deductions, p.net_pay,
+            p.pf_employer, p.esic_employer,
+            p.days_present, p.days_paid_leave, p.days_unpaid_leave,
+            p.days_absent, p.days_paid, p.days_lop, p.working_days,
+        ])
+    return buf.getvalue()
+
+
+def build_pf_ecr(
+    run: PayrollRun,
+    payslips: Sequence[Payslip],
+    employees: dict[int, "Employee"],
+) -> str:
+    """EPFO ECR (Electronic Challan-cum-Return) text file, '#~#'
+    delimited, one line per member with a UAN. PF wages are capped at
+    ₹15,000; EPS = 8.33% of capped wages, EPF = employee 12% and the
+    employer balance. Only employees with a UAN and non-zero PF are
+    included — file this on the EPFO Unified Portal."""
+    PF_CAP = Decimal("15000")
+    lines: list[str] = []
+    for p in payslips:
+        e = employees.get(p.employee_id)
+        if not e or not (e.uan_number or "").strip():
+            continue
+        pf_emp = Decimal(p.pf_employee or 0)
+        if pf_emp <= 0:
+            continue
+        # Derive PF wages from the capped basic the calculator used.
+        pf_wages = min(Decimal(p.basic or 0), PF_CAP)
+        pf_wages = pf_wages.quantize(Decimal("1"))
+        eps_wages = pf_wages
+        edli_wages = pf_wages
+        eps_contri = (eps_wages * Decimal("0.0833")).quantize(Decimal("1"))
+        epf_contri = pf_emp.quantize(Decimal("1"))
+        # Employer EPF share = employer total − EPS.
+        er_total = Decimal(p.pf_employer or 0).quantize(Decimal("1"))
+        er_epf = max(Decimal("0"), er_total - eps_contri)
+        diff = (epf_contri + er_epf) - epf_contri  # employer EPF portion
+        ncp_days = int(Decimal(p.days_lop or 0))
+        name = f"{e.first_name} {e.last_name}".strip().upper()
+        lines.append(
+            "#~#".join(
+                str(x)
+                for x in [
+                    (e.uan_number or "").strip(),
+                    name,
+                    int(pf_wages),       # Gross wages
+                    int(pf_wages),       # EPF wages
+                    int(eps_wages),      # EPS wages
+                    int(edli_wages),     # EDLI wages
+                    int(epf_contri),     # EPF contri remitted (employee)
+                    int(eps_contri),     # EPS contri remitted
+                    int(diff),           # EPF EPS diff remitted (employer EPF)
+                    ncp_days,            # NCP days
+                    0,                   # Refund of advances
+                ]
+            )
+        )
+    header = (
+        f"# Jaikalki PF ECR — {run.year}-{run.month:02d} "
+        f"(cycle start {run.cycle_start_day})\n"
+        f"# UAN#~#Name#~#GrossWages#~#EPFWages#~#EPSWages#~#EDLIWages"
+        f"#~#EPFContri#~#EPSContri#~#EPFEPSDiff#~#NCPDays#~#Refund\n"
+    )
+    return header + "\n".join(lines) + ("\n" if lines else "")
 
 
 # ── Reads ─────────────────────────────────────────────────────────────

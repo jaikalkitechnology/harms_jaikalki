@@ -107,6 +107,12 @@ class Attendance(Base, TimestampMixin):
     )
     total_minutes: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    # Late-arrival flag + free-text remark (set by the late-grace rule
+    # or manually by an admin from the attendance editor).
+    is_late: Mapped[bool] = mapped_column(
+        Boolean, default=False, nullable=False
+    )
+    late_remark: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
 
 
 class AttendanceRegularization(Base, TimestampMixin):

@@ -58,7 +58,11 @@ async def run_payroll(
     user: User = Depends(require_permission("payroll.run")),
 ):
     return await payroll_service.process_payroll(
-        db, year=payload.year, month=payload.month, run_by=user
+        db,
+        year=payload.year,
+        month=payload.month,
+        cycle_start_day=payload.cycle_start_day,
+        run_by=user,
     )
 
 
@@ -80,6 +84,71 @@ async def revert_run(
     _: User = Depends(require_permission("payroll.run")),
 ):
     return await payroll_service.revert_run(db, run_id)
+
+
+@router.delete(
+    "/runs/{run_id}", status_code=status.HTTP_204_NO_CONTENT
+)
+async def delete_run(
+    run_id: int,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_permission("payroll.run")),
+):
+    await payroll_service.delete_run(db, run_id)
+
+
+@router.post("/runs/{run_id}/disburse", response_model=PayrollRunOut)
+async def disburse_run(
+    run_id: int,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_permission("payroll.run")),
+):
+    return await payroll_service.mark_disbursed(db, run_id, by_user=user)
+
+
+@router.post("/runs/{run_id}/undo-disburse", response_model=PayrollRunOut)
+async def undo_disburse_run(
+    run_id: int,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_permission("payroll.run")),
+):
+    return await payroll_service.undo_disbursed(db, run_id)
+
+
+@router.get("/runs/{run_id}/export.csv")
+async def export_run_csv(
+    run_id: int,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_permission("payroll.run")),
+):
+    run = await payroll_service.get_run(db, run_id)
+    emps = (await db.execute(select(Employee))).scalars().all()
+    by_id = {e.id: e for e in emps}
+    csv_text = payroll_service.build_run_csv(run, run.payslips, by_id)
+    fname = f"payroll-{run.year}-{run.month:02d}.csv"
+    return Response(
+        content=csv_text,
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{fname}"'},
+    )
+
+
+@router.get("/runs/{run_id}/pf-challan.txt")
+async def export_pf_challan(
+    run_id: int,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_permission("payroll.run")),
+):
+    run = await payroll_service.get_run(db, run_id)
+    emps = (await db.execute(select(Employee))).scalars().all()
+    by_id = {e.id: e for e in emps}
+    ecr = payroll_service.build_pf_ecr(run, run.payslips, by_id)
+    fname = f"pf-ecr-{run.year}-{run.month:02d}.txt"
+    return Response(
+        content=ecr,
+        media_type="text/plain",
+        headers={"Content-Disposition": f'attachment; filename="{fname}"'},
+    )
 
 
 @router.get("/runs/{run_id}", response_model=PayrollRunDetail)

@@ -53,6 +53,23 @@ class PayrollRun(Base, TimestampMixin):
     total_employees: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
+    # Attendance cycle this run was computed against (1 = calendar
+    # month, 21 = 21st-prev → 20th-current, etc.).
+    cycle_start_day: Mapped[int] = mapped_column(
+        Integer, default=1, nullable=False
+    )
+    # Salary distributed / paid-out marker. Set once the bank transfer
+    # is done — independent of the processed→finalized status flow.
+    disbursed: Mapped[bool] = mapped_column(
+        Boolean, default=False, nullable=False
+    )
+    disbursed_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime, nullable=True
+    )
+    disbursed_by: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+
     payslips: Mapped[List["Payslip"]] = relationship(
         back_populates="run", cascade="all, delete-orphan", lazy="selectin"
     )

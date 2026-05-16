@@ -14,6 +14,9 @@ export interface PayrollRun {
   total_net: string;
   total_employer_cost: string;
   total_employees: number;
+  cycle_start_day: number;
+  disbursed: boolean;
+  disbursed_at: string | null;
 }
 
 export interface Payslip {
@@ -80,10 +83,15 @@ export const payrollApi = {
     const { data } = await apiClient.get(`${v1}/payroll/runs/${id}`);
     return data;
   },
-  async runPayroll(year: number, month: number): Promise<PayrollRun> {
+  async runPayroll(
+    year: number,
+    month: number,
+    cycleStartDay?: number | null,
+  ): Promise<PayrollRun> {
     const { data } = await apiClient.post(`${v1}/payroll/run`, {
       year,
       month,
+      cycle_start_day: cycleStartDay ?? null,
     });
     return data;
   },
@@ -94,6 +102,25 @@ export const payrollApi = {
   async revert(id: number): Promise<PayrollRun> {
     const { data } = await apiClient.post(`${v1}/payroll/runs/${id}/revert`);
     return data;
+  },
+  async deleteRun(id: number): Promise<void> {
+    await apiClient.delete(`${v1}/payroll/runs/${id}`);
+  },
+  async disburse(id: number): Promise<PayrollRun> {
+    const { data } = await apiClient.post(`${v1}/payroll/runs/${id}/disburse`);
+    return data;
+  },
+  async undoDisburse(id: number): Promise<PayrollRun> {
+    const { data } = await apiClient.post(
+      `${v1}/payroll/runs/${id}/undo-disburse`,
+    );
+    return data;
+  },
+  runCsvUrl(id: number): string {
+    return `${API_BASE_URL}${v1}/payroll/runs/${id}/export.csv`;
+  },
+  pfChallanUrl(id: number): string {
+    return `${API_BASE_URL}${v1}/payroll/runs/${id}/pf-challan.txt`;
   },
   async pendingReimbursements(): Promise<Reimbursement[]> {
     const { data } = await apiClient.get(

@@ -17,11 +17,17 @@ class PayrollRunOut(BaseModel):
     total_net: Decimal
     total_employer_cost: Decimal
     total_employees: int
+    cycle_start_day: int = 1
+    disbursed: bool = False
+    disbursed_at: Optional[datetime] = None
 
 
 class PayrollRunRequest(BaseModel):
     year: int = Field(ge=2024, le=2099)
     month: int = Field(ge=1, le=12)
+    # 1 = calendar month; >1 = N-of-prev → (N-1)-of-this. None ⇒ use
+    # each employee's own attendance_cycle_start_day.
+    cycle_start_day: Optional[int] = Field(default=None, ge=1, le=28)
 
 
 class PayslipOut(BaseModel):

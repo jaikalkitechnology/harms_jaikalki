@@ -401,6 +401,8 @@ async def upsert_attendance_by_date(
         check_out=payload.check_out,
         work_mode=payload.work_mode,
         notes=payload.notes,
+        is_late=payload.is_late,
+        late_remark=payload.late_remark,
         actor_user_id=user.id,
     )
 

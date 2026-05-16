@@ -697,6 +697,8 @@ async def calendar_for_employee(
             "total_minutes": att.total_minutes if att else 0,
             "notes": att.notes if att else None,
             "leave_type": leave.leave_type.code if leave and leave.leave_type else None,
+            "is_late": bool(att.is_late) if att else False,
+            "late_remark": att.late_remark if att else None,
         })
 
     return {
@@ -780,6 +782,8 @@ async def upsert_by_date(
     check_out: Optional[datetime],
     work_mode: Optional[str],
     notes: Optional[str],
+    is_late: Optional[bool] = None,
+    late_remark: Optional[str] = None,
     actor_user_id: Optional[int] = None,
 ) -> Attendance:
     """Admin-side single-day upsert. Refuses Sundays and holidays so
@@ -821,6 +825,8 @@ async def upsert_by_date(
             check_in=check_in,
             check_out=check_out,
             notes=notes,
+            is_late=bool(is_late) if is_late is not None else False,
+            late_remark=late_remark,
         )
         db.add(att)
     else:
@@ -835,6 +841,10 @@ async def upsert_by_date(
             att.check_out = check_out
         if notes is not None:
             att.notes = notes
+        if is_late is not None:
+            att.is_late = bool(is_late)
+        if late_remark is not None:
+            att.late_remark = late_remark
         att.source = "admin"
 
     if att.check_in and att.check_out:
