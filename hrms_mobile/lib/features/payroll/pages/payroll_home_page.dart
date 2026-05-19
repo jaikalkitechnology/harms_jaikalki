@@ -1,7 +1,10 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
-import 'package:url_launcher/url_launcher.dart';
+import 'package:open_filex/open_filex.dart';
+import 'package:path_provider/path_provider.dart';
 
 import '../../../core/di/injection.dart';
 import '../../../core/theme/app_colors.dart';
@@ -151,13 +154,40 @@ class _PayslipCard extends StatelessWidget {
             const SizedBox(height: 8),
             Align(
               alignment: Alignment.centerRight,
-              child: TextButton.icon(
-                onPressed: () async {
-                  final url = Uri.parse(api.payslipPdfUrl(payslip.id));
-                  await launchUrl(url, mode: LaunchMode.externalApplication);
-                },
-                icon: const Icon(Icons.picture_as_pdf, size: 18),
-                label: const Text('Open PDF'),
+              child: Builder(
+                builder: (btnCtx) => TextButton.icon(
+                  onPressed: () async {
+                    final messenger = ScaffoldMessenger.of(btnCtx);
+                    messenger.showSnackBar(
+                      const SnackBar(content: Text('Preparing payslip…')),
+                    );
+                    try {
+                      final bytes = await api.downloadPayslipPdf(
+                        payslip.id,
+                      );
+                      final dir = await getTemporaryDirectory();
+                      final f = File(
+                        '${dir.path}/payslip_${payslip.year}_'
+                        '${payslip.month}.pdf',
+                      );
+                      await f.writeAsBytes(bytes, flush: true);
+                      final res = await OpenFilex.open(f.path);
+                      if (res.type != ResultType.done) {
+                        messenger.showSnackBar(
+                          SnackBar(content: Text(res.message)),
+                        );
+                      }
+                    } catch (_) {
+                      messenger.showSnackBar(
+                        const SnackBar(
+                          content: Text('Could not open payslip'),
+                        ),
+                      );
+                    }
+                  },
+                  icon: const Icon(Icons.picture_as_pdf, size: 18),
+                  label: const Text('Open PDF'),
+                ),
               ),
             ),
           ],

@@ -113,7 +113,7 @@ class _MoreMenuPageState extends State<MoreMenuPage> {
                   'No modules enabled for your department yet.\n'
                   'Please contact your admin.',
                   textAlign: TextAlign.center,
-                  style: TextStyle(color: AppColors.brandBrownLight),
+                  style: TextStyle(color: context.textMuted),
                 ),
               ),
             ),
@@ -168,7 +168,7 @@ class _SectionBlock extends StatelessWidget {
               shrinkWrap: true,
               mainAxisSpacing: 10,
               crossAxisSpacing: 10,
-              childAspectRatio: 0.95,
+              childAspectRatio: 0.82,
               children: section.items.map((i) => _MoreTile(item: i)).toList(),
             );
           },
