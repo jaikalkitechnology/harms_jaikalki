@@ -275,9 +275,11 @@ class _CalendarGrid extends StatelessWidget {
           shrinkWrap: true,
           gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
             crossAxisCount: 7,
-            mainAxisSpacing: 6,
-            crossAxisSpacing: 6,
-            childAspectRatio: 0.95,
+            mainAxisSpacing: 4,
+            crossAxisSpacing: 4,
+            // Slightly taller than wide so the day number + status
+            // token always fit on the narrowest phones.
+            childAspectRatio: 0.78,
           ),
           itemCount: cells.length,
           itemBuilder: (context, i) {
@@ -383,43 +385,60 @@ class _DayTile extends StatelessWidget {
       onTap: () => _showDetail(context),
       borderRadius: BorderRadius.circular(8),
       child: Container(
-        padding: const EdgeInsets.all(4),
+        padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 3),
         decoration: BoxDecoration(
           color: _bg(),
           borderRadius: BorderRadius.circular(8),
           border: Border.all(color: _border()),
         ),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text(
-              '$dayNum',
-              style: TextStyle(
-                fontWeight: FontWeight.w700,
-                color: _numColor(),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Flexible(
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      '$dayNum',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: _numColor(),
+                      ),
+                    ),
+                  ),
+                ),
+                if (day.isLate)
+                  Container(
+                    width: 6,
+                    height: 6,
+                    decoration: const BoxDecoration(
+                      color: AppColors.warning,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+              ],
+            ),
+            SizedBox(
+              width: double.infinity,
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  _badge(),
+                  maxLines: 1,
+                  style: TextStyle(
+                    fontSize: 9.5,
+                    fontWeight: FontWeight.w700,
+                    color: _numColor(),
+                  ),
+                ),
               ),
             ),
-            const Spacer(),
-            if (day.isHoliday)
-              Text(
-                day.holidayName ?? 'Holiday',
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  fontSize: 8.5,
-                  color: AppColors.error,
-                  fontWeight: FontWeight.w600,
-                ),
-              )
-            else
-              Text(
-                _badge(),
-                style: TextStyle(
-                  fontSize: 10,
-                  fontWeight: FontWeight.w700,
-                  color: _numColor(),
-                ),
-              ),
           ],
         ),
       ),
@@ -480,6 +499,13 @@ class _DayTile extends StatelessWidget {
                       '${(day.totalMinutes / 60).floor()}h ${day.totalMinutes % 60}m',
                     ),
                   if (day.leaveType != null) _kv('Leave', day.leaveType!),
+                  if (day.isLate)
+                    _kv(
+                      'Late',
+                      day.lateRemark?.isNotEmpty == true
+                          ? day.lateRemark!
+                          : 'Marked late',
+                    ),
                   if (day.notes != null && day.notes!.isNotEmpty)
                     _kv('Notes', day.notes!),
                 ],
