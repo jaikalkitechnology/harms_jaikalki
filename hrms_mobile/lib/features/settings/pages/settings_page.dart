@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../l10n/app_l10n.dart';
+import '../../auth/presentation/bloc/auth_bloc.dart';
 import '../cubit/settings_cubit.dart';
 
 class SettingsPage extends StatelessWidget {
@@ -54,11 +55,26 @@ class SettingsPage extends StatelessWidget {
               ),
               const Divider(),
               _SectionHeader(label: 'SECURITY'),
-              SwitchListTile(
-                title: Text(l.biometric),
-                subtitle: const Text('Face ID / fingerprint'),
-                value: state.biometricEnabled,
-                onChanged: cubit.setBiometric,
+              BlocBuilder<AuthBloc, AuthState>(
+                builder: (context, auth) {
+                  return SwitchListTile(
+                    title: Text(l.biometric),
+                    subtitle: Text(
+                      auth.biometricAvailable
+                          ? 'Face ID / fingerprint sign-in'
+                          : 'Not available on this device',
+                    ),
+                    value: auth.biometricEnabled,
+                    onChanged: auth.biometricAvailable
+                        ? (v) {
+                            cubit.setBiometric(v);
+                            context
+                                .read<AuthBloc>()
+                                .add(AuthBiometricToggleRequested(v));
+                          }
+                        : null,
+                  );
+                },
               ),
               SwitchListTile(
                 title: Text(l.notifications),

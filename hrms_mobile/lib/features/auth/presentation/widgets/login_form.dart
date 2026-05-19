@@ -151,14 +151,16 @@ class _LoginFormState extends State<LoginForm> {
                       : const Text('Sign in'),
                 ),
               ),
-              const SizedBox(height: 12),
-              BiometricButton(
-                onPressed: loading
-                    ? () {}
-                    : () => context.read<AuthBloc>().add(
-                          const AuthBiometricLoginRequested(),
-                        ),
-              ),
+              if (state.canUseBiometric) ...[
+                const SizedBox(height: 12),
+                BiometricButton(
+                  onPressed: loading
+                      ? () {}
+                      : () => context.read<AuthBloc>().add(
+                            const AuthBiometricLoginRequested(),
+                          ),
+                ),
+              ],
             ],
           ),
         );
