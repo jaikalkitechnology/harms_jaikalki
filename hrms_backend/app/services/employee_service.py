@@ -87,6 +87,58 @@ def assert_can_view(user: User, target: Employee, allowed_ids: Optional[set[int]
         raise ForbiddenError("Not allowed to view this employee")
 
 
+# ── Leave-approver visibility (manager + HR/admin + dept mapping) ───────
+async def _mapped_approver_department_ids(
+    db: AsyncSession, user: User
+) -> set[int]:
+    """Departments that have explicitly mapped this user as a leave
+    approver (set in the admin panel)."""
+    from app.models import Department
+
+    rows = (
+        await db.execute(
+            select(Department.id, Department.leave_approver_user_ids)
+        )
+    ).all()
+    out: set[int] = set()
+    for dept_id, ids in rows:
+        if ids and user.id in ids:
+            out.add(dept_id)
+    return out
+
+
+async def is_leave_approver(db: AsyncSession, user: User) -> bool:
+    """A user may act on leave approvals if their role grants
+    ``leave.approve.team`` OR they are mapped as a department approver."""
+    if "leave.approve.team" in user.permission_codes:
+        return True
+    return bool(await _mapped_approver_department_ids(db, user))
+
+
+async def leave_visible_employee_ids(
+    db: AsyncSession, user: User
+) -> Optional[set[int]]:
+    """Employee IDs whose leave this user may see/decide.
+
+    Returns ``None`` (no filter — sees everyone) for HR/Admin/Director.
+    Otherwise the union of the manager's reportees (and self) and every
+    employee in a department this user is mapped to approve for.
+    """
+    base = await visible_employee_ids(db, user)
+    if base is None:
+        return None
+    ids: set[int] = set(base)
+    dept_ids = await _mapped_approver_department_ids(db, user)
+    if dept_ids:
+        rows = (
+            await db.execute(
+                select(Employee.id).where(Employee.department_id.in_(dept_ids))
+            )
+        ).scalars().all()
+        ids.update(rows)
+    return ids
+
+
 # ── Code generation ────────────────────────────────────────────────────
 async def next_employee_code(db: AsyncSession) -> str:
     prefix = settings.EMPLOYEE_CODE_PREFIX

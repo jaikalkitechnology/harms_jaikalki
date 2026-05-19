@@ -44,6 +44,18 @@ async def _self_employee(db: AsyncSession, user: User):
     return emp
 
 
+async def require_leave_approver(
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> User:
+    """Allow the request when the caller's role grants
+    ``leave.approve.team`` OR they are mapped as a department leave
+    approver in the admin panel (manager + HR + admin + mapped HR)."""
+    if not await emp_svc.is_leave_approver(db, user):
+        raise ForbiddenError("Missing permission: leave.approve.team")
+    return user
+
+
 # ── Leave types ─────────────────────────────────────────────────────────
 @router.get("/types", response_model=list[LeaveTypeOut])
 async def list_leave_types(
@@ -214,9 +226,9 @@ async def cancel_request(
 @router.get("/pending-approvals", response_model=list[LeaveRequestOut])
 async def pending_approvals(
     db: AsyncSession = Depends(get_db),
-    user: User = Depends(require_permission("leave.approve.team")),
+    user: User = Depends(require_leave_approver),
 ):
-    visible = await emp_svc.visible_employee_ids(db, user)
+    visible = await emp_svc.leave_visible_employee_ids(db, user)
     return await leave_svc.list_pending_for_approver(
         db, user, visible_employee_ids=visible
     )
@@ -230,9 +242,9 @@ async def all_requests(
     from_date: Optional[date] = Query(default=None),
     to_date: Optional[date] = Query(default=None),
     db: AsyncSession = Depends(get_db),
-    user: User = Depends(require_permission("leave.approve.team")),
+    user: User = Depends(require_leave_approver),
 ):
-    visible = await emp_svc.visible_employee_ids(db, user)
+    visible = await emp_svc.leave_visible_employee_ids(db, user)
     return await leave_svc.list_requests_admin(
         db,
         visible_employee_ids=visible,
@@ -248,7 +260,7 @@ async def all_requests(
 async def undo_leave_decision(
     request_id: int,
     db: AsyncSession = Depends(get_db),
-    user: User = Depends(require_permission("leave.approve.team")),
+    user: User = Depends(require_leave_approver),
 ):
     return await leave_svc.undo_decision(db, request_id, approver=user)
 
@@ -258,7 +270,7 @@ async def approve_leave(
     request_id: int,
     payload: LeaveDecisionRequest,
     db: AsyncSession = Depends(get_db),
-    user: User = Depends(require_permission("leave.approve.team")),
+    user: User = Depends(require_leave_approver),
 ):
     return await leave_svc.decide_leave(
         db,
@@ -274,7 +286,7 @@ async def reject_leave(
     request_id: int,
     payload: LeaveDecisionRequest,
     db: AsyncSession = Depends(get_db),
-    user: User = Depends(require_permission("leave.approve.team")),
+    user: User = Depends(require_leave_approver),
 ):
     return await leave_svc.decide_leave(
         db,

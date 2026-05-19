@@ -45,10 +45,12 @@ class _MoreMenuPageState extends State<MoreMenuPage> {
         _MoreItem('leaves', l.leaves, Icons.beach_access_outlined, AppRoutes.leaves),
         _MoreItem('dwp', 'Daily plan', Icons.checklist_outlined, AppRoutes.dwp),
         _MoreItem('approvals', l.approvals, Icons.inbox_outlined, AppRoutes.approvalsInbox),
+        _MoreItem('leave_approvals', 'Leave approvals', Icons.fact_check_outlined, AppRoutes.managerInbox),
         _MoreItem('field_plan', 'Field plan', Icons.map_outlined, AppRoutes.fieldHome),
         _MoreItem('live_team_map', 'Live team map', Icons.location_on_outlined, AppRoutes.fieldLiveMap),
       ]),
       _MoreSection('Sales', [
+        _MoreItem('my_leads', 'Leads', Icons.person_add_alt_1_outlined, AppRoutes.myLeads),
         _MoreItem('sales_pipeline', 'Pipeline', Icons.trending_up_outlined, AppRoutes.salesPipeline),
         _MoreItem('sales_targets', 'My target', Icons.flag_outlined, AppRoutes.salesTargets),
       ]),

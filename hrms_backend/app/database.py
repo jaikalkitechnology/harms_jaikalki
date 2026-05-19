@@ -158,6 +158,7 @@ _PENDING_COLUMNS: list[tuple[str, str, str, str | None]] = [
         None,
     ),
     ("departments", "enabled_modules", "JSON NULL", None),
+    ("departments", "leave_approver_user_ids", "JSON NULL", None),
 ]
 
 

@@ -182,6 +182,88 @@ class SalaryBreakup extends Equatable {
   List<Object?> get props => [templateName, totalCtcAnnual];
 }
 
+class Nominee extends Equatable {
+  const Nominee({
+    required this.id,
+    required this.name,
+    required this.relation,
+    required this.sharePct,
+    required this.nomineeType,
+    this.dateOfBirth,
+    this.phone,
+    this.isMinor = false,
+    this.guardianName,
+  });
+
+  final int id;
+  final String name;
+  final String relation;
+  final num sharePct;
+  final String nomineeType;
+  final String? dateOfBirth;
+  final String? phone;
+  final bool isMinor;
+  final String? guardianName;
+
+  factory Nominee.fromJson(Map<String, dynamic> json) => Nominee(
+        id: json['id'] as int,
+        name: json['name'] as String,
+        relation: json['relation'] as String,
+        sharePct: num.tryParse('${json['share_pct']}') ?? 0,
+        nomineeType: (json['nominee_type'] as String?) ?? 'general',
+        dateOfBirth: json['date_of_birth'] as String?,
+        phone: json['phone'] as String?,
+        isMinor: (json['is_minor'] as bool?) ?? false,
+        guardianName: json['guardian_name'] as String?,
+      );
+
+  @override
+  List<Object?> get props => [id];
+}
+
+class MyStatutory extends Equatable {
+  const MyStatutory({
+    this.pfNumber,
+    this.uanNumber,
+    this.esicNumber,
+    this.insuranceCompany,
+    this.insurancePolicyNo,
+    this.nominees = const [],
+    this.nomineesLocked = false,
+  });
+
+  final String? pfNumber;
+  final String? uanNumber;
+  final String? esicNumber;
+  final String? insuranceCompany;
+  final String? insurancePolicyNo;
+  final List<Nominee> nominees;
+  final bool nomineesLocked;
+
+  factory MyStatutory.fromJson(Map<String, dynamic> json) => MyStatutory(
+        pfNumber: json['pf_number'] as String?,
+        uanNumber: json['uan_number'] as String?,
+        esicNumber: json['esic_number'] as String?,
+        insuranceCompany: json['insurance_company'] as String?,
+        insurancePolicyNo: json['insurance_policy_no'] as String?,
+        nominees: ((json['nominees'] as List<dynamic>?) ?? const [])
+            .map((e) => Nominee.fromJson(e as Map<String, dynamic>))
+            .toList(),
+        nomineesLocked: (json['nominees_locked'] as bool?) ?? false,
+      );
+
+  @override
+  List<Object?> get props => [
+        pfNumber,
+        uanNumber,
+        esicNumber,
+        insuranceCompany,
+        insurancePolicyNo,
+        nominees,
+        nomineesLocked,
+      ];
+}
+
 class EmployeeDetail extends Equatable {
   const EmployeeDetail({
     required this.id,

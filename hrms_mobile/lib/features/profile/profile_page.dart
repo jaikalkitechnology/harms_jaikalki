@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
@@ -6,6 +7,7 @@ import '../../core/di/injection.dart';
 import '../../core/routing/app_router.dart';
 import '../../core/theme/app_colors.dart';
 import '../../l10n/app_l10n.dart';
+import '../auth/domain/repositories/auth_repository.dart';
 import '../auth/presentation/bloc/auth_bloc.dart';
 import '../employees/data/employee_api.dart';
 import '../employees/data/employee_models.dart';
@@ -135,6 +137,8 @@ class _ProfilePageState extends State<ProfilePage> {
                                     'BLOOD GROUP', emp.bloodGroup),
                               ],
                             ),
+                            const SizedBox(height: 16),
+                            const _StatutoryNomineeSection(),
                           ] else if (snap.connectionState ==
                                   ConnectionState.done &&
                               user != null) ...[
@@ -178,6 +182,25 @@ class _ProfilePageState extends State<ProfilePage> {
                                 ),
                               ),
                             ],
+                          ),
+                          const SizedBox(height: 10),
+                          OutlinedButton.icon(
+                            icon: const Icon(Icons.lock_outline,
+                                color: AppColors.brandGoldDark),
+                            label: const Text(
+                              'CHANGE PASSWORD',
+                              style:
+                                  TextStyle(color: AppColors.brandGoldDark),
+                            ),
+                            style: OutlinedButton.styleFrom(
+                              side: const BorderSide(
+                                  color: AppColors.brandGoldDark),
+                              padding: const EdgeInsets.symmetric(
+                                  vertical: 14),
+                              minimumSize: const Size.fromHeight(0),
+                            ),
+                            onPressed: () =>
+                                _showChangePassword(context),
                           ),
                           const SizedBox(height: 10),
                           OutlinedButton.icon(
@@ -235,6 +258,135 @@ class _ProfilePageState extends State<ProfilePage> {
     if (ok == true && context.mounted) {
       context.read<AuthBloc>().add(const AuthLogoutRequested());
     }
+  }
+
+  Future<void> _showChangePassword(BuildContext context) async {
+    final oldCtrl = TextEditingController();
+    final newCtrl = TextEditingController();
+    final confirmCtrl = TextEditingController();
+    final messenger = ScaffoldMessenger.of(context);
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) {
+        bool busy = false;
+        String? error;
+        bool obscure = true;
+        return StatefulBuilder(
+          builder: (ctx, setLocal) => AlertDialog(
+            title: const Text('Change password'),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: oldCtrl,
+                    obscureText: obscure,
+                    decoration: const InputDecoration(
+                      labelText: 'Current password',
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: newCtrl,
+                    obscureText: obscure,
+                    decoration: const InputDecoration(
+                      labelText: 'New password (min 8 chars)',
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: confirmCtrl,
+                    obscureText: obscure,
+                    decoration: InputDecoration(
+                      labelText: 'Confirm new password',
+                      suffixIcon: IconButton(
+                        icon: Icon(obscure
+                            ? Icons.visibility_outlined
+                            : Icons.visibility_off_outlined),
+                        onPressed: () =>
+                            setLocal(() => obscure = !obscure),
+                      ),
+                    ),
+                  ),
+                  if (error != null) ...[
+                    const SizedBox(height: 10),
+                    Text(error!,
+                        style:
+                            const TextStyle(color: AppColors.error)),
+                  ],
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: busy ? null : () => Navigator.of(ctx).pop(),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: busy
+                    ? null
+                    : () async {
+                        final oldP = oldCtrl.text;
+                        final newP = newCtrl.text;
+                        if (newP.length < 8) {
+                          setLocal(() => error =
+                              'New password must be at least 8 characters');
+                          return;
+                        }
+                        if (newP != confirmCtrl.text) {
+                          setLocal(() =>
+                              error = 'Passwords do not match');
+                          return;
+                        }
+                        setLocal(() {
+                          busy = true;
+                          error = null;
+                        });
+                        try {
+                          await sl<AuthRepository>().changePassword(
+                            oldPassword: oldP,
+                            newPassword: newP,
+                          );
+                          if (ctx.mounted) Navigator.of(ctx).pop();
+                          messenger.showSnackBar(
+                            const SnackBar(
+                              content: Text(
+                                'Password changed. You may need to '
+                                'sign in again on other devices.',
+                              ),
+                              backgroundColor: AppColors.success,
+                            ),
+                          );
+                        } on DioException catch (e) {
+                          final msg = e.response?.data is Map
+                              ? (e.response!.data['detail']
+                                      ?.toString() ??
+                                  'Could not change password')
+                              : 'Could not change password';
+                          setLocal(() {
+                            busy = false;
+                            error = msg;
+                          });
+                        } catch (_) {
+                          setLocal(() {
+                            busy = false;
+                            error = 'Could not change password';
+                          });
+                        }
+                      },
+                child: busy
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Text('Save'),
+              ),
+            ],
+          ),
+        );
+      },
+    );
   }
 
   static (IconData, String, String?) _row(
@@ -510,6 +662,516 @@ class _InfoRow extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+// ── Statutory & nominee (self-service: view + add, nominee locks) ─────
+class _StatutoryNomineeSection extends StatefulWidget {
+  const _StatutoryNomineeSection();
+
+  @override
+  State<_StatutoryNomineeSection> createState() =>
+      _StatutoryNomineeSectionState();
+}
+
+class _StatutoryNomineeSectionState
+    extends State<_StatutoryNomineeSection> {
+  late Future<MyStatutory> _future;
+
+  @override
+  void initState() {
+    super.initState();
+    _future = sl<EmployeeApi>().myStatutory();
+  }
+
+  void _reload() {
+    setState(() => _future = sl<EmployeeApi>().myStatutory());
+  }
+
+  String _typeLabel(String t) {
+    switch (t) {
+      case 'pf':
+        return 'PF';
+      case 'gratuity':
+        return 'Gratuity';
+      case 'insurance':
+        return 'Insurance';
+      default:
+        return 'General';
+    }
+  }
+
+  Future<void> _addStatutory(MyStatutory s) async {
+    final fields = <String, TextEditingController>{
+      if ((s.pfNumber ?? '').isEmpty)
+        'pf_number': TextEditingController(),
+      if ((s.uanNumber ?? '').isEmpty)
+        'uan_number': TextEditingController(),
+      if ((s.esicNumber ?? '').isEmpty)
+        'esic_number': TextEditingController(),
+      if ((s.insuranceCompany ?? '').isEmpty)
+        'insurance_company': TextEditingController(),
+      if ((s.insurancePolicyNo ?? '').isEmpty)
+        'insurance_policy_no': TextEditingController(),
+    };
+    if (fields.isEmpty) return;
+    const labels = {
+      'pf_number': 'PF number',
+      'uan_number': 'UAN number',
+      'esic_number': 'ESIC number',
+      'insurance_company': 'Mediclaim insurer',
+      'insurance_policy_no': 'Mediclaim policy no.',
+    };
+    final messenger = ScaffoldMessenger.of(context);
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) {
+        bool busy = false;
+        String? error;
+        return StatefulBuilder(
+          builder: (ctx, setLocal) => AlertDialog(
+            title: const Text('Add statutory details'),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text(
+                    'You can fill in blank fields once. Corrections '
+                    'afterwards go through HR.',
+                    style: TextStyle(fontSize: 12),
+                  ),
+                  const SizedBox(height: 8),
+                  for (final e in fields.entries) ...[
+                    TextField(
+                      controller: e.value,
+                      decoration:
+                          InputDecoration(labelText: labels[e.key]),
+                    ),
+                    const SizedBox(height: 8),
+                  ],
+                  if (error != null)
+                    Text(error!,
+                        style:
+                            const TextStyle(color: AppColors.error)),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed:
+                    busy ? null : () => Navigator.of(ctx).pop(),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: busy
+                    ? null
+                    : () async {
+                        final payload = <String, dynamic>{};
+                        for (final e in fields.entries) {
+                          final v = e.value.text.trim();
+                          if (v.isNotEmpty) payload[e.key] = v;
+                        }
+                        if (payload.isEmpty) {
+                          Navigator.of(ctx).pop();
+                          return;
+                        }
+                        setLocal(() {
+                          busy = true;
+                          error = null;
+                        });
+                        try {
+                          await sl<EmployeeApi>()
+                              .addStatutory(payload);
+                          if (ctx.mounted) Navigator.of(ctx).pop();
+                          messenger.showSnackBar(
+                            const SnackBar(
+                              content: Text('Saved'),
+                              backgroundColor: AppColors.success,
+                            ),
+                          );
+                          _reload();
+                        } on DioException catch (e) {
+                          final msg = e.response?.data is Map
+                              ? (e.response!.data['detail']
+                                      ?.toString() ??
+                                  'Could not save')
+                              : 'Could not save';
+                          setLocal(() {
+                            busy = false;
+                            error = msg;
+                          });
+                        } catch (_) {
+                          setLocal(() {
+                            busy = false;
+                            error = 'Could not save';
+                          });
+                        }
+                      },
+                child: busy
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child:
+                            CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Text('Save'),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _addNominee() async {
+    final name = TextEditingController();
+    final relation = TextEditingController();
+    final phone = TextEditingController();
+    final share = TextEditingController(text: '100');
+    final guardian = TextEditingController();
+    String type = 'general';
+    bool minor = false;
+    final messenger = ScaffoldMessenger.of(context);
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) {
+        bool busy = false;
+        String? error;
+        return StatefulBuilder(
+          builder: (ctx, setLocal) => AlertDialog(
+            title: const Text('Add nominee'),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text(
+                    'Nominee can be added once. After this it is '
+                    'locked — contact HR to change.',
+                    style: TextStyle(fontSize: 12),
+                  ),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: name,
+                    decoration:
+                        const InputDecoration(labelText: 'Full name'),
+                  ),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: relation,
+                    decoration: const InputDecoration(
+                        labelText: 'Relation (e.g. Spouse)'),
+                  ),
+                  const SizedBox(height: 8),
+                  DropdownButtonFormField<String>(
+                    value: type,
+                    decoration:
+                        const InputDecoration(labelText: 'Applies to'),
+                    items: const [
+                      DropdownMenuItem(
+                          value: 'general', child: Text('General')),
+                      DropdownMenuItem(value: 'pf', child: Text('PF')),
+                      DropdownMenuItem(
+                          value: 'gratuity', child: Text('Gratuity')),
+                      DropdownMenuItem(
+                          value: 'insurance',
+                          child: Text('Insurance')),
+                    ],
+                    onChanged: (v) =>
+                        setLocal(() => type = v ?? 'general'),
+                  ),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: share,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(
+                        labelText: 'Share %'),
+                  ),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: phone,
+                    keyboardType: TextInputType.phone,
+                    decoration: const InputDecoration(
+                        labelText: 'Phone (optional)'),
+                  ),
+                  const SizedBox(height: 8),
+                  CheckboxListTile(
+                    contentPadding: EdgeInsets.zero,
+                    value: minor,
+                    title: const Text('Nominee is a minor'),
+                    onChanged: (v) =>
+                        setLocal(() => minor = v ?? false),
+                  ),
+                  if (minor)
+                    TextField(
+                      controller: guardian,
+                      decoration: const InputDecoration(
+                          labelText: 'Guardian name'),
+                    ),
+                  if (error != null) ...[
+                    const SizedBox(height: 8),
+                    Text(error!,
+                        style:
+                            const TextStyle(color: AppColors.error)),
+                  ],
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed:
+                    busy ? null : () => Navigator.of(ctx).pop(),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: busy
+                    ? null
+                    : () async {
+                        if (name.text.trim().length < 2 ||
+                            relation.text.trim().length < 2) {
+                          setLocal(() => error =
+                              'Name and relation are required');
+                          return;
+                        }
+                        setLocal(() {
+                          busy = true;
+                          error = null;
+                        });
+                        try {
+                          await sl<EmployeeApi>().addNominee({
+                            'name': name.text.trim(),
+                            'relation': relation.text.trim(),
+                            'nominee_type': type,
+                            'share_pct':
+                                num.tryParse(share.text.trim()) ??
+                                    100,
+                            if (phone.text.trim().isNotEmpty)
+                              'phone': phone.text.trim(),
+                            'is_minor': minor,
+                            if (minor &&
+                                guardian.text.trim().isNotEmpty)
+                              'guardian_name': guardian.text.trim(),
+                          });
+                          if (ctx.mounted) Navigator.of(ctx).pop();
+                          messenger.showSnackBar(
+                            const SnackBar(
+                              content: Text('Nominee added'),
+                              backgroundColor: AppColors.success,
+                            ),
+                          );
+                          _reload();
+                        } on DioException catch (e) {
+                          final msg = e.response?.data is Map
+                              ? (e.response!.data['detail']
+                                      ?.toString() ??
+                                  'Could not add nominee')
+                              : 'Could not add nominee';
+                          setLocal(() {
+                            busy = false;
+                            error = msg;
+                          });
+                        } catch (_) {
+                          setLocal(() {
+                            busy = false;
+                            error = 'Could not add nominee';
+                          });
+                        }
+                      },
+                child: busy
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child:
+                            CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Text('Save'),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return FutureBuilder<MyStatutory>(
+      future: _future,
+      builder: (context, snap) {
+        if (snap.connectionState != ConnectionState.done) {
+          return const SizedBox.shrink();
+        }
+        if (snap.hasError || !snap.hasData) {
+          return const SizedBox.shrink();
+        }
+        final s = snap.data!;
+        final stat = <(String, String?)>[
+          ('PF NUMBER', s.pfNumber),
+          ('UAN NUMBER', s.uanNumber),
+          ('ESIC NUMBER', s.esicNumber),
+          ('MEDICLAIM INSURER', s.insuranceCompany),
+          ('MEDICLAIM POLICY NO.', s.insurancePolicyNo),
+        ];
+        final hasBlank = stat.any((r) => (r.$2 ?? '').isEmpty);
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.symmetric(
+                  vertical: 8, horizontal: 4),
+              child: Text(
+                '★ STATUTORY & NOMINEE',
+                style: const TextStyle(
+                  fontSize: 11,
+                  letterSpacing: 1.6,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.brandGoldDark,
+                ),
+              ),
+            ),
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    for (final r in stat) ...[
+                      Padding(
+                        padding:
+                            const EdgeInsets.symmetric(vertical: 6),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment:
+                                    CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    r.$1,
+                                    style: const TextStyle(
+                                      fontSize: 9,
+                                      letterSpacing: 1.4,
+                                      fontWeight: FontWeight.w600,
+                                      color:
+                                          AppColors.brandBrownLight,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    (r.$2 ?? '').isEmpty
+                                        ? 'Not added'
+                                        : r.$2!,
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w600,
+                                      color: (r.$2 ?? '').isEmpty
+                                          ? context.textMuted
+                                          : context.textPrimary,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Divider(
+                        height: 1,
+                        color: AppColors.brandBrown100
+                            .withOpacity(0.4),
+                      ),
+                    ],
+                    const SizedBox(height: 8),
+                    if (hasBlank)
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: TextButton.icon(
+                          icon: const Icon(Icons.add, size: 18),
+                          label: const Text('Add statutory details'),
+                          onPressed: () => _addStatutory(s),
+                        ),
+                      ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'NOMINEES',
+                      style: const TextStyle(
+                        fontSize: 9,
+                        letterSpacing: 1.4,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.brandBrownLight,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    if (s.nominees.isEmpty)
+                      Text(
+                        'No nominee on record.',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: context.textMuted,
+                        ),
+                      )
+                    else
+                      ...s.nominees.map(
+                        (n) => Padding(
+                          padding: const EdgeInsets.symmetric(
+                              vertical: 4),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.person_outline,
+                                  size: 18,
+                                  color: AppColors.brandGoldDark),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  '${n.name} · ${n.relation} · '
+                                  '${_typeLabel(n.nomineeType)} · '
+                                  '${n.sharePct}%',
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    color: context.textPrimary,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    const SizedBox(height: 6),
+                    if (s.nomineesLocked)
+                      Row(
+                        children: [
+                          const Icon(Icons.lock_outline,
+                              size: 14,
+                              color: AppColors.brandBrownLight),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Text(
+                              'Nominee details are locked. '
+                              'Contact HR to change.',
+                              style: theme.textTheme.bodySmall
+                                  ?.copyWith(
+                                color: context.textMuted,
+                              ),
+                            ),
+                          ),
+                        ],
+                      )
+                    else
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: TextButton.icon(
+                          icon: const Icon(Icons.add, size: 18),
+                          label: const Text('Add nominee'),
+                          onPressed: _addNominee,
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 }
