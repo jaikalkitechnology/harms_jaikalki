@@ -1462,7 +1462,7 @@ function CompensationHistoryCard({
 
   return (
     <Card className="lg:col-span-2">
-      <CardHeader className="flex flex-row items-center justify-between">
+      <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <CardTitle>
             Compensation <span className="display-em">history</span>

@@ -406,7 +406,7 @@ export default function PayrollRunsPage() {
       {/* ── Run detail ── */}
       {selected && detail && (
         <Card>
-          <CardHeader className="flex flex-row items-start justify-between">
+          <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div>
               <CardTitle>
                 {MONTHS[detail.run.month - 1]} {detail.run.year} ·{" "}
