@@ -8,8 +8,11 @@ from app.dependencies import get_current_user, get_db
 from app.models import Department, Designation, EmployeeCategory, Shift, User
 from app.schemas.attendance import ShiftOut
 from app.schemas.employee import (
+    ApproverCandidate,
     CategoryOut,
     DepartmentCreate,
+    DepartmentLeaveApproversOut,
+    DepartmentLeaveApproversUpdate,
     DepartmentModulesOut,
     DepartmentModulesUpdate,
     DepartmentOut,
@@ -147,6 +150,96 @@ async def set_department_modules(
         department_id=obj.id,
         enabled_modules=obj.enabled_modules,
         available_modules=module_registry.MODULE_KEYS,
+    )
+
+
+# ── Department → leave-approver mapping ───────────────────────────────
+_APPROVER_ROLE_CODES = {"hr", "admin", "manager", "director", "super_admin"}
+
+
+async def _approver_candidates(db: AsyncSession) -> list[User]:
+    """Users eligible to be picked as department leave approvers: any
+    active admin-portal user or anyone holding an HR/Admin/Manager-ish
+    role."""
+    rows = (
+        await db.execute(
+            select(User).where(User.is_active.is_(True)).order_by(User.full_name)
+        )
+    ).scalars().all()
+    out: list[User] = []
+    for u in rows:
+        if u.is_admin_portal or (set(u.role_codes) & _APPROVER_ROLE_CODES):
+            out.append(u)
+    return out
+
+
+@router.get(
+    "/departments/{dept_id}/leave-approvers",
+    response_model=DepartmentLeaveApproversOut,
+)
+async def get_department_leave_approvers(
+    dept_id: int,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_permission("admin.users.view")),
+):
+    obj = (
+        await db.execute(select(Department).where(Department.id == dept_id))
+    ).scalar_one_or_none()
+    if not obj:
+        raise NotFoundError("Department not found")
+    candidates = await _approver_candidates(db)
+    return DepartmentLeaveApproversOut(
+        department_id=obj.id,
+        leave_approver_user_ids=obj.leave_approver_user_ids or [],
+        candidates=[
+            ApproverCandidate(
+                id=u.id,
+                full_name=u.full_name or u.email,
+                email=u.email,
+                role_codes=u.role_codes,
+            )
+            for u in candidates
+        ],
+    )
+
+
+@router.put(
+    "/departments/{dept_id}/leave-approvers",
+    response_model=DepartmentLeaveApproversOut,
+)
+async def set_department_leave_approvers(
+    dept_id: int,
+    payload: DepartmentLeaveApproversUpdate,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_permission("admin.users.manage")),
+):
+    obj = (
+        await db.execute(select(Department).where(Department.id == dept_id))
+    ).scalar_one_or_none()
+    if not obj:
+        raise NotFoundError("Department not found")
+    if payload.leave_approver_user_ids is None:
+        obj.leave_approver_user_ids = None
+    else:
+        # De-dup, drop falsy, keep ints only.
+        obj.leave_approver_user_ids = sorted(
+            {int(i) for i in payload.leave_approver_user_ids if i}
+        )
+    await db.commit()
+    await db.refresh(obj)
+    candidates = await _approver_candidates(db)
+    return DepartmentLeaveApproversOut(
+        department_id=obj.id,
+        leave_approver_user_ids=obj.leave_approver_user_ids or [],
+        candidates=[
+            ApproverCandidate(
+                id=u.id,
+                full_name=u.full_name or u.email,
+                email=u.email,
+                role_codes=u.role_codes,
+            )
+            for u in candidates
+        ],
     )
 
 

@@ -23,6 +23,13 @@ class Department(Base, TimestampMixin):
     # "show only the always-on default modules". See
     # app/services/module_registry.py for the canonical key list.
     enabled_modules: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
+    # User IDs (HR / admin) that may approve leave for members of this
+    # department, in addition to the employee's reporting manager and the
+    # global HR/Admin roles. NULL or empty means "no department-specific
+    # approver mapping".
+    leave_approver_user_ids: Mapped[Optional[list]] = mapped_column(
+        JSON, nullable=True
+    )
 
     designations: Mapped[List["Designation"]] = relationship(
         back_populates="department", cascade="all, delete-orphan", lazy="selectin"

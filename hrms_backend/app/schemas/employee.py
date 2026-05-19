@@ -29,6 +29,28 @@ class DepartmentOut(BaseModel):
     description: Optional[str] = None
     head_id: Optional[int] = None
     enabled_modules: Optional[List[str]] = None
+    leave_approver_user_ids: Optional[List[int]] = None
+
+
+class ApproverCandidate(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    full_name: str
+    email: str
+    role_codes: List[str] = []
+
+
+class DepartmentLeaveApproversOut(BaseModel):
+    department_id: int
+    leave_approver_user_ids: List[int] = []
+    candidates: List[ApproverCandidate] = []
+
+
+class DepartmentLeaveApproversUpdate(BaseModel):
+    """Replace the department's leave-approver mapping. Pass an explicit
+    list (possibly empty). Sending null clears the mapping."""
+
+    leave_approver_user_ids: Optional[List[int]]
 
 
 class DesignationOut(BaseModel):
@@ -541,6 +563,32 @@ class NomineeOut(BaseModel):
     id_proof_url: Optional[str]
     is_minor: bool
     guardian_name: Optional[str]
+
+
+# ── Self-service statutory & nominees (mobile profile) ──────────────────
+class MyStatutoryOut(BaseModel):
+    """Read-only statutory summary the employee can see in the app."""
+
+    pf_number: Optional[str] = None
+    uan_number: Optional[str] = None
+    esic_number: Optional[str] = None
+    insurance_company: Optional[str] = None
+    insurance_policy_no: Optional[str] = None
+    nominees: List[NomineeOut] = []
+    # True once at least one nominee exists — the app must then hide the
+    # add/edit affordance. Changes go through HR after this point.
+    nominees_locked: bool = False
+
+
+class MyStatutoryUpdate(BaseModel):
+    """Add-only: the employee may fill a statutory field that is currently
+    blank but cannot overwrite a value already on record."""
+
+    pf_number: Optional[str] = Field(default=None, max_length=32)
+    uan_number: Optional[str] = Field(default=None, max_length=20)
+    esic_number: Optional[str] = Field(default=None, max_length=20)
+    insurance_company: Optional[str] = Field(default=None, max_length=160)
+    insurance_policy_no: Optional[str] = Field(default=None, max_length=64)
 
 
 # ── Family ──────────────────────────────────────────────────────────────

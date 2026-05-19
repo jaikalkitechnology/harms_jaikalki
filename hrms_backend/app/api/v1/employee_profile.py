@@ -32,6 +32,8 @@ from app.schemas.employee import (
     FamilyMemberCreate,
     FamilyMemberOut,
     FamilyMemberUpdate,
+    MyStatutoryOut,
+    MyStatutoryUpdate,
     NomineeCreate,
     NomineeOut,
     NomineeUpdate,
@@ -144,6 +146,108 @@ async def delete_passport(
     if existing:
         await db.delete(existing)
         await db.commit()
+
+
+# ── Self-service statutory & nominees (mobile profile) ─────────────────
+async def _require_self_employee(db: AsyncSession, user: User) -> Employee:
+    emp = await svc.get_self_employee(db, user)
+    if not emp:
+        raise NotFoundError("No employee record linked to this account")
+    return emp
+
+
+async def _list_nominees(db: AsyncSession, employee_id: int):
+    return (
+        await db.execute(
+            select(EmployeeNominee)
+            .where(EmployeeNominee.employee_id == employee_id)
+            .order_by(EmployeeNominee.nominee_type, EmployeeNominee.id)
+        )
+    ).scalars().all()
+
+
+@router.get("/employees/me/statutory", response_model=MyStatutoryOut)
+async def my_statutory(
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    emp = await _require_self_employee(db, user)
+    nominees = await _list_nominees(db, emp.id)
+    return MyStatutoryOut(
+        pf_number=emp.pf_number,
+        uan_number=emp.uan_number,
+        esic_number=emp.esic_number,
+        insurance_company=emp.insurance_company,
+        insurance_policy_no=emp.insurance_policy_no,
+        nominees=[NomineeOut.model_validate(n) for n in nominees],
+        nominees_locked=len(nominees) > 0,
+    )
+
+
+@router.put("/employees/me/statutory", response_model=MyStatutoryOut)
+async def update_my_statutory(
+    payload: MyStatutoryUpdate,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Add-only: the employee may fill a blank statutory field but cannot
+    overwrite a value already on record (HR owns corrections)."""
+    emp = await _require_self_employee(db, user)
+    data = payload.model_dump(exclude_unset=True)
+    for field in (
+        "pf_number",
+        "uan_number",
+        "esic_number",
+        "insurance_company",
+        "insurance_policy_no",
+    ):
+        new_val = (data.get(field) or "").strip() if field in data else None
+        if not new_val:
+            continue
+        current = (getattr(emp, field) or "").strip()
+        if current:
+            raise ValidationError(
+                f"{field.replace('_', ' ')} is already on record — "
+                "contact HR to change it."
+            )
+        setattr(emp, field, new_val)
+    await db.commit()
+    await db.refresh(emp)
+    nominees = await _list_nominees(db, emp.id)
+    return MyStatutoryOut(
+        pf_number=emp.pf_number,
+        uan_number=emp.uan_number,
+        esic_number=emp.esic_number,
+        insurance_company=emp.insurance_company,
+        insurance_policy_no=emp.insurance_policy_no,
+        nominees=[NomineeOut.model_validate(n) for n in nominees],
+        nominees_locked=len(nominees) > 0,
+    )
+
+
+@router.post(
+    "/employees/me/nominees",
+    response_model=NomineeOut,
+    status_code=status.HTTP_201_CREATED,
+)
+async def add_my_nominee(
+    payload: NomineeCreate,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Employees may add their own nominee(s) once. After any nominee
+    exists the set is locked — further changes go through HR."""
+    emp = await _require_self_employee(db, user)
+    existing = await _list_nominees(db, emp.id)
+    if existing:
+        raise ForbiddenError(
+            "Nominee details are locked. Contact HR to make changes."
+        )
+    n = EmployeeNominee(employee_id=emp.id, **payload.model_dump())
+    db.add(n)
+    await db.commit()
+    await db.refresh(n)
+    return n
 
 
 # ── Nominees ───────────────────────────────────────────────────────────

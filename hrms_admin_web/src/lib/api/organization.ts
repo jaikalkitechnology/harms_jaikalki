@@ -9,12 +9,26 @@ export interface Department {
   description: string | null;
   head_id: number | null;
   enabled_modules: string[] | null;
+  leave_approver_user_ids: number[] | null;
 }
 
 export interface DepartmentModules {
   department_id: number;
   enabled_modules: string[] | null;
   available_modules: string[];
+}
+
+export interface ApproverCandidate {
+  id: number;
+  full_name: string;
+  email: string;
+  role_codes: string[];
+}
+
+export interface DepartmentLeaveApprovers {
+  department_id: number;
+  leave_approver_user_ids: number[];
+  candidates: ApproverCandidate[];
 }
 
 export interface Designation {
@@ -63,6 +77,19 @@ export const organizationApi = {
     (
       await apiClient.put(`${v1}/departments/${id}/modules`, {
         enabled_modules,
+      })
+    ).data,
+  getDepartmentLeaveApprovers: async (
+    id: number,
+  ): Promise<DepartmentLeaveApprovers> =>
+    (await apiClient.get(`${v1}/departments/${id}/leave-approvers`)).data,
+  setDepartmentLeaveApprovers: async (
+    id: number,
+    leave_approver_user_ids: number[] | null,
+  ): Promise<DepartmentLeaveApprovers> =>
+    (
+      await apiClient.put(`${v1}/departments/${id}/leave-approvers`, {
+        leave_approver_user_ids,
       })
     ).data,
 
