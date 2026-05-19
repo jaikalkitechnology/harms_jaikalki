@@ -224,7 +224,7 @@ async def recompute_earned_leaves(
     total = Decimal("0")
     processed = 0
     for emp in employees:
-        # Qualifying day = a calendar day from Jan 1 → today that is
+        # Qualifying day = a day from 1 Apr (FY start) → today that is
         # NOT a recorded leave and NOT a recorded absent. Present /
         # WFH / half-day plus Sundays & holidays all qualify (they're
         # part of `elapsed` and aren't leave/absent rows).
@@ -268,13 +268,13 @@ async def recompute_earned_leaves(
                 leave_type_id=leave_type.id,
                 year=year,
                 days_credited=target,
-                last_present_count=int(present_count),
+                last_present_count=int(qualifying),
                 last_recomputed_at=datetime.utcnow(),
             )
             db.add(ledger)
         else:
             ledger.days_credited = target
-            ledger.last_present_count = int(present_count)
+            ledger.last_present_count = int(qualifying)
             ledger.last_recomputed_at = datetime.utcnow()
 
         # Sync the balance. Accrual owns `allocated` for this leave
