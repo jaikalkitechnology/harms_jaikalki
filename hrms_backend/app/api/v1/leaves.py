@@ -222,6 +222,37 @@ async def pending_approvals(
     )
 
 
+@router.get("/all", response_model=list[LeaveRequestOut])
+async def all_requests(
+    status: Optional[str] = Query(default=None),
+    employee_id: Optional[int] = Query(default=None),
+    leave_type_id: Optional[int] = Query(default=None),
+    from_date: Optional[date] = Query(default=None),
+    to_date: Optional[date] = Query(default=None),
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_permission("leave.approve.team")),
+):
+    visible = await emp_svc.visible_employee_ids(db, user)
+    return await leave_svc.list_requests_admin(
+        db,
+        visible_employee_ids=visible,
+        status=status,
+        employee_id=employee_id,
+        leave_type_id=leave_type_id,
+        from_date=from_date,
+        to_date=to_date,
+    )
+
+
+@router.post("/{request_id}/undo", response_model=LeaveRequestOut)
+async def undo_leave_decision(
+    request_id: int,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_permission("leave.approve.team")),
+):
+    return await leave_svc.undo_decision(db, request_id, approver=user)
+
+
 @router.post("/{request_id}/approve", response_model=LeaveRequestOut)
 async def approve_leave(
     request_id: int,

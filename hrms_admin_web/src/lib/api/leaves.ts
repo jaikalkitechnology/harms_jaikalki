@@ -129,6 +129,20 @@ export const leavesApi = {
     const { data } = await apiClient.get(`${v1}/leaves/pending-approvals`);
     return data;
   },
+  async listAll(params?: {
+    status?: string;
+    employee_id?: number;
+    leave_type_id?: number;
+    from_date?: string;
+    to_date?: string;
+  }): Promise<LeaveRequest[]> {
+    const { data } = await apiClient.get(`${v1}/leaves/all`, { params });
+    return data;
+  },
+  async undo(id: number): Promise<LeaveRequest> {
+    const { data } = await apiClient.post(`${v1}/leaves/${id}/undo`);
+    return data;
+  },
   async apply(payload: {
     leave_type_id: number;
     from_date: string;

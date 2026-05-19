@@ -410,6 +410,89 @@ async def decide_leave(
     return req
 
 
+async def list_requests_admin(
+    db: AsyncSession,
+    *,
+    visible_employee_ids: Optional[set[int]],
+    status: Optional[str] = None,
+    employee_id: Optional[int] = None,
+    leave_type_id: Optional[int] = None,
+    from_date: Optional[date] = None,
+    to_date: Optional[date] = None,
+) -> Sequence[LeaveRequest]:
+    """Approver-side list of every leave request (any status) within
+    the caller's visible employee set, with optional filters."""
+    stmt = select(LeaveRequest).order_by(LeaveRequest.applied_at.desc())
+    if visible_employee_ids is not None:
+        if not visible_employee_ids:
+            return []
+        stmt = stmt.where(LeaveRequest.employee_id.in_(visible_employee_ids))
+    if status:
+        stmt = stmt.where(LeaveRequest.status == status)
+    if employee_id is not None:
+        stmt = stmt.where(LeaveRequest.employee_id == employee_id)
+    if leave_type_id is not None:
+        stmt = stmt.where(LeaveRequest.leave_type_id == leave_type_id)
+    if from_date is not None:
+        stmt = stmt.where(LeaveRequest.to_date >= from_date)
+    if to_date is not None:
+        stmt = stmt.where(LeaveRequest.from_date <= to_date)
+    return (await db.execute(stmt)).scalars().all()
+
+
+async def undo_decision(
+    db: AsyncSession,
+    request_id: int,
+    *,
+    approver: User,
+) -> LeaveRequest:
+    """Revert an approved/rejected leave back to pending so it can be
+    re-decided. An approved leave's consumed balance is released."""
+    req = (
+        await db.execute(
+            select(LeaveRequest).where(LeaveRequest.id == request_id)
+        )
+    ).scalar_one_or_none()
+    if not req:
+        raise NotFoundError("Leave request not found")
+    if req.status not in ("approved", "rejected"):
+        raise ValidationError(
+            f"Only an approved or rejected leave can be undone "
+            f"(this one is '{req.status}')"
+        )
+
+    if req.status == "approved":
+        bal = await get_or_create_balance(
+            db,
+            req.employee_id,
+            req.leave_type,
+            financial_year_start(req.from_date),
+        )
+        bal.used = max(Decimal("0"), bal.used - req.days)
+
+    req.status = "pending"
+    req.approver_id = None
+    req.approved_at = None
+    req.decision_comment = None
+
+    # Best-effort: reopen the universal approval row if the engine
+    # tracks one. Swallow errors so a missing mirror never blocks undo.
+    try:
+        from app.services import approval_engine
+
+        reopen = getattr(approval_engine, "reopen_external", None)
+        if reopen is not None:
+            await reopen(
+                db, request_type="leave_request", request_id=req.id
+            )
+    except Exception:
+        pass
+
+    await db.commit()
+    await db.refresh(req)
+    return req
+
+
 # ── Calendar ──────────────────────────────────────────────────────────
 async def team_calendar(
     db: AsyncSession,
