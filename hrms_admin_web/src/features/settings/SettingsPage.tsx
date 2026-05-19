@@ -946,6 +946,9 @@ function AttendanceTab() {
   const [form, setForm] = useState({
     late_grace_minutes: 0,
     default_shift_start: "09:00",
+    late_mark_minutes: 10,
+    halfday_after_minutes: 60,
+    halfday_free_count: 2,
   });
 
   useEffect(() => {
@@ -953,6 +956,9 @@ function AttendanceTab() {
       setForm({
         late_grace_minutes: Number(data.late_grace_minutes ?? 0),
         default_shift_start: String(data.default_shift_start ?? "09:00"),
+        late_mark_minutes: Number(data.late_mark_minutes ?? 10),
+        halfday_after_minutes: Number(data.halfday_after_minutes ?? 60),
+        halfday_free_count: Number(data.halfday_free_count ?? 2),
       });
   }, [data]);
 
@@ -961,6 +967,9 @@ function AttendanceTab() {
       superAdminApi.setAttendancePolicy({
         late_grace_minutes: form.late_grace_minutes,
         default_shift_start: form.default_shift_start,
+        late_mark_minutes: form.late_mark_minutes,
+        halfday_after_minutes: form.halfday_after_minutes,
+        halfday_free_count: form.halfday_free_count,
       }),
     onSuccess: () => {
       toast.success("Attendance policy saved");
@@ -1018,6 +1027,73 @@ function AttendanceTab() {
             </div>
           </div>
         </div>
+
+        <div className="border-t border-brand-brown-100 pt-3">
+          <div className="text-[10px] font-mono uppercase tracking-[0.2em] text-brand-gold-dark mb-2">
+            Shift late / half-day rule
+          </div>
+          <div className="grid sm:grid-cols-3 gap-3">
+            <div>
+              <Label>Late after (min)</Label>
+              <Input
+                type="number"
+                min={0}
+                max={240}
+                value={form.late_mark_minutes}
+                onChange={(e) =>
+                  setForm({
+                    ...form,
+                    late_mark_minutes: Number(e.target.value),
+                  })
+                }
+              />
+              <div className="text-xs text-brand-brown-light mt-1">
+                Past this many minutes after shift start, the day is
+                flagged <strong>late</strong>.
+              </div>
+            </div>
+            <div>
+              <Label>Half-day after (min)</Label>
+              <Input
+                type="number"
+                min={0}
+                max={480}
+                value={form.halfday_after_minutes}
+                onChange={(e) =>
+                  setForm({
+                    ...form,
+                    halfday_after_minutes: Number(e.target.value),
+                  })
+                }
+              />
+              <div className="text-xs text-brand-brown-light mt-1">
+                A check-in later than this counts as a “very late”
+                occurrence (e.g. 60 = 1 hr).
+              </div>
+            </div>
+            <div>
+              <Label>Forgiven / cycle</Label>
+              <Input
+                type="number"
+                min={0}
+                max={31}
+                value={form.halfday_free_count}
+                onChange={(e) =>
+                  setForm({
+                    ...form,
+                    halfday_free_count: Number(e.target.value),
+                  })
+                }
+              />
+              <div className="text-xs text-brand-brown-light mt-1">
+                First N very-late days each month cycle stay full. From
+                the (N+1)th, the day is auto half-day. e.g. 2 ⇒ 3rd
+                very-late day onward is half-day.
+              </div>
+            </div>
+          </div>
+        </div>
+
         <div>
           <Button onClick={() => save.mutate()} disabled={save.isPending}>
             <Save className="h-4 w-4 mr-1" /> Save

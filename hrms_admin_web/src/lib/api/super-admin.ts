@@ -286,10 +286,16 @@ export const superAdminApi = {
   getAttendancePolicy: async (): Promise<{
     late_grace_minutes: number;
     default_shift_start: string;
+    late_mark_minutes: number;
+    halfday_after_minutes: number;
+    halfday_free_count: number;
   }> => (await apiClient.get(`${P}/attendance-policy`)).data,
   setAttendancePolicy: async (body: {
     late_grace_minutes?: number;
     default_shift_start?: string;
+    late_mark_minutes?: number;
+    halfday_after_minutes?: number;
+    halfday_free_count?: number;
   }) => (await apiClient.put(`${P}/attendance-policy`, body)).data,
 
   // Office geo-fence
