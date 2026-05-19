@@ -204,9 +204,17 @@ async def recompute_earned_leaves(
             "error": f"leave type '{type_code}' not found",
         }
 
+    # Accrual runs on the Apr–Mar financial year, same as the rest of
+    # the leave system. `year` is the FY start year; the qualifying
+    # window is 1 Apr of that FY → today.
+    from app.utils.leave_year import (
+        financial_year_range,
+        financial_year_start,
+    )
+
     today = _today()
-    year = today.year
-    win_start = date(year, 1, 1)
+    year = financial_year_start(today)
+    win_start, _fy_end = financial_year_range(year)
     elapsed = (today - win_start).days + 1
     emp_stmt = select(Employee).where(Employee.status == "active")
     if employee_id is not None:
