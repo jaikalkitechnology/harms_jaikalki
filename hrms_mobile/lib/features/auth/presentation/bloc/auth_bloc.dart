@@ -263,6 +263,22 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     if (sl.isRegistered<LaunchApi>()) {
       await PushNotificationsService.instance.unregisterToken(sl<LaunchApi>());
     }
+
+    if (await _storage.isBiometricEnabled()) {
+      // Soft sign-out: keep the biometric-protected refresh token so
+      // the user can re-enter with fingerprint/Face ID. Only the
+      // access token is dropped; the server refresh stays valid.
+      await _storage.clearAccessToken();
+      final canBio = await _deviceCanAuth();
+      emit(AuthState(
+        status: AuthStatus.unauthenticated,
+        biometricEnabled: true,
+        biometricAvailable: canBio,
+      ));
+      return;
+    }
+
+    // Full sign-out: revoke + wipe everything.
     await _repository.logout();
     emit(const AuthState(status: AuthStatus.unauthenticated));
   }
