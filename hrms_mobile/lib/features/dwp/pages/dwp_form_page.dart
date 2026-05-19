@@ -77,7 +77,7 @@ class _DwpFormViewState extends State<_DwpFormView> {
                   const SizedBox(height: 4),
                   Text(t.description!,
                       style: TextStyle(
-                          color: AppColors.brandBrownLight, fontSize: 13)),
+                          color: context.textMuted, fontSize: 13)),
                 ],
                 if (state.linkedMorningId != null) ...[
                   const SizedBox(height: 8),

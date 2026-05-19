@@ -88,7 +88,7 @@ class _StreakCard extends StatelessWidget {
                 children: [
                   Text('STREAK',
                       style: theme.textTheme.labelSmall?.copyWith(
-                        color: AppColors.brandBrownLight,
+                        color: context.textMuted,
                       )),
                   Text(
                     streak == 0
@@ -186,7 +186,7 @@ class _ActionTile extends StatelessWidget {
                       style: theme.textTheme.bodySmall?.copyWith(
                         color: done
                             ? AppColors.success
-                            : AppColors.brandBrownLight,
+                            : context.textMuted,
                       ),
                     ),
                   ],
@@ -194,7 +194,7 @@ class _ActionTile extends StatelessWidget {
               ),
               if (!done)
                 const Icon(Icons.arrow_forward_ios,
-                    size: 14, color: AppColors.brandBrownLight),
+                    size: 14, color: context.textMuted),
             ],
           ),
         ),
@@ -236,7 +236,7 @@ class _HistoryRow extends StatelessWidget {
         trailing: submission.totalHours != null
             ? Text('${submission.totalHours}h',
                 style: theme.textTheme.bodySmall?.copyWith(
-                  color: AppColors.brandBrownLight,
+                  color: context.textMuted,
                 ))
             : null,
       ),

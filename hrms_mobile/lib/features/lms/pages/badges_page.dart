@@ -28,7 +28,7 @@ class _BadgesPageState extends State<BadgesPage> {
       case 'gold':
         return AppColors.brandGoldDark;
       case 'silver':
-        return AppColors.brandBrownLight;
+        return const Color(0xFFB6BCC4);
       default:
         return AppColors.warning;
     }
@@ -60,7 +60,7 @@ class _BadgesPageState extends State<BadgesPage> {
                       'No badges yet.\nComplete a lesson to earn your first one.',
                       textAlign: TextAlign.center,
                       style: theme.textTheme.bodyMedium?.copyWith(
-                        color: AppColors.brandBrownLight,
+                        color: context.textMuted,
                       ),
                     ),
                   ],
@@ -117,7 +117,7 @@ class _BadgesPageState extends State<BadgesPage> {
                         Text(
                           b.description!,
                           style: theme.textTheme.bodySmall?.copyWith(
-                            color: AppColors.brandBrownLight,
+                            color: context.textMuted,
                           ),
                           textAlign: TextAlign.center,
                           maxLines: 2,

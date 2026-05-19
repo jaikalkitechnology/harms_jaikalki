@@ -17,6 +17,16 @@ class PayrollApi {
   String payslipPdfUrl(int payslipId) =>
       '${AppConstants.apiBaseUrl}/api/v1/payroll/payslips/$payslipId/pdf';
 
+  /// Download the payslip PDF through the authenticated client.
+  /// Launching the raw URL in a browser fails with 403 (no token).
+  Future<List<int>> downloadPayslipPdf(int payslipId) async {
+    final res = await _dio.get<List<int>>(
+      '/api/v1/payroll/payslips/$payslipId/pdf',
+      options: Options(responseType: ResponseType.bytes),
+    );
+    return res.data ?? const <int>[];
+  }
+
   Future<List<Reimbursement>> myReimbursements() async {
     final res = await _dio.get<List<dynamic>>(
       '/api/v1/payroll/reimbursements/me',

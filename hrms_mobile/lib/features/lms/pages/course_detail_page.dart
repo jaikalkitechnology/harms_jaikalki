@@ -87,10 +87,27 @@ class _CourseDetailPageState extends State<CourseDetailPage> {
   }
 
   Future<void> _openContent(Lesson l) async {
-    if (l.contentUrl != null) {
-      final uri = Uri.parse(l.contentUrl!);
-      if (await canLaunchUrl(uri)) {
-        await launchUrl(uri, mode: LaunchMode.externalApplication);
+    if (l.contentUrl != null && l.contentUrl!.trim().isNotEmpty) {
+      // canLaunchUrl is unreliable on Android 11+ (package visibility)
+      // and was silently swallowing valid links — launch directly and
+      // surface any failure instead.
+      final uri = Uri.parse(l.contentUrl!.trim());
+      try {
+        final ok = await launchUrl(
+          uri,
+          mode: LaunchMode.externalApplication,
+        );
+        if (!ok && mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Could not open this link')),
+          );
+        }
+      } catch (_) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Cannot open: ${l.contentUrl}')),
+          );
+        }
       }
     } else if (l.articleBody != null) {
       if (!mounted) return;

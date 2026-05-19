@@ -102,8 +102,23 @@ class _JobsPageState extends State<JobsPage> {
         child: FutureBuilder<({List<JobPosting> jobs, List<JobApplication> mine})>(
           future: _future,
           builder: (context, snap) {
-            if (!snap.hasData) {
+            if (snap.connectionState == ConnectionState.waiting) {
               return const Center(child: CircularProgressIndicator());
+            }
+            if (snap.hasError || !snap.hasData) {
+              return ListView(
+                children: [
+                  const SizedBox(height: 140),
+                  Center(
+                    child: Text(
+                      'Could not load jobs.\nPull down to retry.',
+                      textAlign: TextAlign.center,
+                      style: theme.textTheme.bodyMedium
+                          ?.copyWith(color: context.textMuted),
+                    ),
+                  ),
+                ],
+              );
             }
             final jobs = snap.data!.jobs;
             final appliedIds =
@@ -115,7 +130,7 @@ class _JobsPageState extends State<JobsPage> {
                   child: Text(
                     'No open positions right now.',
                     style: theme.textTheme.bodyMedium?.copyWith(
-                      color: AppColors.brandBrownLight,
+                      color: context.textMuted,
                     ),
                   ),
                 ),
@@ -140,7 +155,7 @@ class _JobsPageState extends State<JobsPage> {
                           '${j.code} · ${j.employmentType.replaceAll("_", " ")}'
                           '${j.location != null ? " · ${j.location}" : ""}',
                           style: theme.textTheme.bodySmall?.copyWith(
-                            color: AppColors.brandBrownLight,
+                            color: context.textMuted,
                           ),
                         ),
                         if (j.description != null) ...[
