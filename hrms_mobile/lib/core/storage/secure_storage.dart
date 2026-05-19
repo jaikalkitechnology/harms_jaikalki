@@ -25,5 +25,10 @@ class SecureStorage {
   Future<bool> isBiometricEnabled() async =>
       (await _storage.read(key: _bioKey)) == '1';
 
+  /// Soft sign-out: drop only the access token, keeping the
+  /// biometric-protected refresh token + flag so the user can come
+  /// back in via fingerprint/Face ID without retyping the password.
+  Future<void> clearAccessToken() => _storage.delete(key: _accessKey);
+
   Future<void> clear() => _storage.deleteAll();
 }
