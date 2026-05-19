@@ -5,6 +5,7 @@ class SecureStorage {
 
   static const _accessKey = 'access_token';
   static const _refreshKey = 'refresh_token';
+  static const _bioKey = 'biometric_enabled';
 
   final FlutterSecureStorage _storage;
 
@@ -17,6 +18,12 @@ class SecureStorage {
       _storage.write(key: _refreshKey, value: token);
 
   Future<String?> readRefreshToken() => _storage.read(key: _refreshKey);
+
+  Future<void> setBiometricEnabled(bool enabled) =>
+      _storage.write(key: _bioKey, value: enabled ? '1' : '0');
+
+  Future<bool> isBiometricEnabled() async =>
+      (await _storage.read(key: _bioKey)) == '1';
 
   Future<void> clear() => _storage.deleteAll();
 }

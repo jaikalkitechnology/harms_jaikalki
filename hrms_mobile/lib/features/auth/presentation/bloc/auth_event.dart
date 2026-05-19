@@ -29,6 +29,16 @@ class AuthBiometricLoginRequested extends AuthEvent {
   const AuthBiometricLoginRequested();
 }
 
+/// Opt in/out of biometric sign-in. Enabling runs a one-time biometric
+/// prompt to confirm the user can authenticate before storing the flag.
+class AuthBiometricToggleRequested extends AuthEvent {
+  const AuthBiometricToggleRequested(this.enable);
+  final bool enable;
+
+  @override
+  List<Object?> get props => [enable];
+}
+
 class AuthLogoutRequested extends AuthEvent {
   const AuthLogoutRequested();
 }

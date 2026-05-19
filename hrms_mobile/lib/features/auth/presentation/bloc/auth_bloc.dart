@@ -24,6 +24,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     on<AuthCheckRequested>(_onCheck);
     on<AuthLoginRequested>(_onLogin);
     on<AuthBiometricLoginRequested>(_onBiometricLogin);
+    on<AuthBiometricToggleRequested>(_onBiometricToggle);
     on<AuthLogoutRequested>(_onLogout);
     on<AuthTokenRefreshRequested>(_onRefresh);
   }
@@ -32,6 +33,16 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
   final SecureStorage _storage;
   final LocalAuthentication _localAuth;
 
+  /// Device can do biometric OR device-credential (PIN/pattern) auth.
+  Future<bool> _deviceCanAuth() async {
+    try {
+      return (await _localAuth.isDeviceSupported()) ||
+          (await _localAuth.canCheckBiometrics);
+    } catch (_) {
+      return false;
+    }
+  }
+
   Future<void> _onCheck(
     AuthCheckRequested event,
     Emitter<AuthState> emit,
@@ -39,9 +50,20 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     emit(state.copyWith(status: AuthStatus.loading, clearError: true));
     final access = await _storage.readAccessToken();
     if (access == null || access.isEmpty) {
+      // No live access token, but the user may have opted in to
+      // biometric with a still-valid refresh token — surface the
+      // biometric button on the login screen in that case.
+      final bioEnabled = await _storage.isBiometricEnabled();
+      final refresh = await _storage.readRefreshToken();
+      final canBio = bioEnabled &&
+          refresh != null &&
+          refresh.isNotEmpty &&
+          await _deviceCanAuth();
       emit(state.copyWith(
         status: AuthStatus.unauthenticated,
         clearUser: true,
+        biometricEnabled: canBio,
+        biometricAvailable: canBio,
       ));
       return;
     }
@@ -50,6 +72,8 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       emit(state.copyWith(
         status: AuthStatus.authenticated,
         user: user,
+        biometricEnabled: await _storage.isBiometricEnabled(),
+        biometricAvailable: await _deviceCanAuth(),
       ));
       _registerPushToken();
     } catch (_) {
@@ -57,6 +81,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       emit(state.copyWith(
         status: AuthStatus.unauthenticated,
         clearUser: true,
+        biometricEnabled: false,
       ));
     }
   }
@@ -76,6 +101,8 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       emit(state.copyWith(
         status: AuthStatus.authenticated,
         user: user,
+        biometricEnabled: await _storage.isBiometricEnabled(),
+        biometricAvailable: await _deviceCanAuth(),
       ));
       _registerPushToken();
     } catch (e) {
@@ -92,43 +119,138 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     Emitter<AuthState> emit,
   ) async {
     try {
-      final canCheck = await _localAuth.canCheckBiometrics;
-      if (!canCheck) {
+      if (!await _storage.isBiometricEnabled()) {
+        emit(state.copyWith(
+          status: AuthStatus.unauthenticated,
+          errorMessage:
+              'Biometric sign-in is off. Sign in with your password, '
+              'then enable it in Settings.',
+        ));
+        return;
+      }
+      final refresh = await _storage.readRefreshToken();
+      if (refresh == null || refresh.isEmpty) {
+        await _storage.setBiometricEnabled(false);
+        emit(state.copyWith(
+          status: AuthStatus.unauthenticated,
+          errorMessage:
+              'Saved session expired. Please sign in with your password.',
+          biometricEnabled: false,
+        ));
+        return;
+      }
+      if (!await _deviceCanAuth()) {
         emit(state.copyWith(
           status: AuthStatus.error,
           errorMessage: 'Biometrics not available on this device',
         ));
         return;
       }
+
       final ok = await _localAuth.authenticate(
         localizedReason: 'Sign in to Jaikalki HRMS',
         options: const AuthenticationOptions(
-          biometricOnly: true,
+          // biometricOnly:false lets a failed scan fall back to the
+          // device PIN/pattern — far more reliable in the field.
+          biometricOnly: false,
           stickyAuth: true,
         ),
       );
       if (!ok) {
         emit(state.copyWith(
           status: AuthStatus.unauthenticated,
-          errorMessage: 'Biometric auth cancelled',
+          errorMessage: 'Biometric authentication cancelled',
         ));
         return;
       }
-      // Reuse existing access token; if expired the interceptor will refresh.
-      final access = await _storage.readAccessToken();
-      if (access == null || access.isEmpty) {
+
+      emit(state.copyWith(status: AuthStatus.loading, clearError: true));
+      // Try the stored access token first; fall back to a refresh.
+      try {
+        final user = await _repository.me();
+        emit(state.copyWith(
+          status: AuthStatus.authenticated,
+          user: user,
+          biometricEnabled: true,
+          biometricAvailable: true,
+        ));
+        _registerPushToken();
+        return;
+      } catch (_) {
+        // access token likely expired — refresh below.
+      }
+      try {
+        await _repository.refresh(refresh);
+        final user = await _repository.me();
+        emit(state.copyWith(
+          status: AuthStatus.authenticated,
+          user: user,
+          biometricEnabled: true,
+          biometricAvailable: true,
+        ));
+        _registerPushToken();
+      } catch (_) {
+        await _storage.clear();
         emit(state.copyWith(
           status: AuthStatus.unauthenticated,
-          errorMessage: 'No saved credentials. Sign in with password first.',
+          errorMessage:
+              'Saved session expired. Please sign in with your password.',
+          biometricEnabled: false,
+          clearUser: true,
         ));
-        return;
       }
-      add(const AuthCheckRequested());
     } catch (e) {
       emit(state.copyWith(
         status: AuthStatus.error,
         errorMessage: _humanize(e),
       ));
+    }
+  }
+
+  Future<void> _onBiometricToggle(
+    AuthBiometricToggleRequested event,
+    Emitter<AuthState> emit,
+  ) async {
+    if (!event.enable) {
+      await _storage.setBiometricEnabled(false);
+      emit(state.copyWith(biometricEnabled: false));
+      return;
+    }
+    // Can only enable while signed in with a refreshable session.
+    final refresh = await _storage.readRefreshToken();
+    if (refresh == null || refresh.isEmpty) {
+      emit(state.copyWith(
+        errorMessage:
+            'Sign in with your password first, then enable biometrics.',
+      ));
+      return;
+    }
+    if (!await _deviceCanAuth()) {
+      emit(state.copyWith(
+        errorMessage:
+            'This device has no biometrics or screen lock set up.',
+      ));
+      return;
+    }
+    try {
+      final ok = await _localAuth.authenticate(
+        localizedReason: 'Confirm to enable biometric sign-in',
+        options: const AuthenticationOptions(
+          biometricOnly: false,
+          stickyAuth: true,
+        ),
+      );
+      if (!ok) {
+        emit(state.copyWith(biometricEnabled: false));
+        return;
+      }
+      await _storage.setBiometricEnabled(true);
+      emit(state.copyWith(
+        biometricEnabled: true,
+        biometricAvailable: true,
+      ));
+    } catch (e) {
+      emit(state.copyWith(errorMessage: _humanize(e)));
     }
   }
 

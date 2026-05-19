@@ -90,22 +90,24 @@ class _LoginFormState extends State<LoginForm> {
                   return null;
                 },
               ),
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  Checkbox(
-                    value: _remember,
-                    onChanged: (v) =>
-                        setState(() => _remember = v ?? false),
-                    activeColor: AppColors.brandGoldDark,
-                  ),
-                  const Text('Remember me'),
-                  const Spacer(),
-                  TextButton(
-                    onPressed: () {},
-                    child: const Text('Forgot password?'),
-                  ),
-                ],
+              const SizedBox(height: 4),
+              InkWell(
+                onTap: () => setState(() => _remember = !_remember),
+                borderRadius: BorderRadius.circular(8),
+                child: Row(
+                  children: [
+                    Checkbox(
+                      value: _remember,
+                      onChanged: (v) =>
+                          setState(() => _remember = v ?? false),
+                      activeColor: AppColors.brandGoldDark,
+                      materialTapTargetSize:
+                          MaterialTapTargetSize.shrinkWrap,
+                    ),
+                    const SizedBox(width: 4),
+                    const Flexible(child: Text('Keep me signed in')),
+                  ],
+                ),
               ),
               if (error != null) ...[
                 const SizedBox(height: 4),
@@ -151,14 +153,16 @@ class _LoginFormState extends State<LoginForm> {
                       : const Text('Sign in'),
                 ),
               ),
-              const SizedBox(height: 12),
-              BiometricButton(
-                onPressed: loading
-                    ? () {}
-                    : () => context.read<AuthBloc>().add(
-                          const AuthBiometricLoginRequested(),
-                        ),
-              ),
+              if (state.canUseBiometric) ...[
+                const SizedBox(height: 12),
+                BiometricButton(
+                  onPressed: loading
+                      ? () {}
+                      : () => context.read<AuthBloc>().add(
+                            const AuthBiometricLoginRequested(),
+                          ),
+                ),
+              ],
             ],
           ),
         );

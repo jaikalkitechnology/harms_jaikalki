@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../l10n/app_l10n.dart';
+import '../../auth/presentation/bloc/auth_bloc.dart';
 import '../cubit/settings_cubit.dart';
 
 class SettingsPage extends StatelessWidget {
@@ -19,46 +20,27 @@ class SettingsPage extends StatelessWidget {
           return ListView(
             padding: const EdgeInsets.symmetric(vertical: 8),
             children: [
-              _SectionHeader(label: l.theme.toUpperCase()),
-              RadioListTile<ThemeMode>(
-                value: ThemeMode.system,
-                groupValue: state.themeMode,
-                title: Text(l.themeSystem),
-                onChanged: (m) => cubit.setThemeMode(m!),
-              ),
-              RadioListTile<ThemeMode>(
-                value: ThemeMode.light,
-                groupValue: state.themeMode,
-                title: Text(l.themeLight),
-                onChanged: (m) => cubit.setThemeMode(m!),
-              ),
-              RadioListTile<ThemeMode>(
-                value: ThemeMode.dark,
-                groupValue: state.themeMode,
-                title: Text(l.themeDark),
-                onChanged: (m) => cubit.setThemeMode(m!),
-              ),
-              const Divider(),
-              _SectionHeader(label: l.language.toUpperCase()),
-              RadioListTile<String>(
-                value: 'en',
-                groupValue: state.locale.languageCode,
-                title: const Text('English'),
-                onChanged: (v) => cubit.setLocale(Locale(v!)),
-              ),
-              RadioListTile<String>(
-                value: 'hi',
-                groupValue: state.locale.languageCode,
-                title: const Text('हिन्दी'),
-                onChanged: (v) => cubit.setLocale(Locale(v!)),
-              ),
-              const Divider(),
               _SectionHeader(label: 'SECURITY'),
-              SwitchListTile(
-                title: Text(l.biometric),
-                subtitle: const Text('Face ID / fingerprint'),
-                value: state.biometricEnabled,
-                onChanged: cubit.setBiometric,
+              BlocBuilder<AuthBloc, AuthState>(
+                builder: (context, auth) {
+                  return SwitchListTile(
+                    title: Text(l.biometric),
+                    subtitle: Text(
+                      auth.biometricAvailable
+                          ? 'Face ID / fingerprint sign-in'
+                          : 'Not available on this device',
+                    ),
+                    value: auth.biometricEnabled,
+                    onChanged: auth.biometricAvailable
+                        ? (v) {
+                            cubit.setBiometric(v);
+                            context
+                                .read<AuthBloc>()
+                                .add(AuthBiometricToggleRequested(v));
+                          }
+                        : null,
+                  );
+                },
               ),
               SwitchListTile(
                 title: Text(l.notifications),

@@ -47,10 +47,11 @@ class _JaikalkiAppState extends State<JaikalkiApp> {
           return MaterialApp.router(
             title: AppConstants.appName,
             debugShowCheckedModeBanner: false,
-            theme: AppTheme.light(),
+            theme: AppTheme.dark(),
             darkTheme: AppTheme.dark(),
-            themeMode: settings.themeMode,
-            locale: settings.locale,
+            // App is fixed to dark mode + English.
+            themeMode: ThemeMode.dark,
+            locale: const Locale('en'),
             supportedLocales: AppL10n.supportedLocales,
             localizationsDelegates: AppL10n.localizationsDelegates,
             routerConfig: _router,

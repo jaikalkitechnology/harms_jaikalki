@@ -4,8 +4,9 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class SettingsState extends Equatable {
+  // App is dark-mode + English only — these are fixed, not user-set.
   const SettingsState({
-    this.themeMode = ThemeMode.system,
+    this.themeMode = ThemeMode.dark,
     this.locale = const Locale('en'),
     this.biometricEnabled = false,
     this.onboardingCompleted = false,
@@ -56,15 +57,14 @@ class SettingsCubit extends Cubit<SettingsState> {
   static const _kNotifications = 'jaikalki.notifications';
 
   void hydrate() {
-    final theme = _prefs.getString(_kTheme) ?? 'system';
-    final locale = _prefs.getString(_kLocale) ?? 'en';
     final bio = _prefs.getBool(_kBio) ?? false;
     final onboarded = _prefs.getBool(_kOnboarding) ?? false;
     final notifs = _prefs.getBool(_kNotifications) ?? true;
 
+    // Theme + language are intentionally fixed: dark mode, English.
     emit(SettingsState(
-      themeMode: _toThemeMode(theme),
-      locale: Locale(locale),
+      themeMode: ThemeMode.dark,
+      locale: const Locale('en'),
       biometricEnabled: bio,
       onboardingCompleted: onboarded,
       notificationsEnabled: notifs,
@@ -95,12 +95,6 @@ class SettingsCubit extends Cubit<SettingsState> {
     await _prefs.setBool(_kNotifications, enabled);
     emit(state.copyWith(notificationsEnabled: enabled));
   }
-
-  ThemeMode _toThemeMode(String s) => switch (s) {
-        'light' => ThemeMode.light,
-        'dark' => ThemeMode.dark,
-        _ => ThemeMode.system,
-      };
 
   String _fromThemeMode(ThemeMode m) => switch (m) {
         ThemeMode.light => 'light',
