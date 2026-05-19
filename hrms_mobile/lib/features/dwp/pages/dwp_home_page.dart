@@ -193,7 +193,7 @@ class _ActionTile extends StatelessWidget {
                 ),
               ),
               if (!done)
-                const Icon(Icons.arrow_forward_ios,
+                Icon(Icons.arrow_forward_ios,
                     size: 14, color: context.textMuted),
             ],
           ),
