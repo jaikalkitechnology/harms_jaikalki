@@ -74,6 +74,26 @@ class AttendanceApi {
     return AttendanceCalendar.fromJson(res.data!);
   }
 
+  /// Employee self-marks one day. Backend allows today always, and
+  /// back-dated only inside an admin-granted window.
+  Future<AttendanceRecord> selfMark({
+    required String date,
+    required String status,
+    String workMode = 'office',
+    String? notes,
+  }) async {
+    final res = await _dio.post<Map<String, dynamic>>(
+      '/api/v1/attendance/me/mark',
+      data: {
+        'date': date,
+        'status': status,
+        'work_mode': workMode,
+        if (notes != null) 'notes': notes,
+      },
+    );
+    return AttendanceRecord.fromJson(res.data!);
+  }
+
   Future<List<AttendanceRecord>> myRecords({String? from, String? to}) async {
     final res = await _dio.get<List<dynamic>>(
       '/api/v1/attendance/me',

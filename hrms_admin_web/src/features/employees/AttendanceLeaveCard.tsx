@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { ChevronLeft, ChevronRight, X } from "lucide-react";
@@ -60,6 +60,30 @@ export function AttendanceLeaveCard({ employeeId }: { employeeId: number }) {
       qc.invalidateQueries({ queryKey: ["attendance-calendar", employeeId] });
     },
     onError: () => toast.error("Could not update cycle"),
+  });
+
+  const [bdFrom, setBdFrom] = useState("");
+  const [bdTo, setBdTo] = useState("");
+  useEffect(() => {
+    setBdFrom(employee?.backdate_from ?? "");
+    setBdTo(employee?.backdate_to ?? "");
+  }, [employee?.backdate_from, employee?.backdate_to]);
+
+  const setBackdate = useMutation({
+    mutationFn: (clear: boolean) =>
+      employeesApi.update(employeeId, {
+        backdate_from: clear ? null : bdFrom || null,
+        backdate_to: clear ? null : bdTo || null,
+      } as Partial<import("@/lib/api/employees").EmployeeDetail>),
+    onSuccess: (_d, clear) => {
+      toast.success(
+        clear
+          ? "Back-date window locked"
+          : "Back-date window granted",
+      );
+      qc.invalidateQueries({ queryKey: ["employee", employeeId] });
+    },
+    onError: () => toast.error("Could not update back-date window"),
   });
 
   // Active cycle list + the employee's current value even if it was
@@ -230,6 +254,66 @@ export function AttendanceLeaveCard({ employeeId }: { employeeId: number }) {
             <Pill label="Working days" value={summary.total_working_days} tone="muted" />
           </div>
         )}
+
+        {/* ── Back-date permission ── */}
+        <div className="rounded-md border border-brand-brown-100 p-3">
+          <div className="text-[10px] font-mono uppercase tracking-[0.2em] text-brand-gold-dark mb-2">
+            Back-date attendance permission
+          </div>
+          <p className="text-xs text-brand-brown-light mb-2">
+            Open a date range so this employee can self-mark missed
+            attendance from the mobile app. Same-day marking is always
+            allowed. Lock to revoke.
+          </p>
+          <div className="flex flex-wrap items-end gap-2">
+            <div>
+              <Label className="text-[10px] uppercase tracking-[0.2em] text-brand-brown-light">
+                From
+              </Label>
+              <Input
+                type="date"
+                value={bdFrom}
+                onChange={(e) => setBdFrom(e.target.value)}
+                className="h-9 w-40"
+              />
+            </div>
+            <div>
+              <Label className="text-[10px] uppercase tracking-[0.2em] text-brand-brown-light">
+                To
+              </Label>
+              <Input
+                type="date"
+                value={bdTo}
+                onChange={(e) => setBdTo(e.target.value)}
+                className="h-9 w-40"
+              />
+            </div>
+            <Button
+              size="sm"
+              disabled={!bdFrom || !bdTo || setBackdate.isPending}
+              onClick={() => setBackdate.mutate(false)}
+            >
+              Grant
+            </Button>
+            {(employee?.backdate_from || employee?.backdate_to) && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="text-destructive"
+                disabled={setBackdate.isPending}
+                onClick={() => setBackdate.mutate(true)}
+              >
+                Lock
+              </Button>
+            )}
+          </div>
+          {employee?.backdate_from && employee?.backdate_to && (
+            <p className="text-xs text-success mt-2">
+              Currently open: {employee.backdate_from} →{" "}
+              {employee.backdate_to}
+            </p>
+          )}
+        </div>
 
         {/* ── 12-month grid ── */}
         <div>

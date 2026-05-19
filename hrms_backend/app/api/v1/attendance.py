@@ -15,6 +15,7 @@ from app.schemas.attendance import (
     AttendanceCheckIn,
     AttendanceCheckOut,
     AttendanceOut,
+    AttendanceSelfMark,
     AttendanceSummary,
     AttendanceUpdate,
     AttendanceUploadResult,
@@ -339,6 +340,23 @@ async def my_calendar(
         employee_id=emp.id,
         year=year or today.year,
         month=month or today.month,
+    )
+
+
+@router.post("/me/mark", response_model=AttendanceOut)
+async def self_mark(
+    payload: AttendanceSelfMark,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    emp = await _self_employee(db, user)
+    return await att_svc.self_mark(
+        db,
+        emp,
+        on_date=payload.date,
+        status_=payload.status,
+        work_mode=payload.work_mode,
+        notes=payload.notes,
     )
 
 

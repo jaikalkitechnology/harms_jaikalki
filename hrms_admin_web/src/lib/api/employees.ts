@@ -128,6 +128,8 @@ export interface EmployeeDetail extends EmployeeListItem {
   insurance_company: string | null;
   insurance_policy_no: string | null;
   attendance_cycle_start_day: number;
+  backdate_from: string | null;
+  backdate_to: string | null;
 }
 
 export interface ExpiringProbation {

@@ -91,7 +91,14 @@ class _AttendanceCalendarPageState extends State<AttendanceCalendarPage> {
                 const SizedBox(height: 12),
                 _SummaryStrip(cal: cal),
                 const SizedBox(height: 16),
-                _CalendarGrid(cal: cal),
+                _CalendarGrid(
+                  cal: cal,
+                  api: _api,
+                  onChanged: () => setState(() {
+                    _future =
+                        _api.myCalendar(year: _year, month: _month);
+                  }),
+                ),
                 const SizedBox(height: 24),
               ],
             ),
@@ -249,8 +256,14 @@ class _SummaryStrip extends StatelessWidget {
 }
 
 class _CalendarGrid extends StatelessWidget {
-  const _CalendarGrid({required this.cal});
+  const _CalendarGrid({
+    required this.cal,
+    required this.api,
+    required this.onChanged,
+  });
   final AttendanceCalendar cal;
+  final AttendanceApi api;
+  final VoidCallback onChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -285,7 +298,11 @@ class _CalendarGrid extends StatelessWidget {
           itemBuilder: (context, i) {
             final c = cells[i];
             if (c.day == null) return const SizedBox.shrink();
-            return _DayTile(day: c.day!);
+            return _DayTile(
+              day: c.day!,
+              api: api,
+              onChanged: onChanged,
+            );
           },
         ),
       ],
@@ -321,8 +338,14 @@ class _CellModel {
 }
 
 class _DayTile extends StatelessWidget {
-  const _DayTile({required this.day});
+  const _DayTile({
+    required this.day,
+    required this.api,
+    required this.onChanged,
+  });
   final CalendarDay day;
+  final AttendanceApi api;
+  final VoidCallback onChanged;
 
   bool get _isUpcoming => day.status == 'upcoming';
 
@@ -449,7 +472,30 @@ class _DayTile extends StatelessWidget {
     showModalBottomSheet<void>(
       context: context,
       showDragHandle: true,
-      builder: (_) {
+      builder: (sheetCtx) {
+        Future<void> mark(String status) async {
+          try {
+            await api.selfMark(date: day.date, status: status);
+            if (sheetCtx.mounted) Navigator.of(sheetCtx).pop();
+            onChanged();
+            if (context.mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Attendance marked')),
+              );
+            }
+          } catch (e) {
+            final msg = RegExp(r'detail"?\s*:\s*"([^"]+)"')
+                    .firstMatch(e.toString())
+                    ?.group(1) ??
+                'Could not mark — outside your allowed window?';
+            if (sheetCtx.mounted) {
+              ScaffoldMessenger.of(sheetCtx).showSnackBar(
+                SnackBar(content: Text(msg)),
+              );
+            }
+          }
+        }
+
         return SafeArea(
           child: Padding(
             padding: const EdgeInsets.fromLTRB(20, 4, 20, 20),
@@ -508,6 +554,43 @@ class _DayTile extends StatelessWidget {
                     ),
                   if (day.notes != null && day.notes!.isNotEmpty)
                     _kv('Notes', day.notes!),
+                ],
+                if (day.isEditable &&
+                    !_isUpcoming &&
+                    !day.isHoliday &&
+                    !day.isSunday) ...[
+                  const SizedBox(height: 16),
+                  Text(
+                    'Mark attendance',
+                    style: Theme.of(sheetCtx).textTheme.labelLarge,
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: FilledButton(
+                          onPressed: () => mark('present'),
+                          child: const Text('Present'),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: () => mark('wfh'),
+                          child: const Text('WFH'),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  const Text(
+                    'Today is always allowed. Past days only if your '
+                    'admin opened a back-date window.',
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: AppColors.brandBrownLight,
+                    ),
+                  ),
                 ],
               ],
             ),

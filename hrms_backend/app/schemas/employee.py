@@ -319,6 +319,8 @@ class EmployeeUpdate(BaseModel):
     insurance_policy_no: Optional[str] = Field(default=None, max_length=64)
     # Attendance / payroll cycle
     attendance_cycle_start_day: Optional[int] = Field(default=None, ge=1, le=28)
+    backdate_from: Optional[date] = None
+    backdate_to: Optional[date] = None
 
 
 class EmployeeListItem(BaseModel):
@@ -376,6 +378,8 @@ class EmployeeOut(BaseModel):
     insurance_company: Optional[str] = None
     insurance_policy_no: Optional[str] = None
     attendance_cycle_start_day: int = 1
+    backdate_from: Optional[date] = None
+    backdate_to: Optional[date] = None
     created_at: datetime
 
 

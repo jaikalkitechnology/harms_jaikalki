@@ -124,6 +124,17 @@ class AttendanceUploadResult(BaseModel):
     errors: List[AttendanceUploadRowError]
 
 
+class AttendanceSelfMark(BaseModel):
+    """Employee self-marks one day (today, or a back-dated day the
+    admin opened a window for)."""
+    date: date
+    status: str = Field(pattern="^(present|wfh|leave|half_day)$")
+    work_mode: str = Field(
+        default="office", pattern="^(office|wfh|hybrid|field)$"
+    )
+    notes: Optional[str] = Field(default=None, max_length=255)
+
+
 class AttendanceUpsertByDate(BaseModel):
     """Single-day attendance edit by admin from the calendar view."""
     date: date
