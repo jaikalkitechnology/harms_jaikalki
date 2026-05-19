@@ -23,7 +23,19 @@ export interface LeaveBalance {
   allocated: string;
   used: string;
   carried_forward: string;
+  adjustment: string;
   balance: string;
+}
+
+export interface LeaveAdjustment {
+  id: number;
+  employee_id: number;
+  leave_type_id: number;
+  year: number;
+  delta: string;
+  reason: string;
+  created_by: number | null;
+  created_at: string;
 }
 
 export interface LeaveRequest {
@@ -78,6 +90,31 @@ export const leavesApi = {
   async employeeBalance(employeeId: number, year?: number): Promise<LeaveBalance[]> {
     const { data } = await apiClient.get(
       `${v1}/leaves/balance/${employeeId}`,
+      { params: year ? { year } : undefined },
+    );
+    return data;
+  },
+  async adjustBalance(
+    employeeId: number,
+    payload: {
+      leave_type_id: number;
+      delta: number;
+      reason: string;
+      year?: number;
+    },
+  ): Promise<LeaveBalance> {
+    const { data } = await apiClient.post(
+      `${v1}/leaves/balance/${employeeId}/adjust`,
+      payload,
+    );
+    return data;
+  },
+  async listAdjustments(
+    employeeId: number,
+    year?: number,
+  ): Promise<LeaveAdjustment[]> {
+    const { data } = await apiClient.get(
+      `${v1}/leaves/balance/${employeeId}/adjustments`,
       { params: year ? { year } : undefined },
     );
     return data;

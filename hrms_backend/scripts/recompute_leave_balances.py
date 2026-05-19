@@ -102,37 +102,24 @@ async def _recompute_one_fy(
 
     for emp in employees:
         # 1. (Re)allocate every leave type for this FY, reset used.
+        #    PL is skipped entirely — it's now driven by the
+        #    earned-leave accrual ledger (allocated), the already
+        #    carried-forward prior balance, and manual adjustments;
+        #    this script must not clobber any of those.
         balances: dict[str, LeaveBalance] = {}
         for code, lt in by_code.items():
+            if code == "PL":
+                continue
             bal = await _balance(db, employee_id=emp.id, lt=lt, fy=fy)
             bal.allocated = lt.days_per_year
             bal.used = Decimal("0")
             bal.carried_forward = Decimal("0")
             balances[code] = bal
 
-        # 2. PL carry-forward from the previous FY — CONFIRMED
-        #    employees only. Anyone still on probation forfeits the
-        #    carry-forward (they accrue a fresh allocation but don't
-        #    bank unused PL across the probation boundary).
-        is_confirmed = not bool(emp.is_on_probation)
-        if is_confirmed:
-            prev_pl = (
-                await db.execute(
-                    select(LeaveBalance)
-                    .where(LeaveBalance.employee_id == emp.id)
-                    .where(LeaveBalance.leave_type_id == pl.id)
-                    .where(LeaveBalance.year == fy - 1)
-                )
-            ).scalar_one_or_none()
-            if prev_pl is not None:
-                prev_remaining = (
-                    (prev_pl.allocated or Decimal("0"))
-                    + (prev_pl.carried_forward or Decimal("0"))
-                    - (prev_pl.used or Decimal("0"))
-                )
-                cap = pl.max_carry_forward or Decimal("0")
-                cf = max(Decimal("0"), min(prev_remaining, cap))
-                balances["PL"].carried_forward = cf
+        # 2. PL is intentionally not managed here any more — it's
+        #    accrued (1 per 20 qualifying days) by
+        #    leave_policy.recompute_earned_leaves and topped up by the
+        #    already carried-forward balance + manual adjustments.
 
         # 3a. Approved leave requests overlapping the FY window.
         leave_reqs = (
@@ -205,14 +192,11 @@ async def _recompute_one_fy(
             for c, b in balances.items()
             if (b.used or 0) and float(b.used) > 0
         }
-        if taken or balances["PL"].carried_forward:
-            tag = "" if is_confirmed else " (probation — no PL c/f)"
+        if taken or lwp_days:
             print(
-                f"    {emp.employee_code:8s} {emp.first_name} {emp.last_name}: "
-                f"PL c/f={balances['PL'].carried_forward} "
-                f"used={taken or '—'}"
+                f"    {emp.employee_code:8s} {emp.first_name} "
+                f"{emp.last_name}: used={taken or '—'}"
                 + (f" LWP={lwp_days}" if lwp_days else "")
-                + tag
             )
 
     # Flush so the next FY in the range can read these PL balances

@@ -35,6 +35,7 @@ export function AttendanceLeaveCard({ employeeId }: { employeeId: number }) {
   const thisYear = new Date().getFullYear();
   const [year, setYear] = useState(thisYear);
   const [openMonth, setOpenMonth] = useState<number | null>(null);
+  const [adjustOpen, setAdjustOpen] = useState(false);
 
   const { data: employee } = useQuery({
     queryKey: ["employee", employeeId],
@@ -141,8 +142,18 @@ export function AttendanceLeaveCard({ employeeId }: { employeeId: number }) {
       <CardContent className="space-y-6">
         {/* ── Leave balances ── */}
         <div>
-          <div className="text-[10px] font-mono uppercase tracking-[0.2em] text-brand-gold-dark mb-2">
-            Leave balance · {year}
+          <div className="flex items-center justify-between mb-2">
+            <div className="text-[10px] font-mono uppercase tracking-[0.2em] text-brand-gold-dark">
+              Leave balance · {year}
+            </div>
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-7 gap-1"
+              onClick={() => setAdjustOpen(true)}
+            >
+              Adjust balance
+            </Button>
           </div>
           {balances.length === 0 ? (
             <p className="text-sm text-brand-brown-light">
@@ -186,6 +197,18 @@ export function AttendanceLeaveCard({ employeeId }: { employeeId: number }) {
                           used <span className="text-warning font-semibold">{used}</span>
                         </div>
                         <div>of {alloc}</div>
+                        {Number(b.adjustment) !== 0 && (
+                          <div
+                            className={
+                              Number(b.adjustment) > 0
+                                ? "text-success"
+                                : "text-error"
+                            }
+                          >
+                            adj {Number(b.adjustment) > 0 ? "+" : ""}
+                            {b.adjustment}
+                          </div>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -279,8 +302,191 @@ export function AttendanceLeaveCard({ employeeId }: { employeeId: number }) {
             onClose={() => setOpenMonth(null)}
           />
         )}
+        {adjustOpen && (
+          <AdjustBalanceModal
+            employeeId={employeeId}
+            year={year}
+            balances={balances}
+            onClose={() => setAdjustOpen(false)}
+            onDone={() => {
+              setAdjustOpen(false);
+              qc.invalidateQueries({
+                queryKey: ["leave-balance", employeeId, year],
+              });
+            }}
+          />
+        )}
       </CardContent>
     </Card>
+  );
+}
+
+function AdjustBalanceModal({
+  employeeId,
+  year,
+  balances,
+  onClose,
+  onDone,
+}: {
+  employeeId: number;
+  year: number;
+  balances: import("@/lib/api/leaves").LeaveBalance[];
+  onClose: () => void;
+  onDone: () => void;
+}) {
+  const [leaveTypeId, setLeaveTypeId] = useState<number>(
+    balances[0]?.leave_type_id ?? 0,
+  );
+  const [sign, setSign] = useState<"+" | "-">("+");
+  const [amount, setAmount] = useState("1");
+  const [reason, setReason] = useState("");
+
+  const { data: history = [] } = useQuery({
+    queryKey: ["leave-adjustments", employeeId, year],
+    queryFn: () => leavesApi.listAdjustments(employeeId, year),
+  });
+
+  const save = useMutation({
+    mutationFn: () =>
+      leavesApi.adjustBalance(employeeId, {
+        leave_type_id: leaveTypeId,
+        delta: (sign === "-" ? -1 : 1) * Number(amount),
+        reason: reason.trim(),
+        year,
+      }),
+    onSuccess: () => {
+      toast.success("Balance adjusted");
+      onDone();
+    },
+    onError: (e: unknown) => {
+      const detail =
+        (e as { response?: { data?: { detail?: string } } })?.response?.data
+          ?.detail ?? "Could not adjust";
+      toast.error(detail);
+    },
+  });
+
+  const codeFor = (id: number) =>
+    balances.find((b) => b.leave_type_id === id)?.leave_type?.code ??
+    `#${id}`;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+      <Card className="w-full max-w-lg max-h-[90vh] overflow-y-auto">
+        <CardHeader className="flex flex-row items-center justify-between">
+          <div>
+            <CardTitle>Adjust leave balance</CardTitle>
+            <CardDescription>
+              Add or remove days for FY {year}. Every change is logged
+              with a reason.
+            </CardDescription>
+          </div>
+          <Button variant="ghost" size="sm" onClick={onClose}>
+            <X className="size-4" />
+          </Button>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label>Leave type</Label>
+              <select
+                value={leaveTypeId}
+                onChange={(e) => setLeaveTypeId(Number(e.target.value))}
+                className="flex h-10 w-full rounded-md border border-input bg-card px-3 text-sm"
+              >
+                {balances.map((b) => (
+                  <option key={b.id} value={b.leave_type_id}>
+                    {b.leave_type?.code} — {b.leave_type?.name} (bal{" "}
+                    {b.balance})
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <Label>Change</Label>
+              <div className="flex gap-2">
+                <select
+                  value={sign}
+                  onChange={(e) => setSign(e.target.value as "+" | "-")}
+                  className="flex h-10 rounded-md border border-input bg-card px-2 text-sm"
+                >
+                  <option value="+">Add (+)</option>
+                  <option value="-">Remove (−)</option>
+                </select>
+                <Input
+                  type="number"
+                  min={0}
+                  step={0.5}
+                  value={amount}
+                  onChange={(e) => setAmount(e.target.value)}
+                  className="w-24"
+                />
+              </div>
+            </div>
+          </div>
+          <div>
+            <Label>Reason *</Label>
+            <Input
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              placeholder="e.g. comp-off for Sunday work on 12 Apr"
+            />
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={onClose}>
+              Cancel
+            </Button>
+            <Button
+              disabled={
+                !leaveTypeId ||
+                !Number(amount) ||
+                reason.trim().length < 3 ||
+                save.isPending
+              }
+              onClick={() => save.mutate()}
+            >
+              {save.isPending ? "Saving…" : "Apply adjustment"}
+            </Button>
+          </div>
+
+          {history.length > 0 && (
+            <div>
+              <div className="text-[10px] font-mono uppercase tracking-[0.2em] text-brand-brown-light mb-2">
+                Adjustment history
+              </div>
+              <div className="rounded-md border border-brand-brown-100 divide-y divide-brand-brown-100/60 max-h-52 overflow-y-auto">
+                {history.map((h) => (
+                  <div
+                    key={h.id}
+                    className="flex items-start justify-between gap-3 px-3 py-2 text-xs"
+                  >
+                    <div>
+                      <span
+                        className={`font-semibold ${
+                          Number(h.delta) >= 0
+                            ? "text-success"
+                            : "text-error"
+                        }`}
+                      >
+                        {Number(h.delta) >= 0 ? "+" : ""}
+                        {h.delta} {codeFor(h.leave_type_id)}
+                      </span>
+                      <span className="text-brand-brown-light">
+                        {" "}
+                        · {h.reason}
+                      </span>
+                    </div>
+                    <span className="text-brand-brown-light whitespace-nowrap">
+                      {new Date(h.created_at).toLocaleDateString()}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
   );
 }
 

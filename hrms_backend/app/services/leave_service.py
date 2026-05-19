@@ -112,6 +112,67 @@ async def list_balances(
     ).scalars().all()
 
 
+# ── Manual balance adjustment (audited) ─────────────────────────────
+async def adjust_balance(
+    db: AsyncSession,
+    *,
+    employee_id: int,
+    leave_type_id: int,
+    delta: Decimal | int | float,
+    reason: str,
+    actor: Optional[User] = None,
+    year: Optional[int] = None,
+) -> LeaveBalance:
+    """Add (+) or remove (−) days from a leave balance and write an
+    audited LeaveAdjustment row capturing who/why."""
+    from app.models import LeaveAdjustment
+
+    delta = Decimal(str(delta))
+    if delta == 0:
+        raise ValidationError("Adjustment cannot be zero")
+    if not (reason or "").strip():
+        raise ValidationError("A reason is required for any adjustment")
+
+    fy = year or financial_year_start(_today())
+    lt = (
+        await db.execute(select(LeaveType).where(LeaveType.id == leave_type_id))
+    ).scalar_one_or_none()
+    if not lt:
+        raise NotFoundError("Leave type not found")
+
+    bal = await get_or_create_balance(db, employee_id, lt, fy)
+    bal.adjustment = (bal.adjustment or Decimal("0")) + delta
+
+    db.add(
+        LeaveAdjustment(
+            employee_id=employee_id,
+            leave_type_id=leave_type_id,
+            year=fy,
+            delta=delta,
+            reason=reason.strip(),
+            created_by=actor.id if actor else None,
+        )
+    )
+    await db.commit()
+    await db.refresh(bal)
+    return bal
+
+
+async def list_adjustments(
+    db: AsyncSession, employee_id: int, *, year: Optional[int] = None
+) -> Sequence:
+    from app.models import LeaveAdjustment
+
+    stmt = (
+        select(LeaveAdjustment)
+        .where(LeaveAdjustment.employee_id == employee_id)
+        .order_by(LeaveAdjustment.created_at.desc())
+    )
+    if year is not None:
+        stmt = stmt.where(LeaveAdjustment.year == year)
+    return (await db.execute(stmt)).scalars().all()
+
+
 # ── Apply / cancel / decide ─────────────────────────────────────────
 async def apply_leave(
     db: AsyncSession,

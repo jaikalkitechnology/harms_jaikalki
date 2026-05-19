@@ -149,6 +149,12 @@ _PENDING_COLUMNS: list[tuple[str, str, str, str | None]] = [
     ("payroll_runs", "disbursed_by", "INT NULL", None),
     ("attendance", "is_late", "BOOLEAN NOT NULL DEFAULT FALSE", None),
     ("attendance", "late_remark", "VARCHAR(255) NULL", None),
+    (
+        "leave_balances",
+        "adjustment",
+        "DECIMAL(6,2) NOT NULL DEFAULT 0",
+        None,
+    ),
     ("departments", "enabled_modules", "JSON NULL", None),
 ]
 
