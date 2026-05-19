@@ -31,11 +31,14 @@ _DEFAULTS: dict[str, object] = {
     # Whether public holidays inside the leave range are also counted
     # under the sandwich rule (Sundays always are when enabled).
     "leave.sandwich_count_holidays": True,
-    # Earned-leave accrual ("19 days present → 1 leave").
-    "leave.earned_accrual_enabled": False,
-    "leave.earned_accrual_days_required": 19,
+    # Earned-leave accrual: 1 PL earned per 20 qualifying days. A
+    # qualifying day = any calendar day that is NOT leave and NOT
+    # absent — so present / WFH / half-day AND Sundays / holidays all
+    # count. Auto-enabled (no flat PL allocation any more).
+    "leave.earned_accrual_enabled": True,
+    "leave.earned_accrual_days_required": 20,
     "leave.earned_accrual_credit_days": 1,
-    "leave.earned_accrual_leave_type_code": "EL",
+    "leave.earned_accrual_leave_type_code": "PL",
 }
 
 _KEYS = list(_DEFAULTS.keys())
@@ -201,7 +204,10 @@ async def recompute_earned_leaves(
             "error": f"leave type '{type_code}' not found",
         }
 
-    year = _today().year
+    today = _today()
+    year = today.year
+    win_start = date(year, 1, 1)
+    elapsed = (today - win_start).days + 1
     emp_stmt = select(Employee).where(Employee.status == "active")
     if employee_id is not None:
         emp_stmt = emp_stmt.where(Employee.id == employee_id)
@@ -210,16 +216,32 @@ async def recompute_earned_leaves(
     total = Decimal("0")
     processed = 0
     for emp in employees:
-        present_count = (
+        # Qualifying day = a calendar day from Jan 1 → today that is
+        # NOT a recorded leave and NOT a recorded absent. Present /
+        # WFH / half-day plus Sundays & holidays all qualify (they're
+        # part of `elapsed` and aren't leave/absent rows).
+        leave_days = (
             await db.execute(
                 select(func.count(Attendance.id))
                 .where(Attendance.employee_id == emp.id)
-                .where(Attendance.status.in_(PRESENT_STATUSES))
+                .where(Attendance.status == "leave")
+                .where(Attendance.date >= win_start)
+                .where(Attendance.date <= today)
             )
         ).scalar() or 0
+        absent_days = (
+            await db.execute(
+                select(func.count(Attendance.id))
+                .where(Attendance.employee_id == emp.id)
+                .where(Attendance.status == "absent")
+                .where(Attendance.date >= win_start)
+                .where(Attendance.date <= today)
+            )
+        ).scalar() or 0
+        qualifying = max(0, elapsed - int(leave_days) - int(absent_days))
 
-        # Idempotent target.
-        target = (Decimal(present_count) // Decimal(threshold)) * credit_per
+        # Idempotent target — 1 PL per `threshold` qualifying days.
+        target = (Decimal(qualifying) // Decimal(threshold)) * credit_per
 
         ledger = (
             await db.execute(
@@ -247,8 +269,11 @@ async def recompute_earned_leaves(
             ledger.last_present_count = int(present_count)
             ledger.last_recomputed_at = datetime.utcnow()
 
-        # Sync the balance — keep the row's "carried_forward" representing
-        # accrued credits beyond the type's days_per_year baseline.
+        # Sync the balance. Accrual owns `allocated` for this leave
+        # type (PL has no flat days_per_year any more), leaving
+        # carried_forward = prior-FY carry and adjustment = manual HR
+        # corrections untouched. balance = allocated + carried_forward
+        # + adjustment − used.
         bal = (
             await db.execute(
                 select(LeaveBalance)
@@ -262,13 +287,13 @@ async def recompute_earned_leaves(
                 employee_id=emp.id,
                 leave_type_id=leave_type.id,
                 year=year,
-                allocated=leave_type.days_per_year,
+                allocated=target,
                 used=Decimal("0"),
-                carried_forward=target,
+                carried_forward=Decimal("0"),
             )
             db.add(bal)
         else:
-            bal.carried_forward = target
+            bal.allocated = target
 
         total += delta if delta > 0 else Decimal("0")
         processed += 1

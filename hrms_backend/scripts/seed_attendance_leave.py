@@ -42,8 +42,10 @@ LEAVE_TYPES = [
     ("SL", "Sick Leave", Decimal("8"), False, Decimal("0"), 3,
      "8 days per leave-year. Doctor's note for 3+ consecutive days.",
      True, False),
-    ("PL", "Privilege Leave", Decimal("18"), True, Decimal("18"), 0,
-     "18 days per leave-year. Earned leave — carries forward (cap 18).",
+    ("PL", "Privilege Leave", Decimal("0"), True, Decimal("999"), 0,
+     "Earned leave — accrued at 1 day per 20 qualifying days "
+     "(present/WFH/half-day + Sundays/holidays; leave & absent "
+     "don't count). No flat yearly allocation. Carries forward.",
      True, False),
     ("ML", "Maternity Leave", Decimal("180"), False, Decimal("0"), 0,
      "180 days as per the Maternity Benefit Act.", True, False),

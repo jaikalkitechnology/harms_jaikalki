@@ -23,6 +23,8 @@ from app.schemas.leave import (
     CompOffOut,
     HolidayCreate,
     HolidayOut,
+    LeaveAdjustmentOut,
+    LeaveAdjustRequest,
     LeaveApplyRequest,
     LeaveBalanceOut,
     LeaveDecisionRequest,
@@ -76,6 +78,7 @@ async def my_balance(
                 allocated=b.allocated,
                 used=b.used,
                 carried_forward=b.carried_forward,
+                adjustment=b.adjustment,
                 balance=b.balance,
             )
         )
@@ -106,10 +109,61 @@ async def employee_balance(
             allocated=b.allocated,
             used=b.used,
             carried_forward=b.carried_forward,
+            adjustment=b.adjustment,
             balance=b.balance,
         )
         for b in rows
     ]
+
+
+@router.post(
+    "/balance/{employee_id}/adjust",
+    response_model=LeaveBalanceOut,
+)
+async def adjust_balance(
+    employee_id: int,
+    payload: LeaveAdjustRequest,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_permission("leave.approve.team")),
+):
+    await emp_svc.get_employee(db, employee_id)
+    b = await leave_svc.adjust_balance(
+        db,
+        employee_id=employee_id,
+        leave_type_id=payload.leave_type_id,
+        delta=payload.delta,
+        reason=payload.reason,
+        actor=user,
+        year=payload.year,
+    )
+    return LeaveBalanceOut(
+        id=b.id,
+        employee_id=b.employee_id,
+        leave_type_id=b.leave_type_id,
+        leave_type=LeaveTypeOut.model_validate(b.leave_type)
+        if b.leave_type
+        else None,
+        year=b.year,
+        allocated=b.allocated,
+        used=b.used,
+        carried_forward=b.carried_forward,
+        adjustment=b.adjustment,
+        balance=b.balance,
+    )
+
+
+@router.get(
+    "/balance/{employee_id}/adjustments",
+    response_model=list[LeaveAdjustmentOut],
+)
+async def list_adjustments(
+    employee_id: int,
+    year: Optional[int] = None,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_permission("leave.approve.team")),
+):
+    await emp_svc.get_employee(db, employee_id)
+    return await leave_svc.list_adjustments(db, employee_id, year=year)
 
 
 # ── Apply / cancel ──────────────────────────────────────────────────────

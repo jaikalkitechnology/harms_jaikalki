@@ -28,7 +28,27 @@ class LeaveBalanceOut(BaseModel):
     allocated: Decimal
     used: Decimal
     carried_forward: Decimal
+    adjustment: Decimal = Decimal("0")
     balance: Decimal
+
+
+class LeaveAdjustRequest(BaseModel):
+    leave_type_id: int
+    delta: Decimal = Field(description="Days to add (+) or remove (−)")
+    reason: str = Field(min_length=3, max_length=500)
+    year: Optional[int] = None
+
+
+class LeaveAdjustmentOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    employee_id: int
+    leave_type_id: int
+    year: int
+    delta: Decimal
+    reason: str
+    created_by: Optional[int] = None
+    created_at: datetime
 
 
 class LeaveApplyRequest(BaseModel):

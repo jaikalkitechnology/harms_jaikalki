@@ -73,14 +73,44 @@ class LeaveBalance(Base, TimestampMixin):
     carried_forward: Mapped[Decimal] = mapped_column(
         Numeric(5, 2), default=Decimal("0")
     )
+    # Manual HR correction (+/-). Every change is also written to
+    # leave_adjustments with a reason for audit.
+    adjustment: Mapped[Decimal] = mapped_column(
+        Numeric(6, 2), default=Decimal("0"), nullable=False
+    )
 
     leave_type: Mapped["LeaveType"] = relationship(lazy="joined")
 
     @property
     def balance(self) -> Decimal:
-        return (self.allocated or Decimal("0")) + (
-            self.carried_forward or Decimal("0")
-        ) - (self.used or Decimal("0"))
+        return (
+            (self.allocated or Decimal("0"))
+            + (self.carried_forward or Decimal("0"))
+            + (self.adjustment or Decimal("0"))
+            - (self.used or Decimal("0"))
+        )
+
+
+class LeaveAdjustment(Base, TimestampMixin):
+    """Audit trail of manual leave-balance corrections — who added or
+    removed how many days of which leave type, for which FY, and why."""
+
+    __tablename__ = "leave_adjustments"
+    __table_args__ = mysql_table_args
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    employee_id: Mapped[int] = mapped_column(
+        ForeignKey("employees.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    leave_type_id: Mapped[int] = mapped_column(
+        ForeignKey("leave_types.id", ondelete="CASCADE"), nullable=False
+    )
+    year: Mapped[int] = mapped_column(Integer, nullable=False)
+    delta: Mapped[Decimal] = mapped_column(Numeric(6, 2), nullable=False)
+    reason: Mapped[str] = mapped_column(Text, nullable=False)
+    created_by: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
 
 
 class LeaveRequest(Base, TimestampMixin):
