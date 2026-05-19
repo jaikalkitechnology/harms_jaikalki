@@ -149,6 +149,8 @@ _PENDING_COLUMNS: list[tuple[str, str, str, str | None]] = [
     ("payroll_runs", "disbursed_by", "INT NULL", None),
     ("attendance", "is_late", "BOOLEAN NOT NULL DEFAULT FALSE", None),
     ("attendance", "late_remark", "VARCHAR(255) NULL", None),
+    ("employees", "backdate_from", "DATE NULL", None),
+    ("employees", "backdate_to", "DATE NULL", None),
     (
         "leave_balances",
         "adjustment",

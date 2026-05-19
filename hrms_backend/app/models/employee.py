@@ -181,6 +181,16 @@ class Employee(Base, TimestampMixin):
         Integer, default=1, nullable=False
     )
 
+    # Admin-granted window during which the employee may self-mark
+    # back-dated attendance from the mobile app. Both null ⇒ only the
+    # current day can be self-marked.
+    backdate_from: Mapped[Optional[date]] = mapped_column(
+        Date, nullable=True
+    )
+    backdate_to: Mapped[Optional[date]] = mapped_column(
+        Date, nullable=True
+    )
+
     work_location: Mapped[str] = mapped_column(
         String(200), default="Mira Road, Thane", nullable=False
     )

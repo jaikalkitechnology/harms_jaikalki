@@ -91,7 +91,14 @@ class _AttendanceCalendarPageState extends State<AttendanceCalendarPage> {
                 const SizedBox(height: 12),
                 _SummaryStrip(cal: cal),
                 const SizedBox(height: 16),
-                _CalendarGrid(cal: cal),
+                _CalendarGrid(
+                  cal: cal,
+                  api: _api,
+                  onChanged: () => setState(() {
+                    _future =
+                        _api.myCalendar(year: _year, month: _month);
+                  }),
+                ),
                 const SizedBox(height: 24),
               ],
             ),
@@ -249,8 +256,14 @@ class _SummaryStrip extends StatelessWidget {
 }
 
 class _CalendarGrid extends StatelessWidget {
-  const _CalendarGrid({required this.cal});
+  const _CalendarGrid({
+    required this.cal,
+    required this.api,
+    required this.onChanged,
+  });
   final AttendanceCalendar cal;
+  final AttendanceApi api;
+  final VoidCallback onChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -275,15 +288,21 @@ class _CalendarGrid extends StatelessWidget {
           shrinkWrap: true,
           gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
             crossAxisCount: 7,
-            mainAxisSpacing: 6,
-            crossAxisSpacing: 6,
-            childAspectRatio: 0.95,
+            mainAxisSpacing: 4,
+            crossAxisSpacing: 4,
+            // Slightly taller than wide so the day number + status
+            // token always fit on the narrowest phones.
+            childAspectRatio: 0.78,
           ),
           itemCount: cells.length,
           itemBuilder: (context, i) {
             final c = cells[i];
             if (c.day == null) return const SizedBox.shrink();
-            return _DayTile(day: c.day!);
+            return _DayTile(
+              day: c.day!,
+              api: api,
+              onChanged: onChanged,
+            );
           },
         ),
       ],
@@ -319,8 +338,14 @@ class _CellModel {
 }
 
 class _DayTile extends StatelessWidget {
-  const _DayTile({required this.day});
+  const _DayTile({
+    required this.day,
+    required this.api,
+    required this.onChanged,
+  });
   final CalendarDay day;
+  final AttendanceApi api;
+  final VoidCallback onChanged;
 
   bool get _isUpcoming => day.status == 'upcoming';
 
@@ -383,43 +408,60 @@ class _DayTile extends StatelessWidget {
       onTap: () => _showDetail(context),
       borderRadius: BorderRadius.circular(8),
       child: Container(
-        padding: const EdgeInsets.all(4),
+        padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 3),
         decoration: BoxDecoration(
           color: _bg(),
           borderRadius: BorderRadius.circular(8),
           border: Border.all(color: _border()),
         ),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text(
-              '$dayNum',
-              style: TextStyle(
-                fontWeight: FontWeight.w700,
-                color: _numColor(),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Flexible(
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      '$dayNum',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: _numColor(),
+                      ),
+                    ),
+                  ),
+                ),
+                if (day.isLate)
+                  Container(
+                    width: 6,
+                    height: 6,
+                    decoration: const BoxDecoration(
+                      color: AppColors.warning,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+              ],
+            ),
+            SizedBox(
+              width: double.infinity,
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  _badge(),
+                  maxLines: 1,
+                  style: TextStyle(
+                    fontSize: 9.5,
+                    fontWeight: FontWeight.w700,
+                    color: _numColor(),
+                  ),
+                ),
               ),
             ),
-            const Spacer(),
-            if (day.isHoliday)
-              Text(
-                day.holidayName ?? 'Holiday',
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  fontSize: 8.5,
-                  color: AppColors.error,
-                  fontWeight: FontWeight.w600,
-                ),
-              )
-            else
-              Text(
-                _badge(),
-                style: TextStyle(
-                  fontSize: 10,
-                  fontWeight: FontWeight.w700,
-                  color: _numColor(),
-                ),
-              ),
           ],
         ),
       ),
@@ -430,7 +472,30 @@ class _DayTile extends StatelessWidget {
     showModalBottomSheet<void>(
       context: context,
       showDragHandle: true,
-      builder: (_) {
+      builder: (sheetCtx) {
+        Future<void> mark(String status) async {
+          try {
+            await api.selfMark(date: day.date, status: status);
+            if (sheetCtx.mounted) Navigator.of(sheetCtx).pop();
+            onChanged();
+            if (context.mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Attendance marked')),
+              );
+            }
+          } catch (e) {
+            final msg = RegExp(r'detail"?\s*:\s*"([^"]+)"')
+                    .firstMatch(e.toString())
+                    ?.group(1) ??
+                'Could not mark — outside your allowed window?';
+            if (sheetCtx.mounted) {
+              ScaffoldMessenger.of(sheetCtx).showSnackBar(
+                SnackBar(content: Text(msg)),
+              );
+            }
+          }
+        }
+
         return SafeArea(
           child: Padding(
             padding: const EdgeInsets.fromLTRB(20, 4, 20, 20),
@@ -480,8 +545,52 @@ class _DayTile extends StatelessWidget {
                       '${(day.totalMinutes / 60).floor()}h ${day.totalMinutes % 60}m',
                     ),
                   if (day.leaveType != null) _kv('Leave', day.leaveType!),
+                  if (day.isLate)
+                    _kv(
+                      'Late',
+                      day.lateRemark?.isNotEmpty == true
+                          ? day.lateRemark!
+                          : 'Marked late',
+                    ),
                   if (day.notes != null && day.notes!.isNotEmpty)
                     _kv('Notes', day.notes!),
+                ],
+                if (day.isEditable &&
+                    !_isUpcoming &&
+                    !day.isHoliday &&
+                    !day.isSunday) ...[
+                  const SizedBox(height: 16),
+                  Text(
+                    'Mark attendance',
+                    style: Theme.of(sheetCtx).textTheme.labelLarge,
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: FilledButton(
+                          onPressed: () => mark('present'),
+                          child: const Text('Present'),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: () => mark('wfh'),
+                          child: const Text('WFH'),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  const Text(
+                    'Today is always allowed. Past days only if your '
+                    'admin opened a back-date window.',
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: AppColors.brandBrownLight,
+                    ),
+                  ),
                 ],
               ],
             ),

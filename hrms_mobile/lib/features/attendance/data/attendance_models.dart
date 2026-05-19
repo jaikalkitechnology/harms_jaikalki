@@ -55,6 +55,8 @@ class CalendarDay extends Equatable {
     this.totalMinutes = 0,
     this.notes,
     this.leaveType,
+    this.isLate = false,
+    this.lateRemark,
   });
 
   final String date;       // YYYY-MM-DD
@@ -70,6 +72,8 @@ class CalendarDay extends Equatable {
   final int totalMinutes;
   final String? notes;
   final String? leaveType;
+  final bool isLate;
+  final String? lateRemark;
 
   factory CalendarDay.fromJson(Map<String, dynamic> j) => CalendarDay(
         date: j['date'] as String,
@@ -85,10 +89,13 @@ class CalendarDay extends Equatable {
         totalMinutes: (j['total_minutes'] as int?) ?? 0,
         notes: j['notes'] as String?,
         leaveType: j['leave_type'] as String?,
+        isLate: j['is_late'] as bool? ?? false,
+        lateRemark: j['late_remark'] as String?,
       );
 
   @override
-  List<Object?> get props => [date, status, isHoliday, isSunday];
+  List<Object?> get props =>
+      [date, status, isHoliday, isSunday, isLate];
 }
 
 class AttendanceCalendar extends Equatable {

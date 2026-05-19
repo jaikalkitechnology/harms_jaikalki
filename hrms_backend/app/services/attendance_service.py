@@ -772,6 +772,87 @@ async def year_summary_for_employee(
     }
 
 
+async def self_mark(
+    db: AsyncSession,
+    employee: Employee,
+    *,
+    on_date: date,
+    status_: str,
+    work_mode: str = "office",
+    notes: Optional[str] = None,
+) -> Attendance:
+    """Employee self-marks attendance for `on_date`.
+
+    Always allowed for today. Back-dated only when the admin has
+    opened a window (Employee.backdate_from..backdate_to) that
+    contains the date. Sundays / holidays are rejected; the late rule
+    is applied for same-day marks.
+    """
+    today = _today()
+    if on_date > today:
+        raise ValidationError("Cannot mark attendance for a future date")
+    if on_date != today:
+        bf = employee.backdate_from
+        bt = employee.backdate_to
+        if not (bf and bt and bf <= on_date <= bt):
+            raise ValidationError(
+                "Back-dating isn't open for this date. Ask your admin "
+                "to grant a back-date window."
+            )
+    if on_date.weekday() == 6:
+        raise ValidationError("Sunday is a non-working day")
+    holiday = (
+        await db.execute(
+            select(Holiday).where(Holiday.date == on_date).limit(1)
+        )
+    ).scalar_one_or_none()
+    if holiday is not None:
+        raise ValidationError(
+            f"{on_date} is a holiday ({holiday.name})"
+        )
+    if status_ not in ("present", "wfh", "leave", "half_day"):
+        raise ValidationError("Invalid status")
+
+    existing = (
+        await db.execute(
+            select(Attendance)
+            .where(Attendance.employee_id == employee.id)
+            .where(Attendance.date == on_date)
+        )
+    ).scalar_one_or_none()
+    if existing is not None and existing.source == "admin":
+        raise ValidationError(
+            "This day was set by HR/admin and can't be self-edited"
+        )
+
+    if existing is None:
+        att = Attendance(
+            employee_id=employee.id,
+            date=on_date,
+            status=status_,
+            work_mode=work_mode,
+            source="manual",
+            notes=notes,
+        )
+        db.add(att)
+    else:
+        att = existing
+        att.status = status_
+        att.work_mode = work_mode
+        att.source = "manual"
+        if notes is not None:
+            att.notes = notes
+
+    await db.flush()
+    if on_date == today and att.status in ("present", "wfh"):
+        from app.services.attendance_policy import apply_late_rule
+
+        await apply_late_rule(db, att, employee.id)
+    await db.commit()
+    await db.refresh(att)
+    return att
+
+
 async def upsert_by_date(
     db: AsyncSession,
     *,
