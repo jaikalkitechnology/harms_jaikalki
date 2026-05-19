@@ -20,40 +20,6 @@ class SettingsPage extends StatelessWidget {
           return ListView(
             padding: const EdgeInsets.symmetric(vertical: 8),
             children: [
-              _SectionHeader(label: l.theme.toUpperCase()),
-              RadioListTile<ThemeMode>(
-                value: ThemeMode.system,
-                groupValue: state.themeMode,
-                title: Text(l.themeSystem),
-                onChanged: (m) => cubit.setThemeMode(m!),
-              ),
-              RadioListTile<ThemeMode>(
-                value: ThemeMode.light,
-                groupValue: state.themeMode,
-                title: Text(l.themeLight),
-                onChanged: (m) => cubit.setThemeMode(m!),
-              ),
-              RadioListTile<ThemeMode>(
-                value: ThemeMode.dark,
-                groupValue: state.themeMode,
-                title: Text(l.themeDark),
-                onChanged: (m) => cubit.setThemeMode(m!),
-              ),
-              const Divider(),
-              _SectionHeader(label: l.language.toUpperCase()),
-              RadioListTile<String>(
-                value: 'en',
-                groupValue: state.locale.languageCode,
-                title: const Text('English'),
-                onChanged: (v) => cubit.setLocale(Locale(v!)),
-              ),
-              RadioListTile<String>(
-                value: 'hi',
-                groupValue: state.locale.languageCode,
-                title: const Text('हिन्दी'),
-                onChanged: (v) => cubit.setLocale(Locale(v!)),
-              ),
-              const Divider(),
               _SectionHeader(label: 'SECURITY'),
               BlocBuilder<AuthBloc, AuthState>(
                 builder: (context, auth) {
