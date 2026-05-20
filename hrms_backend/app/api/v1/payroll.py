@@ -186,7 +186,14 @@ async def download_payslip(
     target = await emp_svc.get_employee(db, payslip.employee_id)
     allowed = await emp_svc.visible_employee_ids(db, user)
     emp_svc.assert_can_view(user, target, allowed)
-    pdf = docs.render_payslip_pdf(payslip, target)
+    from app.models import EmployeeBankDetails as _Bank
+    from sqlalchemy import select as _select
+    bank = (
+        await db.execute(
+            _select(_Bank).where(_Bank.employee_id == target.id)
+        )
+    ).scalar_one_or_none()
+    pdf = docs.render_payslip_pdf(payslip, target, bank=bank)
     return Response(
         content=pdf,
         media_type="application/pdf",
