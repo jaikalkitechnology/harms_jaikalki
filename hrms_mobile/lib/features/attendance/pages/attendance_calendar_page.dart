@@ -204,7 +204,13 @@ class _SummaryStrip extends StatelessWidget {
       ('Present', cal.daysPresent.toString(), AppColors.success),
       ('WFH', cal.daysWfh.toString(), AppColors.info),
       ('Half-day', cal.daysHalfDay.toString(), AppColors.warning),
-      ('Leave', cal.daysLeave.toString(), AppColors.brandGoldDark),
+      (
+        'Leave',
+        cal.daysLeavePending > 0
+            ? '${cal.daysLeave} (${cal.daysLeavePending}?)'
+            : cal.daysLeave.toString(),
+        AppColors.brandGoldDark,
+      ),
       ('Absent', cal.daysAbsent.toString(), AppColors.error),
       ('Holiday', cal.daysHoliday.toString(), AppColors.error),
       ('Sundays', cal.daysWeekoff.toString(), AppColors.error),
@@ -393,7 +399,7 @@ class _DayTile extends StatelessWidget {
       case 'half_day':
         return '½';
       case 'leave':
-        return 'L';
+        return day.leaveStatus == 'pending' ? 'L?' : 'L';
       case 'absent':
         return 'A';
       default:

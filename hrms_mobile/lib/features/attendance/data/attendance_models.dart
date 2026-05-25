@@ -55,6 +55,7 @@ class CalendarDay extends Equatable {
     this.totalMinutes = 0,
     this.notes,
     this.leaveType,
+    this.leaveStatus,
     this.isLate = false,
     this.lateRemark,
   });
@@ -72,6 +73,7 @@ class CalendarDay extends Equatable {
   final int totalMinutes;
   final String? notes;
   final String? leaveType;
+  final String? leaveStatus; // approved / pending
   final bool isLate;
   final String? lateRemark;
 
@@ -89,6 +91,7 @@ class CalendarDay extends Equatable {
         totalMinutes: (j['total_minutes'] as int?) ?? 0,
         notes: j['notes'] as String?,
         leaveType: j['leave_type'] as String?,
+        leaveStatus: j['leave_status'] as String?,
         isLate: j['is_late'] as bool? ?? false,
         lateRemark: j['late_remark'] as String?,
       );
@@ -106,6 +109,7 @@ class AttendanceCalendar extends Equatable {
     required this.daysPresent,
     required this.daysAbsent,
     required this.daysLeave,
+    this.daysLeavePending = 0,
     required this.daysHoliday,
     required this.daysWeekoff,
     required this.daysHalfDay,
@@ -119,6 +123,7 @@ class AttendanceCalendar extends Equatable {
   final int daysPresent;
   final int daysAbsent;
   final int daysLeave;
+  final int daysLeavePending;
   final int daysHoliday;
   final int daysWeekoff;
   final int daysHalfDay;
@@ -135,6 +140,7 @@ class AttendanceCalendar extends Equatable {
         daysPresent: (j['days_present'] as int?) ?? 0,
         daysAbsent: (j['days_absent'] as int?) ?? 0,
         daysLeave: (j['days_leave'] as int?) ?? 0,
+        daysLeavePending: (j['days_leave_pending'] as int?) ?? 0,
         daysHoliday: (j['days_holiday'] as int?) ?? 0,
         daysWeekoff: (j['days_weekoff'] as int?) ?? 0,
         daysHalfDay: (j['days_half_day'] as int?) ?? 0,

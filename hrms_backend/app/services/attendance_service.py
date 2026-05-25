@@ -640,6 +640,7 @@ async def calendar_for_employee(
     days = []
     counts = dict(
         present=0, absent=0, leave=0, holiday=0, weekoff=0, half_day=0, wfh=0,
+        leave_pending=0,
     )
     working = 0
     today = _today()
@@ -664,6 +665,8 @@ async def calendar_for_employee(
         elif leave is not None:
             status_ = "leave"
             counts["leave"] += 1
+            if leave.status == "pending":
+                counts["leave_pending"] += 1
         elif att is not None:
             status_ = att.status
             if status_ == "present":
@@ -700,6 +703,7 @@ async def calendar_for_employee(
             "total_minutes": att.total_minutes if att else 0,
             "notes": att.notes if att else None,
             "leave_type": leave.leave_type.code if leave and leave.leave_type else None,
+            "leave_status": leave.status if leave else None,
             "is_late": bool(att.is_late) if att else False,
             "late_remark": att.late_remark if att else None,
         })
@@ -712,6 +716,7 @@ async def calendar_for_employee(
         "days_present": counts["present"],
         "days_absent": counts["absent"],
         "days_leave": counts["leave"],
+        "days_leave_pending": counts["leave_pending"],
         "days_holiday": counts["holiday"],
         "days_weekoff": counts["weekoff"],
         "days_half_day": counts["half_day"],
