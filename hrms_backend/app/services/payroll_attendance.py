@@ -258,6 +258,13 @@ async def compute_attendance_month(
             out.days_present += Decimal("0.5")
             out.days_absent += Decimal("0.5")
             out.by_date[d] = "half_day"
+        elif att and att.status == "leave":
+            # HR / admin marked the day as "leave" directly on the
+            # attendance grid (no LeaveRequest row was opened). Honour
+            # that mark — count it as a paid leave instead of letting
+            # it slide into "absent" and deducting salary.
+            out.days_paid_leave += Decimal("1")
+            out.by_date[d] = "paid_leave_manual"
         else:
             out.days_absent += Decimal("1")
             out.by_date[d] = "absent"
