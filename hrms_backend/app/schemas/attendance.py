@@ -167,6 +167,8 @@ class CalendarDay(BaseModel):
     total_minutes: int = 0
     notes: Optional[str] = None
     leave_type: Optional[str] = None
+    # "approved" / "pending" when a leave covers this day, else None.
+    leave_status: Optional[str] = None
     is_late: bool = False
     late_remark: Optional[str] = None
 
@@ -179,6 +181,8 @@ class AttendanceCalendar(BaseModel):
     days_present: int
     days_absent: int
     days_leave: int
+    # Subset of days_leave whose leave is still awaiting HR approval.
+    days_leave_pending: int = 0
     days_holiday: int
     days_weekoff: int
     days_half_day: int
