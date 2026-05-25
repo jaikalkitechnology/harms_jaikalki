@@ -138,6 +138,7 @@ async def process_payroll(
             month=month,
             cycle_start_day=eff_cycle,
             treat_all_leave_as_paid=bool(_policy.get("all_approved_paid", True)),
+            sandwich_absent=bool(_policy.get("sandwich_absent_enabled", True)),
         )
         working = att.working_days
         lop = att.days_lop

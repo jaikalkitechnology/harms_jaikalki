@@ -83,6 +83,7 @@ async def compute_attendance_month(
     month: int,
     cycle_start_day: int = 1,
     treat_all_leave_as_paid: bool = True,
+    sandwich_absent: bool = True,
 ) -> AttendanceMonth:
     if cycle_start_day and cycle_start_day > 1:
         prev_year = year if month > 1 else year - 1
@@ -255,5 +256,39 @@ async def compute_attendance_month(
         else:
             out.days_absent += Decimal("1")
             out.by_date[d] = "absent"
+
+    # Absence-sandwich pass: a Sunday / public holiday flanked by
+    # "absent" working days on both sides is reclassified as absent.
+    # Mirrors the unpaid-leave-sandwich math: bump days_absent AND
+    # working_days so paid = working - LOP still cancels the day from
+    # the divisor of the scaling ratio.
+    if sandwich_absent:
+        non_working = {"holiday", "week_off"}
+        for i in range(days_in_month):
+            d = first + timedelta(days=i)
+            if out.by_date.get(d) not in non_working:
+                continue
+            # Nearest working-side classification on each flank.
+            prev = d - timedelta(days=1)
+            while prev >= first and out.by_date.get(prev) in non_working:
+                prev -= timedelta(days=1)
+            nxt = d + timedelta(days=1)
+            while nxt <= last and out.by_date.get(nxt) in non_working:
+                nxt += timedelta(days=1)
+            if prev < first or nxt > last:
+                continue  # Bracket runs off the cycle window.
+            if (
+                out.by_date.get(prev) == "absent"
+                and out.by_date.get(nxt) == "absent"
+            ):
+                was = out.by_date[d]
+                if was == "holiday":
+                    out.days_holiday -= Decimal("1")
+                elif was == "week_off":
+                    out.days_weekoff -= Decimal("1")
+                out.days_absent += Decimal("1")
+                out.days_sandwich += Decimal("1")
+                out.working_days += Decimal("1")
+                out.by_date[d] = "absent_sandwich"
 
     return out
