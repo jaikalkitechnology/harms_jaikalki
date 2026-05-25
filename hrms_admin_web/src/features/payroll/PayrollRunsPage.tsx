@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
@@ -23,6 +23,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { LoadingScreen } from "@/components/shared/LoadingScreen";
 import { payrollApi, type PayrollRun } from "@/lib/api/payroll";
+import { employeesApi } from "@/lib/api/employees";
 import { attendanceCyclesApi } from "@/lib/api/employeeProfile";
 import { API_BASE_URL } from "@/lib/constants";
 import { apiClient } from "@/lib/api/client";
@@ -66,6 +67,15 @@ export default function PayrollRunsPage() {
   const [month, setMonth] = useState(now.getMonth() + 1);
   const [cycle, setCycle] = useState<number>(0); // 0 = per-employee
   const [selected, setSelected] = useState<PayrollRun | null>(null);
+
+  const { data: employees = [] } = useQuery({
+    queryKey: ["employees-all"],
+    queryFn: () => employeesApi.list(),
+  });
+  const empById = useMemo(
+    () => new Map(employees.map((e) => [e.id, e])),
+    [employees],
+  );
 
   const { data: runs = [], isLoading } = useQuery({
     queryKey: ["payroll-runs"],
@@ -439,7 +449,7 @@ export default function PayrollRunsPage() {
             <table className="w-full text-sm min-w-[820px]">
               <thead className="text-left text-brand-brown-light bg-brand-brown-50">
                 <tr>
-                  <th className="py-2 px-4">Emp</th>
+                  <th className="py-2 px-4">Employee</th>
                   <th>Days (paid / work)</th>
                   <th>Gross</th>
                   <th>Deductions</th>
@@ -448,19 +458,37 @@ export default function PayrollRunsPage() {
                 </tr>
               </thead>
               <tbody>
-                {detail.payslips.map((p) => (
+                {detail.payslips.map((p) => {
+                  const emp = empById.get(p.employee_id);
+                  return (
                   <tr
                     key={p.id}
                     className="border-t border-brand-brown-50"
                   >
-                    <td className="py-2 px-4 font-mono text-xs">
-                      #{p.employee_id}
+                    <td className="py-2 px-4 text-xs">
+                      {emp ? (
+                        <>
+                          <span className="font-semibold text-brand-brown-darker">
+                            {emp.first_name} {emp.last_name}
+                          </span>
+                          <span className="ml-1 font-mono text-brand-brown-light">
+                            · {emp.employee_code}
+                          </span>
+                        </>
+                      ) : (
+                        <span className="font-mono">#{p.employee_id}</span>
+                      )}
                     </td>
                     <td className="text-xs">
                       <span className="font-semibold text-brand-brown-darker">
                         {Number(p.days_paid).toFixed(1)}
                       </span>{" "}
                       / {Number(p.working_days).toFixed(0)}
+                      {Number(p.days_paid_leave) > 0 && (
+                        <span className="ml-1 text-brand-gold-dark">
+                          · Lv {Number(p.days_paid_leave).toFixed(1)}
+                        </span>
+                      )}
                       {Number(p.days_unpaid_leave) > 0 && (
                         <span className="ml-1 text-error">
                           · LWP {Number(p.days_unpaid_leave).toFixed(1)}
@@ -490,7 +518,8 @@ export default function PayrollRunsPage() {
                       </a>
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </CardContent>

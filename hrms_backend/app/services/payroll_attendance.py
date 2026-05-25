@@ -107,12 +107,17 @@ async def compute_attendance_month(
         ).scalars().all()
     }
 
-    # Approved leaves overlapping the month.
+    # Leaves overlapping the month. We pick up both approved AND pending
+    # requests: a pending leave is in flight with HR and the employee
+    # has *applied* — counting that day as "absent" and deducting salary
+    # would punish the employee for HR's queue depth. Rejected /
+    # cancelled requests are excluded; re-run payroll after rejection to
+    # claw back the day.
     leaves: Sequence[LeaveRequest] = (
         await db.execute(
             select(LeaveRequest)
             .where(LeaveRequest.employee_id == employee_id)
-            .where(LeaveRequest.status == "approved")
+            .where(LeaveRequest.status.in_(("approved", "pending")))
             .where(LeaveRequest.from_date <= last)
             .where(LeaveRequest.to_date >= first)
         )

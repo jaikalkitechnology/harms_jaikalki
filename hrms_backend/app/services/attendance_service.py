@@ -199,11 +199,13 @@ async def monthly_summary(
     ).scalars().all()
     holiday_dates = {h.date for h in holidays}
 
+    # Mirror payroll: pending leaves also classify the day as "on leave"
+    # so the summary doesn't show absent while HR is still deciding.
     leaves = (
         await db.execute(
             select(LeaveRequest)
             .where(LeaveRequest.employee_id == employee_id)
-            .where(LeaveRequest.status == "approved")
+            .where(LeaveRequest.status.in_(("approved", "pending")))
             .where(LeaveRequest.from_date <= last)
             .where(LeaveRequest.to_date >= first)
         )
@@ -617,11 +619,12 @@ async def calendar_for_employee(
     ).scalars().all()
     by_date = {r.date: r for r in rows}
 
+    # Pending leaves count alongside approved ones (matches payroll).
     leaves = (
         await db.execute(
             select(LeaveRequest)
             .where(LeaveRequest.employee_id == employee_id)
-            .where(LeaveRequest.status == "approved")
+            .where(LeaveRequest.status.in_(("approved", "pending")))
             .where(LeaveRequest.from_date <= last)
             .where(LeaveRequest.to_date >= first)
         )
