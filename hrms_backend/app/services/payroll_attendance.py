@@ -82,6 +82,7 @@ async def compute_attendance_month(
     year: int,
     month: int,
     cycle_start_day: int = 1,
+    treat_all_leave_as_paid: bool = True,
 ) -> AttendanceMonth:
     if cycle_start_day and cycle_start_day > 1:
         prev_year = year if month > 1 else year - 1
@@ -117,11 +118,19 @@ async def compute_attendance_month(
     ).scalars().all()
 
     # Map every leave-day in the month to (is_paid, applies_sandwich, half_day).
+    # When ``treat_all_leave_as_paid`` is set (the Jaikalki default),
+    # every approved leave is paid — the LeaveType.is_paid flag is
+    # ignored for LOP/payroll purposes. Only "absent" attendance and the
+    # absent half of a half-day mark deduct salary.
     leave_day: dict[date, tuple[bool, bool, bool]] = {}
     for lr in leaves:
         lt: LeaveType = lr.leave_type
-        is_paid = bool(getattr(lt, "is_paid", True))
-        sandwich = bool(getattr(lt, "applies_sandwich_rule", False))
+        is_paid = True if treat_all_leave_as_paid else bool(getattr(lt, "is_paid", True))
+        sandwich = (
+            False
+            if treat_all_leave_as_paid
+            else bool(getattr(lt, "applies_sandwich_rule", False))
+        )
         d = max(lr.from_date, first)
         end = min(lr.to_date, last)
         while d <= end:
