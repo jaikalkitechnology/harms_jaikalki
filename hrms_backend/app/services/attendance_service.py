@@ -242,6 +242,11 @@ async def monthly_summary(
                 present += 1
             elif status == "half_day":
                 present += 1
+            elif status == "leave":
+                # Day was manually marked as leave on the attendance
+                # grid (no separate LeaveRequest). Treat the same as an
+                # approved leave so payroll and reports agree.
+                leave_d += 1
             elif status == "absent":
                 absent += 1
         else:
@@ -675,6 +680,12 @@ async def calendar_for_employee(
                 counts["wfh"] += 1
             elif status_ == "half_day":
                 counts["half_day"] += 1
+            elif status_ == "leave":
+                # Manually-marked leave (no LeaveRequest exists). The
+                # attendance grid lets HR / admin set "leave" directly;
+                # we count it under the same bucket so payroll + reports
+                # agree with the calendar visual.
+                counts["leave"] += 1
             elif status_ == "absent":
                 counts["absent"] += 1
         elif is_future:
@@ -818,7 +829,18 @@ async def self_mark(
         raise ValidationError(
             f"{on_date} is a holiday ({holiday.name})"
         )
-    if status_ not in ("present", "wfh", "leave", "half_day"):
+    if status_ == "leave":
+        # Self-marking "leave" on the attendance grid would bypass the
+        # leave application flow (no leave type, no balance debit, no
+        # approval audit). Redirect the employee to apply via Leaves
+        # instead — admin can still set "leave" via the admin attendance
+        # upsert path.
+        raise ValidationError(
+            "To take leave, apply from the Leaves screen. Your "
+            "manager / HR will approve it and the day will reflect "
+            "here automatically."
+        )
+    if status_ not in ("present", "wfh", "half_day"):
         raise ValidationError("Invalid status")
 
     existing = (
