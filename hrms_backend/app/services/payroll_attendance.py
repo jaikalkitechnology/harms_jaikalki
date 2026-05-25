@@ -82,6 +82,8 @@ async def compute_attendance_month(
     year: int,
     month: int,
     cycle_start_day: int = 1,
+    treat_all_leave_as_paid: bool = True,
+    sandwich_absent: bool = True,
 ) -> AttendanceMonth:
     if cycle_start_day and cycle_start_day > 1:
         prev_year = year if month > 1 else year - 1
@@ -117,11 +119,19 @@ async def compute_attendance_month(
     ).scalars().all()
 
     # Map every leave-day in the month to (is_paid, applies_sandwich, half_day).
+    # When ``treat_all_leave_as_paid`` is set (the Jaikalki default),
+    # every approved leave is paid — the LeaveType.is_paid flag is
+    # ignored for LOP/payroll purposes. Only "absent" attendance and the
+    # absent half of a half-day mark deduct salary.
     leave_day: dict[date, tuple[bool, bool, bool]] = {}
     for lr in leaves:
         lt: LeaveType = lr.leave_type
-        is_paid = bool(getattr(lt, "is_paid", True))
-        sandwich = bool(getattr(lt, "applies_sandwich_rule", False))
+        is_paid = True if treat_all_leave_as_paid else bool(getattr(lt, "is_paid", True))
+        sandwich = (
+            False
+            if treat_all_leave_as_paid
+            else bool(getattr(lt, "applies_sandwich_rule", False))
+        )
         d = max(lr.from_date, first)
         end = min(lr.to_date, last)
         while d <= end:
@@ -246,5 +256,39 @@ async def compute_attendance_month(
         else:
             out.days_absent += Decimal("1")
             out.by_date[d] = "absent"
+
+    # Absence-sandwich pass: a Sunday / public holiday flanked by
+    # "absent" working days on both sides is reclassified as absent.
+    # Mirrors the unpaid-leave-sandwich math: bump days_absent AND
+    # working_days so paid = working - LOP still cancels the day from
+    # the divisor of the scaling ratio.
+    if sandwich_absent:
+        non_working = {"holiday", "week_off"}
+        for i in range(days_in_month):
+            d = first + timedelta(days=i)
+            if out.by_date.get(d) not in non_working:
+                continue
+            # Nearest working-side classification on each flank.
+            prev = d - timedelta(days=1)
+            while prev >= first and out.by_date.get(prev) in non_working:
+                prev -= timedelta(days=1)
+            nxt = d + timedelta(days=1)
+            while nxt <= last and out.by_date.get(nxt) in non_working:
+                nxt += timedelta(days=1)
+            if prev < first or nxt > last:
+                continue  # Bracket runs off the cycle window.
+            if (
+                out.by_date.get(prev) == "absent"
+                and out.by_date.get(nxt) == "absent"
+            ):
+                was = out.by_date[d]
+                if was == "holiday":
+                    out.days_holiday -= Decimal("1")
+                elif was == "week_off":
+                    out.days_weekoff -= Decimal("1")
+                out.days_absent += Decimal("1")
+                out.days_sandwich += Decimal("1")
+                out.working_days += Decimal("1")
+                out.by_date[d] = "absent_sandwich"
 
     return out

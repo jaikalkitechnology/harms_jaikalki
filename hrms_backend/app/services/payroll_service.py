@@ -20,6 +20,7 @@ from app.models import (
     Reimbursement,
     User,
 )
+from app.services.leave_policy import get_leave_policy
 from app.services.payroll_attendance import compute_attendance_month
 from app.services.salary_calculator import JaikalkiSalaryCalculator
 
@@ -99,6 +100,7 @@ async def process_payroll(
     ).scalars().all()
 
     calc = JaikalkiSalaryCalculator()
+    _policy = await get_leave_policy(db)
 
     total_gross = Decimal("0")
     total_net = Decimal("0")
@@ -120,15 +122,23 @@ async def process_payroll(
         ).as_dict()
 
         # Per-day class breakdown: holidays + Sundays drop out of the
-        # divisor; LOP = unpaid leave (incl. sandwich days) + absent.
-        # Paid leave keeps the day's gross intact.
+        # divisor; LOP = absent days only (every approved leave counts
+        # as paid by default — see `leave.all_approved_paid` policy).
+        # Cycle window honours the employee's attendance_cycle_start_day
+        # (e.g. 21st → 20th) unless the run explicitly overrides it.
         eff_cycle = (
             cycle_start_day
             if cycle_start_day is not None
             else (emp.attendance_cycle_start_day or 1)
         )
         att = await compute_attendance_month(
-            db, emp.id, year=year, month=month, cycle_start_day=eff_cycle
+            db,
+            emp.id,
+            year=year,
+            month=month,
+            cycle_start_day=eff_cycle,
+            treat_all_leave_as_paid=bool(_policy.get("all_approved_paid", True)),
+            sandwich_absent=bool(_policy.get("sandwich_absent_enabled", True)),
         )
         working = att.working_days
         lop = att.days_lop

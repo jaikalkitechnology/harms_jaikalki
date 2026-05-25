@@ -31,6 +31,17 @@ _DEFAULTS: dict[str, object] = {
     # Whether public holidays inside the leave range are also counted
     # under the sandwich rule (Sundays always are when enabled).
     "leave.sandwich_count_holidays": True,
+    # Payroll deduction policy: when True (default), every APPROVED
+    # leave is treated as paid for LOP purposes — no salary deduction.
+    # Only attendance "absent" days and the unpaid half of a half-day
+    # mark deduct from the payslip. Flip to False to fall back to the
+    # per-leave-type `is_paid` flag (e.g. mark LWP/Sabbatical unpaid).
+    "leave.all_approved_paid": True,
+    # Absence-sandwich rule: if an employee is absent on both flanks of
+    # a non-working day (Sunday or public holiday), the non-working day
+    # is also marked absent and added to LOP. Prevents using weekends /
+    # festivals to bridge skipped Fridays + Mondays.
+    "leave.sandwich_absent_enabled": True,
     # Earned-leave accrual: 1 PL earned per 20 qualifying days. A
     # qualifying day = any calendar day that is NOT leave and NOT
     # absent — so present / WFH / half-day AND Sundays / holidays all
