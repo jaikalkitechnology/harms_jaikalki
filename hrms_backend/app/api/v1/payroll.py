@@ -173,7 +173,11 @@ async def my_payslips(
     emp = await emp_svc.get_self_employee(db, user)
     if not emp:
         raise NotFoundError("No employee record")
-    return await payroll_service.list_payslips_for_employee(db, emp.id)
+    # Self-service: only surface a slip once the run has been disbursed.
+    # Draft / processed / finalized runs are visible only to HR / admin.
+    return await payroll_service.list_payslips_for_employee(
+        db, emp.id, only_disbursed=True
+    )
 
 
 @router.get("/payslips/{payslip_id}/pdf")
@@ -186,6 +190,15 @@ async def download_payslip(
     target = await emp_svc.get_employee(db, payslip.employee_id)
     allowed = await emp_svc.visible_employee_ids(db, user)
     emp_svc.assert_can_view(user, target, allowed)
+    # The employee may only pull their own slip once salary is paid.
+    # Admin / manager (visible_employee_ids returns None or includes
+    # the target) keep early access for audit / corrections.
+    if target.user_id == user.id and not emp_svc.can_see_all(user):
+        if not await payroll_service.is_run_disbursed(db, payslip):
+            raise ForbiddenError(
+                "This payslip is not yet finalized. It will be "
+                "available once the salary has been paid."
+            )
     from app.models import EmployeeBankDetails as _Bank
     from sqlalchemy import select as _select
     bank = (
