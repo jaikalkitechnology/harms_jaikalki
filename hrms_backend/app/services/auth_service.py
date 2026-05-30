@@ -39,6 +39,14 @@ async def issue_token_pair(
     access_minutes: Optional[int] = None,
     refresh_days: Optional[int] = None,
 ) -> tuple[str, str, int]:
+    """Mint a fresh access + refresh token pair for ``user``.
+
+    Multi-device by design: each login inserts a NEW RefreshToken row
+    and leaves any previously-issued tokens for the same user alone.
+    The desktop, laptop and phone can all hold a live session at once.
+    Only an explicit logout, a password change (revoke_all_for_user) or
+    a manual revocation invalidates an existing session.
+    """
     access = create_access_token(
         user.id,
         extra={"email": user.email},
