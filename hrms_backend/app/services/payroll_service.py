@@ -436,21 +436,29 @@ async def list_payslips_for_employee(
         .order_by(Payslip.year.desc(), Payslip.month.desc())
     )
     if only_disbursed:
+        # Require BOTH conditions so a "processed" or "draft" run can
+        # never leak into the employee's mobile slip list, even if some
+        # legacy row had `disbursed` flipped without going through the
+        # finalize step.
         stmt = stmt.join(
             PayrollRun, Payslip.payroll_run_id == PayrollRun.id
-        ).where(PayrollRun.disbursed.is_(True))
+        ).where(
+            PayrollRun.status == "finalized",
+            PayrollRun.disbursed.is_(True),
+        )
     return (await db.execute(stmt)).scalars().all()
 
 
 async def is_run_disbursed(db: AsyncSession, payslip: Payslip) -> bool:
-    """Return True iff the run that produced this payslip is marked
-    disbursed (salary paid out). Used to gate the self-PDF download."""
+    """True iff the parent run is BOTH finalized AND marked disbursed —
+    matches the visibility rule used by list_payslips_for_employee.
+    Used to gate the self-PDF download."""
     run = (
         await db.execute(
             select(PayrollRun).where(PayrollRun.id == payslip.payroll_run_id)
         )
     ).scalar_one_or_none()
-    return bool(run and run.disbursed)
+    return bool(run and run.status == "finalized" and run.disbursed)
 
 
 async def get_payslip(db: AsyncSession, payslip_id: int) -> Payslip:
