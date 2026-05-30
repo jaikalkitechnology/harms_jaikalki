@@ -167,17 +167,29 @@ async def get_run(
 # ── Payslips ──────────────────────────────────────────────────────────
 @router.get("/payslips/me", response_model=list[PayslipOut])
 async def my_payslips(
+    response: Response,
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
     emp = await emp_svc.get_self_employee(db, user)
     if not emp:
         raise NotFoundError("No employee record")
-    # Self-service: only surface a slip once the run has been disbursed.
-    # Draft / processed / finalized runs are visible only to HR / admin.
-    return await payroll_service.list_payslips_for_employee(
+    # Self-service: only surface a slip once the run is finalized AND
+    # marked disbursed (salary paid). Draft / processed / finalized but
+    # not-yet-paid runs are visible only to HR / admin on the runs page.
+    rows = await payroll_service.list_payslips_for_employee(
         db, emp.id, only_disbursed=True
     )
+    # Force every hop to fetch fresh — without this a CDN / proxy can
+    # serve a stale list from before the disbursed gate was deployed.
+    response.headers["Cache-Control"] = "no-store"
+    response.headers["X-Payslip-Filter"] = "finalized+disbursed"
+    import logging
+    logging.getLogger(__name__).info(
+        "my_payslips emp=%s returning=%d (only_disbursed=True)",
+        emp.id, len(rows),
+    )
+    return rows
 
 
 @router.get("/payslips/{payslip_id}/pdf")
