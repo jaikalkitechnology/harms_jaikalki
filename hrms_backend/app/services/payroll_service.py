@@ -417,15 +417,40 @@ def build_pf_ecr(
 
 # ── Reads ─────────────────────────────────────────────────────────────
 async def list_payslips_for_employee(
-    db: AsyncSession, employee_id: int
+    db: AsyncSession,
+    employee_id: int,
+    *,
+    only_disbursed: bool = False,
 ) -> Sequence[Payslip]:
-    return (
+    """Return payslips for an employee.
+
+    When ``only_disbursed`` is True (the default for the employee's own
+    self-service endpoint), drafts and finalized-but-not-yet-paid runs
+    are filtered out — the employee should only see a slip once the
+    salary has actually been credited. Admin paths leave this off so
+    they can review in-flight runs.
+    """
+    stmt = (
+        select(Payslip)
+        .where(Payslip.employee_id == employee_id)
+        .order_by(Payslip.year.desc(), Payslip.month.desc())
+    )
+    if only_disbursed:
+        stmt = stmt.join(
+            PayrollRun, Payslip.payroll_run_id == PayrollRun.id
+        ).where(PayrollRun.disbursed.is_(True))
+    return (await db.execute(stmt)).scalars().all()
+
+
+async def is_run_disbursed(db: AsyncSession, payslip: Payslip) -> bool:
+    """Return True iff the run that produced this payslip is marked
+    disbursed (salary paid out). Used to gate the self-PDF download."""
+    run = (
         await db.execute(
-            select(Payslip)
-            .where(Payslip.employee_id == employee_id)
-            .order_by(Payslip.year.desc(), Payslip.month.desc())
+            select(PayrollRun).where(PayrollRun.id == payslip.payroll_run_id)
         )
-    ).scalars().all()
+    ).scalar_one_or_none()
+    return bool(run and run.disbursed)
 
 
 async def get_payslip(db: AsyncSession, payslip_id: int) -> Payslip:
