@@ -98,6 +98,12 @@ const SECTIONS: NavSection[] = [
         permission: "employee.view.all",
       },
       {
+        label: "Letters",
+        to: "/letters",
+        icon: FileText,
+        permission: "employee.view.all",
+      },
+      {
         label: "Shifts",
         to: "/shifts",
         icon: Clock,
