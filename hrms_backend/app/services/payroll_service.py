@@ -417,15 +417,48 @@ def build_pf_ecr(
 
 # ── Reads ─────────────────────────────────────────────────────────────
 async def list_payslips_for_employee(
-    db: AsyncSession, employee_id: int
+    db: AsyncSession,
+    employee_id: int,
+    *,
+    only_disbursed: bool = False,
 ) -> Sequence[Payslip]:
-    return (
-        await db.execute(
-            select(Payslip)
-            .where(Payslip.employee_id == employee_id)
-            .order_by(Payslip.year.desc(), Payslip.month.desc())
+    """Return payslips for an employee.
+
+    When ``only_disbursed`` is True (the default for the employee's own
+    self-service endpoint), drafts and finalized-but-not-yet-paid runs
+    are filtered out — the employee should only see a slip once the
+    salary has actually been credited. Admin paths leave this off so
+    they can review in-flight runs.
+    """
+    stmt = (
+        select(Payslip)
+        .where(Payslip.employee_id == employee_id)
+        .order_by(Payslip.year.desc(), Payslip.month.desc())
+    )
+    if only_disbursed:
+        # Require BOTH conditions so a "processed" or "draft" run can
+        # never leak into the employee's mobile slip list, even if some
+        # legacy row had `disbursed` flipped without going through the
+        # finalize step.
+        stmt = stmt.join(
+            PayrollRun, Payslip.payroll_run_id == PayrollRun.id
+        ).where(
+            PayrollRun.status == "finalized",
+            PayrollRun.disbursed.is_(True),
         )
-    ).scalars().all()
+    return (await db.execute(stmt)).scalars().all()
+
+
+async def is_run_disbursed(db: AsyncSession, payslip: Payslip) -> bool:
+    """True iff the parent run is BOTH finalized AND marked disbursed —
+    matches the visibility rule used by list_payslips_for_employee.
+    Used to gate the self-PDF download."""
+    run = (
+        await db.execute(
+            select(PayrollRun).where(PayrollRun.id == payslip.payroll_run_id)
+        )
+    ).scalar_one_or_none()
+    return bool(run and run.status == "finalized" and run.disbursed)
 
 
 async def get_payslip(db: AsyncSession, payslip_id: int) -> Payslip:

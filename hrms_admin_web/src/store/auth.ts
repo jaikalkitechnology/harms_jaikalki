@@ -5,6 +5,7 @@ import {
   adminMe,
   type AdminUser,
 } from "@/lib/api/auth";
+import { clearAuthActive, markAuthActive } from "@/lib/api/client";
 import type { Role } from "@/lib/constants";
 
 interface AuthState {
@@ -32,6 +33,7 @@ function applyMe(
   set: (partial: Partial<AuthState>) => void,
   data: Awaited<ReturnType<typeof adminMe>>,
 ) {
+  markAuthActive();
   set({
     user: data.user,
     role: (data.role as Role | null) ?? null,
@@ -100,6 +102,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     } catch {
       /* ignore */
     }
+    clearAuthActive();
     set({ ...initial, isLoading: false });
   },
 
@@ -109,6 +112,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       const data = await adminMe();
       applyMe(set, data);
     } catch {
+      // Don't clear `auth_active` here: a fresh page load with no
+      // session is the normal case, and a transient 401 on a real
+      // session expiry is handled by the interceptor.
       set({ ...initial, isLoading: false });
     }
   },
@@ -129,6 +135,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
 if (typeof window !== "undefined") {
   window.addEventListener("auth:unauthorized", () => {
+    clearAuthActive();
     useAuthStore.setState({ ...initial, isLoading: false });
   });
 }
