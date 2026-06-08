@@ -79,6 +79,7 @@ from .leave import (
     LeaveRequest,
     LeaveType,
 )
+from .letter_template import LetterTemplate
 from .lms import (
     Badge,
     Course,

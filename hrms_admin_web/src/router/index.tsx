@@ -15,6 +15,7 @@ import AttendanceCalendarPage from "@/features/attendance/AttendanceCalendarPage
 import AttendanceUploadPage from "@/features/attendance/AttendanceUploadPage";
 import LeaveApprovalsPage from "@/features/leaves/LeaveApprovalsPage";
 import HolidaysPage from "@/features/holidays/HolidaysPage";
+import LettersPage from "@/features/letters/LettersPage";
 import ApprovalsInboxPage from "@/features/approvals/ApprovalsInboxPage";
 import DwpTeamPage from "@/features/dwp/DwpTeamPage";
 import AdminDwpPage from "@/features/dwp/AdminDwpPage";
@@ -94,6 +95,7 @@ export const router = createBrowserRouter([
       { path: "departments", element: <DepartmentsPage /> },
       { path: "designations", element: <DesignationsPage /> },
       { path: "holidays", element: <HolidaysPage /> },
+      { path: "letters", element: <LettersPage /> },
       { path: "shifts", element: <ShiftsPage /> },
       { path: "attendance", element: <AttendancePage /> },
       {
