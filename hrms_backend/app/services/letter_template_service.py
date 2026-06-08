@@ -88,10 +88,18 @@ def _letterhead_path() -> Optional[Path]:
 
 
 def _icon_path() -> Optional[Path]:
-    """Small icon-only logo for the header (left of the company name)."""
+    """Small header logo (left of the company name). Reuses the same
+    full Jaikalki mark used for the page watermark so the visual
+    identity is consistent — the previous icon-only sunflower didn't
+    carry the wordmark."""
     here = Path(__file__).resolve()
     for parent in here.parents:
-        for name in ("jaikalki-icon-only-512.png", "jaikalki-app-icon-512.png"):
+        for name in (
+            "jaikalki-letterhead.png",
+            "jaikalki-app-icon-cream-1024.png",
+            "jaikalki-app-icon-1024.png",
+            "jaikalki-app-icon-512.png",
+        ):
             p = parent / "logos" / name
             try:
                 if p.exists():
@@ -247,16 +255,19 @@ def _letterhead_decorator(letterhead: Optional[Path], icon: Optional[Path]):
         # ── Header band ───────────────────────────────────────────
         margin = 1.8 * cm
         top = page_h - 1.0 * cm
-        # Icon top-left
-        icon_w = 2.0 * cm
+        # Icon top-left — the full Jaikalki mark (same as the
+        # watermark) so the wordmark reads. Wider than tall, so use a
+        # 3 cm × 1.8 cm box with preserveAspectRatio.
+        icon_w = 3.0 * cm
+        icon_h = 1.8 * cm
         if icon is not None:
             try:
                 canvas.drawImage(
                     str(icon),
                     margin,
-                    top - icon_w,
+                    top - icon_h,
                     width=icon_w,
-                    height=icon_w,
+                    height=icon_h,
                     mask="auto",
                     preserveAspectRatio=True,
                 )
@@ -271,8 +282,8 @@ def _letterhead_decorator(letterhead: Optional[Path], icon: Optional[Path]):
         # Title
         _draw_spaced(
             canvas, COMPANY_LEGAL_NAME,
-            text_x, top - 0.5 * cm,
-            font=FONT_BOLD, size=14.5, char_space=1.3,
+            text_x, top - 0.6 * cm,
+            font=FONT_BOLD, size=13.5, char_space=1.2,
             color=_TINTED_BROWN,
         )
         # CIN + GST right-aligned, letter-spaced
