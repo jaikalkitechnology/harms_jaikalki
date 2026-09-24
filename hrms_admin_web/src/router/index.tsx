@@ -51,6 +51,7 @@ import JobPostingsPage from "@/features/polish/JobPostingsPage";
 import NotificationsPage from "@/features/launch/NotificationsPage";
 import AuditLogPage from "@/features/launch/AuditLogPage";
 import ResignationsPage from "@/features/launch/ResignationsPage";
+import SeparationsPage from "@/features/launch/SeparationsPage";
 import SalaryRevisionsPage from "@/features/compensation/SalaryRevisionsPage";
 import SystemConfigPage from "@/features/super-admin/SystemConfigPage";
 import PermissionCatalogPage from "@/features/super-admin/PermissionCatalogPage";
@@ -178,6 +179,7 @@ export const router = createBrowserRouter([
       { path: "notifications", element: <NotificationsPage /> },
       { path: "audit", element: <AuditLogPage /> },
       { path: "resignations", element: <ResignationsPage /> },
+      { path: "separations", element: <SeparationsPage /> },
       { path: "compensation", element: <SalaryRevisionsPage /> },
       {
         path: "reports",

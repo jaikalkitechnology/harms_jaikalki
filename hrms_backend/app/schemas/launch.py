@@ -105,6 +105,7 @@ class ResignationOut(BaseModel):
     actual_last_working_day: Optional[date]
     reason: Optional[str]
     status: str
+    separation_type: str = "resignation"
     manager_decision_at: Optional[datetime]
     manager_decision_by: Optional[int]
     manager_comment: Optional[str]
@@ -115,6 +116,28 @@ class ResignationOut(BaseModel):
     final_settled_at: Optional[datetime]
     exit_interview_notes: Optional[str]
     documents: Optional[list] = None
+
+
+class AdminSeparationCreate(BaseModel):
+    """Admin-initiated resignation or termination on behalf of an
+    employee. Auto-approves at ``in_notice`` (or ``accepted`` when the
+    proposed last working day is today / in the past)."""
+
+    employee_id: int
+    separation_type: str = Field(default="resignation", pattern="^(resignation|termination)$")
+    proposed_last_working_day: date
+    reason: Optional[str] = None
+    notice_period_days: int = Field(default=30, ge=0, le=180)
+    manager_comment: Optional[str] = None
+
+
+class SeparationEmailRequest(BaseModel):
+    """Send the generated letter to the employee (and optional CCs)."""
+
+    to: Optional[str] = None  # override; defaults to employee email
+    cc: Optional[list[str]] = None
+    subject: Optional[str] = None
+    body: Optional[str] = None
 
 
 # ─── Bulk import ─────────────────────────────────────────────────────

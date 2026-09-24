@@ -332,6 +332,12 @@ const SECTIONS: NavSection[] = [
         permission: "approval.act",
       },
       {
+        label: "Resign / Terminate",
+        to: "/separations",
+        icon: DoorOpen,
+        permission: "employee.update",
+      },
+      {
         label: "Salary Revisions",
         to: "/compensation",
         icon: Coins,

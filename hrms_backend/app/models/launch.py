@@ -171,6 +171,14 @@ class Resignation(Base, TimestampMixin):
     # kind: "resignation_letter" | "noc" | "experience_letter" |
     # "settlement_sheet" | "asset_handover" | "other".
     documents: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
+    # Distinguishes an employee-initiated resignation from an HR-issued
+    # termination. Populated on new rows; existing rows default to
+    # "resignation" so old data reads correctly.
+    separation_type: Mapped[str] = mapped_column(
+        Enum("resignation", "termination", name="separation_type"),
+        default="resignation",
+        nullable=False,
+    )
 
 
 # ─── Password reset OTP ──────────────────────────────────────────────

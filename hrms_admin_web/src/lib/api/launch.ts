@@ -1,4 +1,5 @@
 import { apiClient } from "./client";
+import { API_BASE_URL } from "@/lib/constants";
 
 const v1 = "/api/v1";
 
@@ -33,6 +34,7 @@ export interface Resignation {
   actual_last_working_day: string | null;
   reason: string | null;
   status: string;
+  separation_type?: string;
   manager_decision_at: string | null;
   manager_decision_by: number | null;
   manager_comment: string | null;
@@ -217,6 +219,45 @@ export const launchApi = {
       `${v1}/employees/bulk-import`,
       form,
       { headers: { "Content-Type": "multipart/form-data" } },
+    );
+    return data;
+  },
+  // Admin-initiated separation (resign / terminate on behalf).
+  adminCreateSeparation: async (body: {
+    employee_id: number;
+    separation_type: "resignation" | "termination";
+    proposed_last_working_day: string;
+    reason?: string;
+    notice_period_days?: number;
+    manager_comment?: string;
+  }) => {
+    const { data } = await apiClient.post<Resignation>(
+      `${v1}/separations`,
+      body,
+    );
+    return data;
+  },
+  downloadSeparationPdf: async (id: number) => {
+    const res = await apiClient.get<Blob>(
+      `${v1}/separations/${id}/pdf`,
+      { responseType: "blob" },
+    );
+    return res.data;
+  },
+  separationPdfUrl: (id: number) =>
+    `${API_BASE_URL}${v1}/separations/${id}/pdf`,
+  emailSeparationLetter: async (
+    id: number,
+    body: {
+      to?: string;
+      cc?: string[];
+      subject?: string;
+      body?: string;
+    },
+  ) => {
+    const { data } = await apiClient.post<{ sent: boolean; to: string }>(
+      `${v1}/separations/${id}/email`,
+      body,
     );
     return data;
   },
