@@ -497,15 +497,39 @@ function Stat({
   );
 }
 
+// Backend stores check-in / check-out as naive UTC (Python's
+// datetime.utcnow().isoformat()). These helpers convert IST wall-clock
+// ↔ that naive-UTC representation so the time picker always shows and
+// captures IST regardless of the browser's own timezone.
+const IST_OFFSET_MIN = 5 * 60 + 30; // +05:30
+const pad = (n: number) => String(n).padStart(2, "0");
+
 function toLocalTimeInput(iso: string): string {
-  const d = new Date(iso);
-  const hh = String(d.getHours()).padStart(2, "0");
-  const mm = String(d.getMinutes()).padStart(2, "0");
-  return `${hh}:${mm}`;
+  // Treat the incoming string as UTC (add 'Z' if none) so IST HH:MM is
+  // stable even if the admin's laptop is in another zone.
+  const hasTz = /Z$|[+-]\d{2}:?\d{2}$/.test(iso);
+  const asUtc = new Date(hasTz ? iso : iso + "Z");
+  if (Number.isNaN(asUtc.getTime())) return "";
+  return new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Asia/Kolkata",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(asUtc);
 }
 
 function combineDateTime(dateStr: string, hhmm: string): string {
-  // dateStr is YYYY-MM-DD, hhmm is HH:MM. Build an ISO timestamp in
-  // local time so server interprets check-in/out as wall-clock.
-  return `${dateStr}T${hhmm}:00`;
+  // dateStr is YYYY-MM-DD, hhmm is HH:MM — both entered as IST. Convert
+  // to naive-UTC ISO ("YYYY-MM-DDTHH:MM:SS") so Pydantic parses it
+  // consistently and lands in the same format used by live check-ins.
+  const [y, mo, d] = dateStr.split("-").map(Number);
+  const [h, m] = hhmm.split(":").map(Number);
+  const utcMs =
+    Date.UTC(y, mo - 1, d, h, m) - IST_OFFSET_MIN * 60 * 1000;
+  const utc = new Date(utcMs);
+  return (
+    `${utc.getUTCFullYear()}-${pad(utc.getUTCMonth() + 1)}-` +
+    `${pad(utc.getUTCDate())}T${pad(utc.getUTCHours())}:` +
+    `${pad(utc.getUTCMinutes())}:00`
+  );
 }
