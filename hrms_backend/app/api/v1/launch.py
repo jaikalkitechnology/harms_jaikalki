@@ -22,6 +22,7 @@ from app.dependencies import get_current_user, get_db
 from sqlalchemy import select
 from app.models import Resignation, User
 from app.schemas.launch import (
+    AdminSeparationCreate,
     AuditLogOut,
     BroadcastResult,
     BulkImportResult,
@@ -34,6 +35,7 @@ from app.schemas.launch import (
     ResignationNdcUpdate,
     ResignationOut,
     ResignationSettle,
+    SeparationEmailRequest,
     UnreadCount,
 )
 from app.services import (
@@ -562,3 +564,142 @@ async def bulk_import_employees(
     return await bulk_import_service.import_employees_csv(
         db, csv_bytes=contents
     )
+
+
+# ─── Admin-initiated separation (resign / terminate on behalf) ─────────
+@router.post(
+    "/separations",
+    response_model=ResignationOut,
+    status_code=status.HTTP_201_CREATED,
+    tags=["separations"],
+)
+async def admin_create_separation(
+    payload: AdminSeparationCreate,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_permission("employee.update")),
+):
+    from app.models import Employee
+    from app.services import employee_service as emp_svc
+
+    emp = await emp_svc.get_employee(db, payload.employee_id)
+    res = await resignation_service.admin_initiate(
+        db,
+        employee=emp,
+        separation_type=payload.separation_type,
+        proposed_last_working_day=payload.proposed_last_working_day,
+        reason=payload.reason,
+        notice_period_days=payload.notice_period_days,
+        manager_comment=payload.manager_comment,
+        actor=user,
+    )
+    # Best-effort in-app notification for the employee.
+    if emp.user_id:
+        try:
+            await notification_service.notify(
+                db,
+                user_id=emp.user_id,
+                type="separation.initiated",
+                title=(
+                    "Termination notice issued"
+                    if payload.separation_type == "termination"
+                    else "Resignation processed"
+                ),
+                body=(
+                    f"Your last working day is "
+                    f"{payload.proposed_last_working_day.strftime('%d %b %Y')}."
+                ),
+                data={"resignation_id": res.id, "type": payload.separation_type},
+            )
+        except Exception:
+            pass
+    return res
+
+
+@router.get(
+    "/separations/{resignation_id}/pdf",
+    tags=["separations"],
+)
+async def download_separation_pdf(
+    resignation_id: int,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_permission("employee.update")),
+):
+    from fastapi import Response
+    from app.services import employee_service as emp_svc
+
+    res = await resignation_service.get(db, resignation_id)
+    emp = await emp_svc.get_employee(db, res.employee_id)
+    pdf = resignation_service.render_separation_pdf(res, emp)
+    kind = (
+        "termination" if getattr(res, "separation_type", "resignation") == "termination"
+        else "resignation"
+    )
+    return Response(
+        content=pdf,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": (
+                f'inline; filename="{kind}_{emp.employee_code}.pdf"'
+            ),
+            "Cache-Control": "no-store",
+        },
+    )
+
+
+@router.post(
+    "/separations/{resignation_id}/email",
+    tags=["separations"],
+)
+async def email_separation_letter(
+    resignation_id: int,
+    payload: SeparationEmailRequest,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_permission("employee.update")),
+):
+    from app.services import employee_service as emp_svc
+    from app.services.email_service import send_email
+
+    res = await resignation_service.get(db, resignation_id)
+    emp = await emp_svc.get_employee(db, res.employee_id)
+    pdf = resignation_service.render_separation_pdf(res, emp)
+
+    to_email = (payload.to or emp.personal_email or "").strip()
+    if not to_email:
+        raise NotFoundError(
+            "No email address on record for this employee — pass `to` "
+            "to override."
+        )
+    kind = (
+        "termination" if getattr(res, "separation_type", "resignation") == "termination"
+        else "resignation"
+    )
+    subject = payload.subject or (
+        f"Notice of Termination — {emp.first_name} {emp.last_name}"
+        if kind == "termination"
+        else f"Acceptance of Resignation — {emp.first_name} {emp.last_name}"
+    )
+    body_html = payload.body or (
+        f"<p>Dear {emp.first_name},</p>"
+        f"<p>Please find attached the formal letter regarding your "
+        f"{'termination' if kind == 'termination' else 'resignation'} "
+        f"from Jaikalki Technology Pvt Ltd.</p>"
+        f"<p>Regards,<br/>Human Resources</p>"
+    )
+    ok, err = await send_email(
+        to_email=to_email,
+        to_name=f"{emp.first_name} {emp.last_name}",
+        subject=subject,
+        html=body_html,
+        cc=payload.cc,
+        attachments=[
+            {
+                "filename": f"{kind}_{emp.employee_code}.pdf",
+                "content": pdf,
+                "mime": "application/pdf",
+            }
+        ],
+    )
+    if not ok:
+        from app.core.exceptions import ValidationError as _V
+        raise _V(f"Could not send email: {err}")
+    return {"sent": True, "to": to_email, "cc": payload.cc or []}

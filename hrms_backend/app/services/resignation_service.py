@@ -1,6 +1,7 @@
 """Resignation / offboarding workflow."""
 from __future__ import annotations
 
+import io
 from datetime import date, datetime, timedelta, timezone
 from typing import Optional, Sequence
 
@@ -31,6 +32,161 @@ DEFAULT_NDC: dict[str, bool] = {
     "exit_interview_done": False,
     "final_payslip_generated": False,
 }
+
+
+# ── Letter renderer (uses the Jaikalki letterhead) ─────────────────────
+_DEFAULT_RESIGNATION_BODY = (
+    "Dear {{first_name}},\n\n"
+    "This is to formally acknowledge your resignation from the "
+    "position of {{designation}} in {{department}} at Jaikalki "
+    "Technology Pvt Ltd. Your resignation has been accepted, and "
+    "your last working day with the company will be {{last_working_date}}.\n\n"
+    "You are required to serve the notice period as per policy, "
+    "complete pending hand-overs and return all company assets by "
+    "your last working day. HR will coordinate the No-Dues process, "
+    "final settlement and issuance of your relieving / experience "
+    "letter thereafter.\n\n"
+    "We appreciate your contribution and wish you the very best "
+    "for your future endeavours.\n"
+)
+
+_DEFAULT_TERMINATION_BODY = (
+    "Dear {{first_name}},\n\n"
+    "This letter serves as formal notice that your employment with "
+    "Jaikalki Technology Pvt Ltd as {{designation}} in {{department}} "
+    "stands terminated with effect from {{last_working_date}}.\n\n"
+    "Reason: {{reason}}\n\n"
+    "You are required to clear all outstanding company assets, "
+    "handovers and dues by your last working day. Your final "
+    "settlement will be processed as per company policy and applicable "
+    "statutory guidelines.\n\n"
+    "For any queries relating to this notice or the settlement, "
+    "please contact the Human Resources department.\n"
+)
+
+
+def render_separation_pdf(
+    resignation: Resignation, employee: Employee
+) -> bytes:
+    """Render the resignation / termination letter over the branded
+    Jaikalki letterhead so HR can print or attach it to an email."""
+    from types import SimpleNamespace
+
+    from app.services.letter_template_service import render_letter_pdf
+
+    is_termination = resignation.separation_type == "termination"
+    subject = (
+        "Subject: Termination of Employment"
+        if is_termination
+        else "Subject: Acceptance of Resignation"
+    )
+    body = (
+        _DEFAULT_TERMINATION_BODY if is_termination else _DEFAULT_RESIGNATION_BODY
+    )
+    template = SimpleNamespace(
+        code=(
+            "termination_letter" if is_termination else "resignation_acceptance"
+        ),
+        name=(
+            "Termination Letter"
+            if is_termination
+            else "Resignation Acceptance Letter"
+        ),
+        category="termination" if is_termination else "other",
+        subject=subject,
+        body=body,
+    )
+    lwd = (
+        resignation.actual_last_working_day
+        or resignation.proposed_last_working_day
+    )
+    letter_no_prefix = "TL" if is_termination else "RL"
+    letter_no = (
+        f"JKT/HR/{letter_no_prefix}/{resignation.id:03d}/"
+        f"{lwd.year if lwd else datetime.utcnow().year}"
+    )
+    return render_letter_pdf(
+        template,
+        employee,
+        overrides={
+            "letter_no": letter_no,
+            "last_working_date": lwd.strftime("%d %b %Y") if lwd else "—",
+            "reason": (resignation.reason or "—"),
+        },
+    )
+
+
+async def admin_initiate(
+    db: AsyncSession,
+    *,
+    employee: Employee,
+    separation_type: str,
+    proposed_last_working_day: date,
+    reason: Optional[str],
+    notice_period_days: int = 30,
+    manager_comment: Optional[str] = None,
+    actor: Optional[User] = None,
+) -> Resignation:
+    """Admin creates a resignation / termination on behalf of an
+    employee and auto-approves it (skips the manager review step).
+
+    Status lands as ``in_notice`` when the last-working-day is in the
+    future; if the LWD is today or past we jump straight to ``cleared``
+    so payroll can finalise the settlement. The employee's exit_date
+    is set to the LWD so attendance clamps immediately (see the
+    attendance service-window guard)."""
+
+    if separation_type not in ("resignation", "termination"):
+        raise ValidationError("separation_type must be resignation or termination")
+
+    existing = (
+        await db.execute(
+            select(Resignation)
+            .where(Resignation.employee_id == employee.id)
+            .where(
+                Resignation.status.notin_(["rejected", "settled", "cancelled"])
+            )
+        )
+    ).scalar_one_or_none()
+    if existing:
+        raise ConflictError(
+            "An active resignation / termination already exists for this "
+            "employee. Cancel or settle the existing one first."
+        )
+
+    today = _now().date()
+    lwd_in_future = proposed_last_working_day > today
+    status_ = "in_notice" if lwd_in_future else "cleared"
+
+    res = Resignation(
+        employee_id=employee.id,
+        requested_at=_now(),
+        proposed_last_working_day=proposed_last_working_day,
+        actual_last_working_day=None if lwd_in_future else proposed_last_working_day,
+        reason=reason,
+        status=status_,
+        separation_type=separation_type,
+        notice_period_days=notice_period_days,
+        manager_comment=manager_comment,
+        # Admin action is the approval — stamp the decision as accepted.
+        manager_decision_at=_now(),
+        manager_decision_by=actor.id if actor else None,
+        ndc_checklist=DEFAULT_NDC.copy(),
+    )
+    db.add(res)
+
+    # Reflect the separation on the employee record so attendance,
+    # payroll and mobile flows all see the correct exit_date, and set
+    # the account inactive if the LWD is already in the past.
+    employee.exit_date = proposed_last_working_day
+    if not lwd_in_future:
+        employee.status = "inactive"
+    # Lock any future self-service resignation attempts.
+    employee.resignation_unlocked = False
+
+    await db.commit()
+    await db.refresh(res)
+    return res
 
 
 async def submit(

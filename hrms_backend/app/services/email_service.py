@@ -135,8 +135,15 @@ async def send_email(
     subject: str,
     html: str,
     plain: Optional[str] = None,
+    cc: Optional[list[str]] = None,
+    attachments: Optional[list[dict]] = None,
 ) -> tuple[bool, Optional[str]]:
-    """Send a single email via SMTP. Returns (ok, error)."""
+    """Send a single email via SMTP. Returns (ok, error).
+
+    ``attachments`` is an optional list of dicts::
+
+        {"filename": "letter.pdf", "content": <bytes>, "mime": "application/pdf"}
+    """
     if not settings.EMAIL_ENABLED:
         logger.info(
             "EMAIL_ENABLED=False, would send to=%s subject=%s",
@@ -151,6 +158,8 @@ async def send_email(
     msg["To"] = (
         f"{to_name} <{to_email}>" if to_name else to_email
     )
+    if cc:
+        msg["Cc"] = ", ".join(cc)
     msg["Subject"] = subject
     if plain:
         msg.set_content(plain)
@@ -158,6 +167,19 @@ async def send_email(
         # crude html->text fallback
         msg.set_content(re.sub(r"<[^>]+>", "", html))
     msg.add_alternative(_wrap_html(html), subtype="html")
+    for att in attachments or []:
+        try:
+            mime = (att.get("mime") or "application/octet-stream").split("/", 1)
+            maintype = mime[0]
+            subtype = mime[1] if len(mime) > 1 else "octet-stream"
+            msg.add_attachment(
+                att["content"],
+                maintype=maintype,
+                subtype=subtype,
+                filename=att.get("filename") or "attachment",
+            )
+        except Exception:
+            logger.exception("Skipping malformed attachment %r", att)
 
     try:
         await aiosmtplib.send(
