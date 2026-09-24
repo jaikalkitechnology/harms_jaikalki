@@ -37,8 +37,7 @@ export default function SeparationsPage() {
 
   const { data: rows = [], isLoading } = useQuery({
     queryKey: ["separations"],
-    queryFn: () =>
-      launchApi.listResignations({ status: undefined, limit: 500 }),
+    queryFn: () => launchApi.listResignations(),
   });
   const { data: employees = [] } = useQuery({
     queryKey: ["employees-all"],
@@ -186,12 +185,6 @@ export default function SeparationsPage() {
       {emailingId != null && (
         <EmailSeparationModal
           resignationId={emailingId}
-          defaultTo={
-            empById.get(
-              (rows as Resignation[]).find((r) => r.id === emailingId)
-                ?.employee_id ?? -1,
-            )?.personal_email ?? ""
-          }
           onClose={() => setEmailingId(null)}
         />
       )}
@@ -367,14 +360,12 @@ function NewSeparationModal({
 
 function EmailSeparationModal({
   resignationId,
-  defaultTo,
   onClose,
 }: {
   resignationId: number;
-  defaultTo: string;
   onClose: () => void;
 }) {
-  const [to, setTo] = useState(defaultTo);
+  const [to, setTo] = useState("");
   const [cc, setCc] = useState("");
   const [subject, setSubject] = useState("");
   const [body, setBody] = useState("");
@@ -440,7 +431,7 @@ function EmailSeparationModal({
               type="email"
               value={to}
               onChange={(e) => setTo(e.target.value)}
-              placeholder="employee@example.com"
+              placeholder="Leave blank to use the employee's personal email"
             />
           </div>
           <div>
@@ -501,7 +492,7 @@ function EmailSeparationModal({
             </Button>
             <Button
               onClick={() => send.mutate()}
-              disabled={send.isPending || !to}
+              disabled={send.isPending}
             >
               <Mail className="h-4 w-4 mr-1" />
               {send.isPending ? "Sending…" : "Send"}
