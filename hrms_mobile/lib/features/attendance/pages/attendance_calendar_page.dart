@@ -354,8 +354,12 @@ class _DayTile extends StatelessWidget {
   final VoidCallback onChanged;
 
   bool get _isUpcoming => day.status == 'upcoming';
+  bool get _isNotInService => day.status == 'not_in_service';
 
   Color _bg() {
+    if (_isNotInService) {
+      return AppColors.brandBrownLight.withOpacity(0.06);
+    }
     if (day.isHoliday || day.isSunday) {
       return AppColors.error.withOpacity(0.10);
     }
@@ -377,17 +381,20 @@ class _DayTile extends StatelessWidget {
   }
 
   Color _border() {
+    if (_isNotInService) return AppColors.brandBrownLight.withOpacity(0.12);
     if (day.isHoliday || day.isSunday) return AppColors.error.withOpacity(0.4);
     return AppColors.brandBrownLight.withOpacity(0.18);
   }
 
   Color _numColor() {
+    if (_isNotInService) return AppColors.brandBrownLight;
     if (day.isHoliday || day.isSunday) return AppColors.error;
     if (_isUpcoming) return AppColors.brandBrownLight;
     return AppColors.brandBrownDarker;
   }
 
   String _badge() {
+    if (_isNotInService) return '—';
     if (day.isHoliday) return 'HOL';
     if (day.isSunday) return 'SUN';
     if (_isUpcoming) return '';
