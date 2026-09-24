@@ -720,7 +720,12 @@ function DayCell({
   const dayNum = Number(day.date.slice(8, 10));
   const off = day.is_sunday || day.is_holiday;
   const upcoming = day.status === "upcoming";
-  const tone = off
+  // Grey out days outside the employee's roll window (before joining
+  // or after exit) so HR can't back-date onto an inactive record.
+  const notInService = day.status === "not_in_service";
+  const tone = notInService
+    ? "bg-brand-brown-50/30 border-dashed border-brand-brown-50 text-brand-brown-light cursor-not-allowed opacity-50"
+    : off
     ? "bg-error/10 border-error/30 text-error cursor-not-allowed"
     : upcoming
       ? "bg-brand-brown-50/40 border-brand-brown-50 text-brand-brown-light cursor-not-allowed"
@@ -740,7 +745,9 @@ function DayCell({
       disabled={!day.is_editable}
       className={`aspect-square rounded-md border p-1 text-left transition-colors ${tone}`}
       title={
-        day.is_holiday
+        notInService
+          ? "Outside the employee's service window (before joining or after exit)"
+          : day.is_holiday
           ? `Holiday: ${day.holiday_name ?? ""}`
           : day.is_sunday
             ? "Sunday — week off"
@@ -756,7 +763,7 @@ function DayCell({
           />
         )}
       </div>
-      {!upcoming && (
+      {!upcoming && !notInService && (
         <div className="text-[10px] font-bold mt-0.5">
           {day.is_holiday
             ? "HOL"

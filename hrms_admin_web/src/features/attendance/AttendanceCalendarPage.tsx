@@ -244,18 +244,26 @@ function DayCell({
   const dayNum = Number(day.date.slice(8, 10));
   const blocked = !day.is_editable;
   const isUpcoming = day.status === "upcoming";
+  // Dates before the employee joined or after their exit_date come back
+  // from the API as ``not_in_service`` — grey them out and disable the
+  // editor entirely so HR can't back-date onto an inactive record.
+  const isNotInService = day.status === "not_in_service";
   const isOffDay = day.is_sunday || day.is_holiday;
   const tone = STATUS_BG[day.status] ?? "bg-brand-brown-50";
-  const cellTone = isOffDay
-    ? "bg-error/10 border-error/30 cursor-not-allowed"
-    : isUpcoming
-      ? "bg-brand-brown-50/40 border-brand-brown-50 cursor-not-allowed"
-      : "bg-card hover:border-brand-gold-dark border-brand-brown-50 cursor-pointer";
-  const numTone = isOffDay
-    ? "text-error"
-    : isUpcoming
-      ? "text-brand-brown-light"
-      : "text-brand-brown-darker";
+  const cellTone = isNotInService
+    ? "bg-brand-brown-50/30 border-dashed border-brand-brown-50 cursor-not-allowed opacity-50"
+    : isOffDay
+      ? "bg-error/10 border-error/30 cursor-not-allowed"
+      : isUpcoming
+        ? "bg-brand-brown-50/40 border-brand-brown-50 cursor-not-allowed"
+        : "bg-card hover:border-brand-gold-dark border-brand-brown-50 cursor-pointer";
+  const numTone = isNotInService
+    ? "text-brand-brown-light"
+    : isOffDay
+      ? "text-error"
+      : isUpcoming
+        ? "text-brand-brown-light"
+        : "text-brand-brown-darker";
   return (
     <button
       type="button"
@@ -263,7 +271,9 @@ function DayCell({
       disabled={blocked}
       className={`aspect-square rounded-md border text-left p-1.5 transition-colors ${cellTone}`}
       title={
-        day.is_holiday
+        isNotInService
+          ? "Outside the employee's service window (before joining or after exit)"
+          : day.is_holiday
           ? `Holiday: ${day.holiday_name ?? ""}`
           : day.is_sunday
             ? "Sunday — week off"
@@ -281,7 +291,9 @@ function DayCell({
           />
         )}
       </div>
-      {day.is_holiday ? (
+      {isNotInService ? (
+        <div className="text-[9px] text-brand-brown-light mt-0.5">—</div>
+      ) : day.is_holiday ? (
         <div className="text-[9px] text-error font-medium truncate mt-0.5">
           {day.holiday_name}
         </div>

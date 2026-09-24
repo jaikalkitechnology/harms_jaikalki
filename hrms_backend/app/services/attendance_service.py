@@ -57,6 +57,18 @@ async def check_in(
 ) -> tuple[Attendance, GeoFenceCheck | None]:
     today = _today()
 
+    # Service-window guard: a check-in is only valid while the employee
+    # is on the roll — refuse pre-join and post-exit attempts.
+    if employee.date_of_joining and today < employee.date_of_joining:
+        raise ValidationError(
+            "Check-in is not open until your date of joining "
+            f"({employee.date_of_joining.isoformat()})."
+        )
+    if employee.exit_date and today > employee.exit_date:
+        raise ValidationError(
+            "Check-in is closed — your exit date has passed."
+        )
+
     # Guard: if HR/manager has already approved a leave covering today,
     # block the check-in. The employee is on leave; attendance for the
     # day is reflected via the approved leave instead.
@@ -483,6 +495,29 @@ async def bulk_import(
                            "error": str(e)})
             rows_skipped += 1
             continue
+        # Service-window guard: rows falling outside the roll window
+        # are recorded as a skip with a clear error, so an operator
+        # notices any wildly-off dates instead of silently landing them.
+        if emp.date_of_joining and on < emp.date_of_joining:
+            errors.append({
+                "row": idx, "employee_code": code, "date": date_raw,
+                "error": (
+                    f"{on} is before the employee's date of joining "
+                    f"({emp.date_of_joining.isoformat()})"
+                ),
+            })
+            rows_skipped += 1
+            continue
+        if emp.exit_date and on > emp.exit_date:
+            errors.append({
+                "row": idx, "employee_code": code, "date": date_raw,
+                "error": (
+                    f"{on} is after the employee's exit date "
+                    f"({emp.exit_date.isoformat()})"
+                ),
+            })
+            rows_skipped += 1
+            continue
         try:
             ci = _parse_dt(raw.get("check_in"), on)
             co = _parse_dt(raw.get("check_out"), on)
@@ -591,6 +626,14 @@ async def calendar_for_employee(
     ).scalar_one_or_none()
     cycle_start = max(1, getattr(emp, "attendance_cycle_start_day", 1) or 1)
 
+    # Service window — the calendar only exists between the employee's
+    # date_of_joining and their exit_date (if any). Days outside the
+    # window come back as ``not_in_service`` and are non-editable, so
+    # HR can't mark attendance before someone was on the roll or after
+    # they've been resigned / terminated.
+    doj = getattr(emp, "date_of_joining", None)
+    exit_dt = getattr(emp, "exit_date", None)
+
     if cycle_start == 1:
         days_in = monthrange(year, month)[1]
         first = date(year, month, 1)
@@ -658,6 +701,35 @@ async def calendar_for_employee(
         att = by_date.get(d)
         leave = leave_by_date.get(d)
         is_future = d > today
+
+        # Out-of-service days sit outside the employee's roll dates —
+        # never editable, never counted, always render as a greyed-out
+        # placeholder in the UI.
+        out_of_service = (
+            (doj is not None and d < doj)
+            or (exit_dt is not None and d > exit_dt)
+        )
+        if out_of_service:
+            days.append({
+                "date": d,
+                "weekday": wd,
+                "status": "not_in_service",
+                "is_sunday": is_sunday,
+                "is_holiday": h is not None,
+                "holiday_name": h.name if h else None,
+                "is_editable": False,
+                "attendance_id": None,
+                "check_in": None,
+                "check_out": None,
+                "work_mode": None,
+                "total_minutes": 0,
+                "notes": None,
+                "leave_type": None,
+                "leave_status": None,
+                "is_late": False,
+                "late_remark": None,
+            })
+            continue
 
         is_editable = not (is_sunday or h is not None or is_future)
 
@@ -810,6 +882,16 @@ async def self_mark(
     today = _today()
     if on_date > today:
         raise ValidationError("Cannot mark attendance for a future date")
+    # Service-window guard — an employee can't self-mark before they
+    # joined or after they've been resigned / terminated.
+    if employee.date_of_joining and on_date < employee.date_of_joining:
+        raise ValidationError(
+            "Attendance cannot be marked before your date of joining."
+        )
+    if employee.exit_date and on_date > employee.exit_date:
+        raise ValidationError(
+            "Attendance cannot be marked after your exit date."
+        )
     if on_date != today:
         bf = employee.backdate_from
         bt = employee.backdate_to
@@ -899,6 +981,26 @@ async def upsert_by_date(
 ) -> Attendance:
     """Admin-side single-day upsert. Refuses Sundays and holidays so
     payroll's working-days denominator stays clean."""
+    # Service-window guard: refuse any date that predates the join or
+    # postdates the exit — attendance can only be recorded while the
+    # employee is on the roll.
+    emp = (
+        await db.execute(select(Employee).where(Employee.id == employee_id))
+    ).scalar_one_or_none()
+    if emp is None:
+        raise NotFoundError("Employee not found")
+    if emp.date_of_joining and on_date < emp.date_of_joining:
+        raise ValidationError(
+            f"{on_date} is before the employee joined "
+            f"({emp.date_of_joining.isoformat()}); attendance cannot "
+            "be marked before the date of joining."
+        )
+    if emp.exit_date and on_date > emp.exit_date:
+        raise ValidationError(
+            f"{on_date} is after the employee's exit date "
+            f"({emp.exit_date.isoformat()}); attendance cannot be "
+            "marked after resignation / termination."
+        )
     if on_date.weekday() == 6:
         raise ValidationError(
             "Sunday is a non-working day. Mark the leave from the Leaves "
