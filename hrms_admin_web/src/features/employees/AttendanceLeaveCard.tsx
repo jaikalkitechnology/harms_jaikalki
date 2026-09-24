@@ -814,8 +814,8 @@ function DayEditModal({
         date: day.date,
         status: status_ as never,
         work_mode: workMode,
-        check_in: checkIn ? `${day.date}T${checkIn}:00` : null,
-        check_out: checkOut ? `${day.date}T${checkOut}:00` : null,
+        check_in: checkIn ? combineIstToNaiveUtc(day.date, checkIn) : null,
+        check_out: checkOut ? combineIstToNaiveUtc(day.date, checkOut) : null,
         notes: notes || null,
         is_late: isLate,
         late_remark: lateRemark || null,
@@ -932,10 +932,30 @@ function DayEditModal({
 }
 
 function toTimeInput(iso: string): string {
-  const d = new Date(iso);
-  return `${String(d.getHours()).padStart(2, "0")}:${String(
-    d.getMinutes(),
-  ).padStart(2, "0")}`;
+  // Backend stores naive UTC; convert to IST HH:MM so the picker is
+  // stable regardless of the admin's own laptop timezone.
+  const hasTz = /Z$|[+-]\d{2}:?\d{2}$/.test(iso);
+  const d = new Date(hasTz ? iso : iso + "Z");
+  if (Number.isNaN(d.getTime())) return "";
+  return new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Asia/Kolkata",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(d);
+}
+
+function combineIstToNaiveUtc(dateStr: string, hhmm: string): string {
+  const [y, mo, d] = dateStr.split("-").map(Number);
+  const [h, m] = hhmm.split(":").map(Number);
+  const utcMs = Date.UTC(y, mo - 1, d, h, m) - (5 * 60 + 30) * 60 * 1000;
+  const utc = new Date(utcMs);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return (
+    `${utc.getUTCFullYear()}-${pad(utc.getUTCMonth() + 1)}-` +
+    `${pad(utc.getUTCDate())}T${pad(utc.getUTCHours())}:` +
+    `${pad(utc.getUTCMinutes())}:00`
+  );
 }
 
 // For a cycle whose start day is N (>1), the period that "belongs to"
