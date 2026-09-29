@@ -445,3 +445,16 @@ async def confirm_employee(
         confirmed_on=payload.confirmed_on or _date.today(),
         actor=user,
     )
+
+
+@router.post("/{employee_id}/lifecycle/undo")
+async def undo_lifecycle(
+    employee_id: int,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_permission("employee.update")),
+):
+    """Reverse the last lifecycle change on this employee. Returns a
+    small ``{action, phase, id}`` summary describing what was undone
+    so the UI can toast a specific message."""
+    emp = await svc.get_employee(db, employee_id)
+    return await lifecycle_service.undo_last(db, employee=emp)

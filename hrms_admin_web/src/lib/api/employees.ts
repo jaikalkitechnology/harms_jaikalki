@@ -334,6 +334,16 @@ export const lifecycleApi = {
     );
     return data;
   },
+  async undo(
+    employeeId: number,
+  ): Promise<{ action: string; phase: string | null; id: number | null }> {
+    const { data } = await apiClient.post<{
+      action: string;
+      phase: string | null;
+      id: number | null;
+    }>(`${v1}/employees/${employeeId}/lifecycle/undo`);
+    return data;
+  },
 };
 
 export const lookupsApi = {
