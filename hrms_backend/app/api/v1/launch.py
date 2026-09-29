@@ -487,7 +487,11 @@ async def decide_resignation(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    manager_emp = await _self_employee(db, user)
+    # HR / admin accounts often have no linked Employee row, so we
+    # look one up when the caller has it (needed for the reporting-
+    # manager check) but pass ``None`` through otherwise — the service
+    # falls back to the role-based bypass.
+    manager_emp = await emp_svc.get_self_employee(db, user)
     return await resignation_service.manager_decision(
         db,
         resignation_id,
