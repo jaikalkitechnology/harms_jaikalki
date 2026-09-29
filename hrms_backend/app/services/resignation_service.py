@@ -258,7 +258,7 @@ async def manager_decision(
     resignation_id: int,
     *,
     manager: User,
-    manager_employee: Employee,
+    manager_employee: Optional[Employee] = None,
     accept: bool,
     comment: Optional[str] = None,
     actual_last_working_day: Optional[date] = None,
@@ -273,12 +273,15 @@ async def manager_decision(
     ).scalar_one_or_none()
     if not target:
         raise NotFoundError("Employee not found")
-    if target.reporting_to != manager_employee.id:
-        # HR/admins can act too
-        if not (
-            set(manager.role_codes)
-            & {"super_admin", "director", "hr", "admin"}
-        ):
+    # HR / admin / director / super-admin can always decide, even when
+    # they have no Employee row of their own. Otherwise the caller must
+    # be the target's direct reporting manager.
+    privileged = bool(
+        set(manager.role_codes)
+        & {"super_admin", "director", "hr", "admin"}
+    )
+    if not privileged:
+        if manager_employee is None or target.reporting_to != manager_employee.id:
             raise ForbiddenError(
                 "Only the direct manager or HR can decide this resignation"
             )
@@ -291,6 +294,10 @@ async def manager_decision(
         res.actual_last_working_day = (
             actual_last_working_day or res.proposed_last_working_day
         )
+        # Also clamp the employee's exit_date so attendance / payroll
+        # respect the last working day immediately (matches the admin-
+        # initiated separation path).
+        target.exit_date = res.actual_last_working_day
     else:
         res.status = "rejected"
     await db.commit()
