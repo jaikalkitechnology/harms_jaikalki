@@ -242,3 +242,132 @@ async def list_history(
             )
         ).scalars().all()
     )
+
+
+async def undo_last(
+    db: AsyncSession, *, employee: Employee
+) -> dict:
+    """Reverse the most recent lifecycle change on this employee.
+
+    Priority order — we look for the newest state and undo it:
+      1. Employee was just confirmed → reopen the confirmed row and
+         clear ``confirmation_date`` + ``is_on_probation``.
+      2. The most recent open/extended row is extended → clear the
+         extension fields and put the row back to ``in_progress``.
+      3. Otherwise → delete the most recently-created row entirely. If
+         that row was a probation that had closed an intern row, we
+         reopen the intern row.
+
+    Returns a small ``{action, phase, id?}`` summary so the UI can toast
+    what actually happened."""
+    # 1) Undo confirmation.
+    if (
+        not employee.is_on_probation
+        and employee.confirmation_date is not None
+    ):
+        confirmed = (
+            await db.execute(
+                select(EmployeeProbation)
+                .where(EmployeeProbation.employee_id == employee.id)
+                .where(EmployeeProbation.status == "confirmed")
+                .order_by(EmployeeProbation.id.desc())
+            )
+        ).scalars().first()
+        if confirmed is not None:
+            # If a matching probation confirmed same day, prefer that row.
+            confirmed.status = (
+                "extended" if confirmed.is_extended else "in_progress"
+            )
+            confirmed.confirmed_date = None
+            confirmed.confirmed_by = None
+        employee.is_on_probation = True
+        employee.confirmation_date = None
+        await db.commit()
+        return {
+            "action": "confirm_undone",
+            "phase": confirmed.phase if confirmed else None,
+            "id": confirmed.id if confirmed else None,
+        }
+
+    # 2) Undo an extension on the currently open row.
+    latest_open = (
+        await db.execute(
+            select(EmployeeProbation)
+            .where(EmployeeProbation.employee_id == employee.id)
+            .where(EmployeeProbation.status.in_(("in_progress", "extended")))
+            .order_by(EmployeeProbation.id.desc())
+        )
+    ).scalars().first()
+    if latest_open is not None and latest_open.is_extended:
+        latest_open.is_extended = False
+        latest_open.extension_end_date = None
+        latest_open.extension_reason = None
+        latest_open.status = "in_progress"
+        # Restore Employee.probation_end_date to the row's original end.
+        if latest_open.phase == "probation":
+            employee.probation_end_date = latest_open.probation_end_date
+        await db.commit()
+        return {
+            "action": "extension_undone",
+            "phase": latest_open.phase,
+            "id": latest_open.id,
+        }
+
+    # 3) Delete the most recently-created row. If it's a probation that
+    #    closed an intern, re-open that intern row.
+    latest = (
+        await db.execute(
+            select(EmployeeProbation)
+            .where(EmployeeProbation.employee_id == employee.id)
+            .order_by(EmployeeProbation.id.desc())
+        )
+    ).scalars().first()
+    if latest is None:
+        raise NotFoundError(
+            "Nothing to undo — this employee has no lifecycle history."
+        )
+    phase = latest.phase
+    row_id = latest.id
+    if phase == "probation":
+        # Look for a most-recent intern row that was closed as
+        # 'confirmed' on the same start_date (that's how start_probation
+        # closes an intern). Reopen it.
+        intern_prev = (
+            await db.execute(
+                select(EmployeeProbation)
+                .where(EmployeeProbation.employee_id == employee.id)
+                .where(EmployeeProbation.phase == "intern")
+                .where(EmployeeProbation.status == "confirmed")
+                .where(
+                    EmployeeProbation.confirmed_date == latest.probation_start_date
+                )
+                .order_by(EmployeeProbation.id.desc())
+            )
+        ).scalars().first()
+        if intern_prev is not None:
+            intern_prev.status = (
+                "extended" if intern_prev.is_extended else "in_progress"
+            )
+            intern_prev.confirmed_date = None
+            employee.is_on_probation = True
+    await db.delete(latest)
+    # If no other open row remains, decide the flag based on what's left.
+    remaining_open = (
+        await db.execute(
+            select(EmployeeProbation)
+            .where(EmployeeProbation.employee_id == employee.id)
+            .where(EmployeeProbation.status.in_(("in_progress", "extended")))
+        )
+    ).scalars().first()
+    if remaining_open is None:
+        # No lifecycle rows left — leave confirmation_date alone but
+        # match is_on_probation to whichever state the employee was in
+        # before any lifecycle rows existed. Simplest safe default: if
+        # the employee has never been confirmed, keep them on probation.
+        if employee.confirmation_date is None:
+            employee.is_on_probation = True
+    else:
+        employee.is_on_probation = True
+        employee.confirmation_date = None
+    await db.commit()
+    return {"action": "phase_removed", "phase": phase, "id": row_id}

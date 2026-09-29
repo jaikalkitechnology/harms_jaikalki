@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { CheckCircle2, ChevronRight, Clock, GraduationCap, X } from "lucide-react";
+import { CheckCircle2, ChevronRight, Clock, GraduationCap, Undo2, X } from "lucide-react";
 
 import {
   Card,
@@ -135,6 +135,22 @@ export function LifecycleDrawer({
       toast.error(errDetail(e) ?? "Could not confirm"),
   });
 
+  const undo = useMutation({
+    mutationFn: () => lifecycleApi.undo(employeeId),
+    onSuccess: (res) => {
+      const label =
+        res.action === "confirm_undone"
+          ? "Confirmation undone"
+          : res.action === "extension_undone"
+            ? `${res.phase === "intern" ? "Internship" : "Probation"} extension removed`
+            : `${res.phase === "intern" ? "Internship" : "Probation"} removed`;
+      toast.success(label);
+      invalidate();
+    },
+    onError: (e: unknown) =>
+      toast.error(errDetail(e) ?? "Nothing to undo"),
+  });
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
       <Card className="w-full max-w-2xl max-h-[92vh] overflow-y-auto">
@@ -159,16 +175,37 @@ export function LifecycleDrawer({
           )}
           {data && (
             <>
-              <div className="flex items-center gap-2 text-xs font-mono uppercase tracking-[0.2em]">
-                <span className="text-brand-brown-light">Stage:</span>
-                <span className={STAGE_TONE[stage]}>
-                  {STAGE_LABEL[stage] ?? stage}
-                </span>
-                {data.confirmation_date && (
-                  <span className="text-brand-brown-light">
-                    · confirmed {data.confirmation_date}
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2 text-xs font-mono uppercase tracking-[0.2em]">
+                  <span className="text-brand-brown-light">Stage:</span>
+                  <span className={STAGE_TONE[stage]}>
+                    {STAGE_LABEL[stage] ?? stage}
                   </span>
-                )}
+                  {data.confirmation_date && (
+                    <span className="text-brand-brown-light">
+                      · confirmed {data.confirmation_date}
+                    </span>
+                  )}
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    if (
+                      window.confirm(
+                        "Undo the most recent lifecycle change on this employee?",
+                      )
+                    ) {
+                      undo.mutate();
+                    }
+                  }}
+                  disabled={
+                    undo.isPending || (data.history.length === 0 && !data.confirmation_date)
+                  }
+                >
+                  <Undo2 className="h-4 w-4 mr-1" />
+                  {undo.isPending ? "Undoing…" : "Undo last"}
+                </Button>
               </div>
 
               {stage === "intern" || stage === "probation" ? (
