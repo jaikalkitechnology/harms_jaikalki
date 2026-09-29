@@ -104,7 +104,19 @@ async def extend_intern(
 ) -> EmployeeProbation:
     row = await _open_phase(db, employee.id, "intern")
     if row is None:
-        raise NotFoundError("No open internship to extend")
+        # Legacy — no phase row on file. Synthesise one that starts on
+        # the employee's date_of_joining (or today) so the extension is
+        # anchored somewhere.
+        span_start = employee.date_of_joining or _now().date()
+        row = EmployeeProbation(
+            employee_id=employee.id,
+            phase="intern",
+            probation_start_date=span_start,
+            probation_end_date=extension_end,
+            status="in_progress",
+        )
+        db.add(row)
+        await db.flush()
     row.is_extended = True
     row.extension_end_date = extension_end
     row.extension_reason = reason
@@ -155,7 +167,19 @@ async def extend_probation(
 ) -> EmployeeProbation:
     row = await _open_phase(db, employee.id, "probation")
     if row is None:
-        raise NotFoundError("No open probation to extend")
+        # Legacy — Employee.is_on_probation was set by hand without a
+        # phase row. Anchor the extension on date_of_joining (or today
+        # as a last resort) so the record has a start.
+        span_start = employee.date_of_joining or _now().date()
+        row = EmployeeProbation(
+            employee_id=employee.id,
+            phase="probation",
+            probation_start_date=span_start,
+            probation_end_date=extension_end,
+            status="in_progress",
+        )
+        db.add(row)
+        await db.flush()
     row.is_extended = True
     row.extension_end_date = extension_end
     row.extension_reason = reason
@@ -173,13 +197,28 @@ async def confirm(
     confirmed_on: date,
     actor: Optional[User] = None,
 ) -> EmployeeProbation:
+    """Confirm the employee. If an open intern / probation row exists,
+    close it. If none exists (legacy data — ``is_on_probation`` set by
+    hand without a phase row), synthesise a closed probation row so the
+    history stays readable and the confirmation is auditable."""
     row = await _open_phase(db, employee.id, "probation")
     if row is None:
         row = await _open_phase(db, employee.id, "intern")
+
     if row is None:
-        raise NotFoundError(
-            "No open intern / probation phase to confirm. Start one first."
+        # Legacy path — no phase row on file. Create one that spans
+        # date_of_joining → confirmed_on so the audit trail exists.
+        span_start = employee.date_of_joining or confirmed_on
+        row = EmployeeProbation(
+            employee_id=employee.id,
+            phase="probation",
+            probation_start_date=span_start,
+            probation_end_date=confirmed_on,
+            status="in_progress",
         )
+        db.add(row)
+        await db.flush()
+
     row.status = "confirmed"
     row.confirmed_date = confirmed_on
     if actor:
