@@ -196,6 +196,37 @@ async def apply_leave(
     if not lt or not lt.is_active:
         raise NotFoundError("Leave type not available")
 
+    # Gender eligibility — only enforced when the leave type actually
+    # restricts genders. Blank employee.gender bypasses the check so we
+    # don't punish employees with an incomplete profile.
+    allowed_genders = {
+        g.strip().lower() for g in (lt.applies_to_genders or "m,f").split(",")
+        if g.strip()
+    }
+    if allowed_genders and allowed_genders != {"m", "f"}:
+        emp_g = (employee.gender or "").strip().lower()
+        if emp_g and emp_g[:1] not in allowed_genders:
+            raise ValidationError(
+                f"{lt.name} is not available for your recorded gender."
+            )
+
+    # Confirmation gate — only confirmed employees can take leaves
+    # flagged ``requires_confirmation`` (default off). Interns and
+    # probationers see only Sick Leave-style types until they're
+    # confirmed. ``is_on_probation`` covers both intern + probation
+    # phases; ``confirmation_date`` set + is_on_probation flipped off
+    # marks the employee as confirmed.
+    if lt.requires_confirmation:
+        confirmed = (
+            not getattr(employee, "is_on_probation", False)
+            and getattr(employee, "confirmation_date", None) is not None
+        )
+        if not confirmed:
+            raise ValidationError(
+                f"{lt.name} is only available after confirmation. "
+                "Interns and probationers can only apply for Sick Leave."
+            )
+
     # Check overlap with existing pending/approved leaves.
     overlap = (
         await db.execute(

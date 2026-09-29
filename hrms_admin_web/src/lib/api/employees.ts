@@ -254,6 +254,88 @@ export const employeesApi = {
   },
 };
 
+// ── Onboarding lifecycle ──────────────────────────────────────────────
+export interface LifecyclePhase {
+  id: number;
+  employee_id: number;
+  phase: "intern" | "probation";
+  probation_start_date: string;
+  probation_end_date: string;
+  is_extended: boolean;
+  extension_end_date: string | null;
+  extension_reason: string | null;
+  status: "in_progress" | "extended" | "confirmed" | "terminated";
+  confirmed_date: string | null;
+  confirmed_by: number | null;
+}
+
+export interface LifecycleState {
+  employee_id: number;
+  stage: "intern" | "probation" | "confirmed";
+  is_on_probation: boolean;
+  confirmation_date: string | null;
+  history: LifecyclePhase[];
+}
+
+export const lifecycleApi = {
+  async get(employeeId: number): Promise<LifecycleState> {
+    const { data } = await apiClient.get<LifecycleState>(
+      `${v1}/employees/${employeeId}/lifecycle`,
+    );
+    return data;
+  },
+  async startIntern(
+    employeeId: number,
+    body: { start_date: string; months?: number },
+  ): Promise<LifecyclePhase> {
+    const { data } = await apiClient.post<LifecyclePhase>(
+      `${v1}/employees/${employeeId}/lifecycle/intern/start`,
+      body,
+    );
+    return data;
+  },
+  async extendIntern(
+    employeeId: number,
+    body: { extension_end_date: string; reason?: string },
+  ): Promise<LifecyclePhase> {
+    const { data } = await apiClient.post<LifecyclePhase>(
+      `${v1}/employees/${employeeId}/lifecycle/intern/extend`,
+      body,
+    );
+    return data;
+  },
+  async startProbation(
+    employeeId: number,
+    body: { start_date: string; months?: number },
+  ): Promise<LifecyclePhase> {
+    const { data } = await apiClient.post<LifecyclePhase>(
+      `${v1}/employees/${employeeId}/lifecycle/probation/start`,
+      body,
+    );
+    return data;
+  },
+  async extendProbation(
+    employeeId: number,
+    body: { extension_end_date: string; reason?: string },
+  ): Promise<LifecyclePhase> {
+    const { data } = await apiClient.post<LifecyclePhase>(
+      `${v1}/employees/${employeeId}/lifecycle/probation/extend`,
+      body,
+    );
+    return data;
+  },
+  async confirm(
+    employeeId: number,
+    body: { confirmed_on?: string } = {},
+  ): Promise<LifecyclePhase> {
+    const { data } = await apiClient.post<LifecyclePhase>(
+      `${v1}/employees/${employeeId}/lifecycle/confirm`,
+      body,
+    );
+    return data;
+  },
+};
+
 export const lookupsApi = {
   async categories(): Promise<Category[]> {
     const { data } = await apiClient.get(`${v1}/employee-categories`);

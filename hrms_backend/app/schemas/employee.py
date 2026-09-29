@@ -663,3 +663,42 @@ class AttendanceCycleOut(BaseModel):
     description: Optional[str] = None
     is_default: bool
     is_active: bool
+
+
+# ── Onboarding lifecycle ────────────────────────────────────────────────
+class LifecyclePhaseOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    employee_id: int
+    phase: str
+    probation_start_date: date
+    probation_end_date: date
+    is_extended: bool
+    extension_end_date: Optional[date] = None
+    extension_reason: Optional[str] = None
+    status: str
+    confirmed_date: Optional[date] = None
+    confirmation_letter_url: Optional[str] = None
+    confirmed_by: Optional[int] = None
+
+
+class LifecycleStartRequest(BaseModel):
+    start_date: date
+    months: Optional[int] = Field(default=None, ge=1, le=24)
+
+
+class LifecycleExtendRequest(BaseModel):
+    extension_end_date: date
+    reason: Optional[str] = None
+
+
+class LifecycleConfirmRequest(BaseModel):
+    confirmed_on: Optional[date] = None
+
+
+class LifecycleStateOut(BaseModel):
+    employee_id: int
+    stage: str
+    is_on_probation: bool
+    confirmation_date: Optional[date] = None
+    history: list[LifecyclePhaseOut] = []
