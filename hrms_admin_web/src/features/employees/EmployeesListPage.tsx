@@ -13,6 +13,7 @@ import {
   type EmployeeListItem,
 } from "@/lib/api/employees";
 import { CategoryBadge } from "./CategoryBadge";
+import { LifecycleDrawer } from "./LifecycleDrawer";
 import { fmtIstDate } from "@/lib/datetime";
 
 export default function EmployeesListPage() {
@@ -20,6 +21,10 @@ export default function EmployeesListPage() {
   const [departmentId, setDepartmentId] = useState<number | undefined>();
   const [categoryId, setCategoryId] = useState<number | undefined>();
   const [onProbation, setOnProbation] = useState<boolean | undefined>();
+  const [lifecycleFor, setLifecycleFor] = useState<{
+    id: number;
+    name: string;
+  } | null>(null);
 
   const { data: employees = [], isLoading } = useQuery({
     queryKey: ["employees", { departmentId, categoryId, onProbation }],
@@ -95,6 +100,33 @@ export default function EmployeesListPage() {
             ? fmtIstDate(row.original.date_of_joining)
             : "—",
       },
+      {
+        id: "lifecycle",
+        header: "Lifecycle",
+        cell: ({ row }) => (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              setLifecycleFor({
+                id: row.original.id,
+                name: `${row.original.first_name} ${row.original.last_name}`,
+              });
+            }}
+            className={
+              "text-[10px] font-mono uppercase tracking-[0.15em] " +
+              "px-2 py-1 rounded-md border border-brand-brown-50 " +
+              "hover:border-brand-gold-dark hover:text-brand-brown-darker " +
+              (row.original.is_on_probation
+                ? "text-brand-gold-dark"
+                : "text-success")
+            }
+            title="Manage intern / probation / confirmation"
+          >
+            {row.original.is_on_probation ? "Manage stage" : "Confirmed"}
+          </button>
+        ),
+      },
     ],
     [],
   );
@@ -167,6 +199,14 @@ export default function EmployeesListPage() {
         onRowClick={(e) => navigate(`/employees/${e.id}`)}
         emptyMessage="No employees match these filters."
       />
+
+      {lifecycleFor && (
+        <LifecycleDrawer
+          employeeId={lifecycleFor.id}
+          employeeName={lifecycleFor.name}
+          onClose={() => setLifecycleFor(null)}
+        />
+      )}
     </div>
   );
 }

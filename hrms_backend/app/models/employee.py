@@ -229,6 +229,15 @@ class EmployeeProbation(Base, TimestampMixin):
     employee_id: Mapped[int] = mapped_column(
         ForeignKey("employees.id", ondelete="CASCADE"), nullable=False, index=True
     )
+    # Which onboarding phase this row represents. Interns (3-month
+    # default, extendable) sit before Probation (6-month default,
+    # extendable) before Confirmation. Existing rows default to
+    # "probation" so old data reads unchanged.
+    phase: Mapped[str] = mapped_column(
+        Enum("intern", "probation", name="lifecycle_phase"),
+        default="probation",
+        nullable=False,
+    )
     probation_start_date: Mapped[date] = mapped_column(Date, nullable=False)
     probation_end_date: Mapped[date] = mapped_column(Date, nullable=False)
     is_extended: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)

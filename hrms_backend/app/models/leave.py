@@ -49,6 +49,18 @@ class LeaveType(Base, TimestampMixin):
     )
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    # Gender eligibility for this leave type — comma-separated codes:
+    # "m", "f" (or "m,f" for both, which is the default). Used for
+    # maternity / paternity type gating.
+    applies_to_genders: Mapped[str] = mapped_column(
+        String(16), default="m,f", nullable=False
+    )
+    # When True the leave is only available to *confirmed* employees.
+    # Interns and probationers are blocked from applying, so a fresh
+    # joiner can only take sick leave until their confirmation lands.
+    requires_confirmation: Mapped[bool] = mapped_column(
+        Boolean, default=False, nullable=False
+    )
 
 
 class LeaveBalance(Base, TimestampMixin):

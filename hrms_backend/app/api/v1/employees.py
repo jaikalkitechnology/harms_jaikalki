@@ -316,3 +316,132 @@ async def upload_employee_photo(
     await db.commit()
     await db.refresh(emp)
     return emp
+
+
+# ── Onboarding lifecycle (Intern → Probation → Confirmation) ────────
+from app.services import lifecycle_service
+from app.schemas.employee import (
+    LifecycleConfirmRequest,
+    LifecycleExtendRequest,
+    LifecyclePhaseOut,
+    LifecycleStartRequest,
+    LifecycleStateOut,
+)
+
+
+@router.get(
+    "/{employee_id}/lifecycle",
+    response_model=LifecycleStateOut,
+)
+async def get_lifecycle(
+    employee_id: int,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_permission("employee.view.all")),
+):
+    emp = await svc.get_employee(db, employee_id)
+    stage = await lifecycle_service.stage_of(db, emp)
+    history = await lifecycle_service.list_history(db, employee_id=employee_id)
+    return LifecycleStateOut(
+        employee_id=emp.id,
+        stage=stage,
+        is_on_probation=bool(emp.is_on_probation),
+        confirmation_date=emp.confirmation_date,
+        history=[LifecyclePhaseOut.model_validate(h) for h in history],
+    )
+
+
+@router.post(
+    "/{employee_id}/lifecycle/intern/start",
+    response_model=LifecyclePhaseOut,
+)
+async def start_intern(
+    employee_id: int,
+    payload: LifecycleStartRequest,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_permission("employee.update")),
+):
+    emp = await svc.get_employee(db, employee_id)
+    return await lifecycle_service.start_intern(
+        db,
+        employee=emp,
+        start_date=payload.start_date,
+        months=payload.months or lifecycle_service.DEFAULT_INTERN_MONTHS,
+    )
+
+
+@router.post(
+    "/{employee_id}/lifecycle/intern/extend",
+    response_model=LifecyclePhaseOut,
+)
+async def extend_intern(
+    employee_id: int,
+    payload: LifecycleExtendRequest,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_permission("employee.update")),
+):
+    emp = await svc.get_employee(db, employee_id)
+    return await lifecycle_service.extend_intern(
+        db,
+        employee=emp,
+        extension_end=payload.extension_end_date,
+        reason=payload.reason,
+    )
+
+
+@router.post(
+    "/{employee_id}/lifecycle/probation/start",
+    response_model=LifecyclePhaseOut,
+)
+async def start_probation(
+    employee_id: int,
+    payload: LifecycleStartRequest,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_permission("employee.update")),
+):
+    emp = await svc.get_employee(db, employee_id)
+    return await lifecycle_service.start_probation(
+        db,
+        employee=emp,
+        start_date=payload.start_date,
+        months=payload.months or lifecycle_service.DEFAULT_PROBATION_MONTHS,
+    )
+
+
+@router.post(
+    "/{employee_id}/lifecycle/probation/extend",
+    response_model=LifecyclePhaseOut,
+)
+async def extend_probation(
+    employee_id: int,
+    payload: LifecycleExtendRequest,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_permission("employee.update")),
+):
+    emp = await svc.get_employee(db, employee_id)
+    return await lifecycle_service.extend_probation(
+        db,
+        employee=emp,
+        extension_end=payload.extension_end_date,
+        reason=payload.reason,
+    )
+
+
+@router.post(
+    "/{employee_id}/lifecycle/confirm",
+    response_model=LifecyclePhaseOut,
+)
+async def confirm_employee(
+    employee_id: int,
+    payload: LifecycleConfirmRequest,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_permission("employee.update")),
+):
+    from datetime import date as _date
+
+    emp = await svc.get_employee(db, employee_id)
+    return await lifecycle_service.confirm(
+        db,
+        employee=emp,
+        confirmed_on=payload.confirmed_on or _date.today(),
+        actor=user,
+    )
