@@ -366,6 +366,10 @@ async def settle(
             getattr(res, "separation_type", "resignation")
         )
         emp.exit_date = res.actual_last_working_day or _now().date()
+        # Release the held final salary.
+        from app.services.payroll_service import set_final_payslips_hold
+
+        await set_final_payslips_hold(db, emp.id, on_hold=False)
 
     await db.commit()
     await db.refresh(res)
@@ -459,6 +463,9 @@ async def admin_undo(db: AsyncSession, resignation_id: int) -> dict:
         res.final_settlement_amount = None
         res.final_settled_at = None
         res.exit_interview_notes = None
+        from app.services.payroll_service import set_final_payslips_hold
+
+        await set_final_payslips_hold(db, res.employee_id, on_hold=True)
         await db.commit()
         return {"action": "settlement_undone", "status": res.status}
 

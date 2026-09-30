@@ -47,6 +47,8 @@ export interface Payslip {
   days_holiday: string;
   days_weekoff: string;
   days_sandwich: string;
+  is_final_settlement?: boolean;
+  on_hold?: boolean;
   pdf_url: string | null;
 }
 

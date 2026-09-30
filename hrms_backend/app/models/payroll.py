@@ -142,6 +142,14 @@ class Payslip(Base, TimestampMixin):
     days_sandwich: Mapped[Decimal] = mapped_column(
         Numeric(5, 2), default=Decimal("0")
     )
+    # Final salary of a resigned / terminated employee whose last
+    # working day falls inside this run's attendance window.
+    is_final_settlement: Mapped[bool] = mapped_column(
+        Boolean, default=False, nullable=False
+    )
+    # Held back from the bank file and the employee's app until the
+    # resignation is marked settled.
+    on_hold: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
     pdf_url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
 
