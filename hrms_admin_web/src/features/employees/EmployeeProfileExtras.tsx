@@ -1,7 +1,7 @@
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Pencil, Plus, Save, Trash2, Upload, X } from "lucide-react";
+import { Eye, EyeOff, Pencil, Plus, Trash2, X } from "lucide-react";
 
 import {
   Card,
@@ -12,11 +12,7 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import {
-  employeesApi,
-  type EmployeeDetail,
-} from "@/lib/api/employees";
+import { type EmployeeDetail } from "@/lib/api/employees";
 import {
   attendanceCyclesApi,
   bankApi,
@@ -31,10 +27,115 @@ import {
   type NomineeType,
   type PassportInput,
 } from "@/lib/api/employeeProfile";
+import {
+  Chip,
+  EmptyState,
+  Field,
+  FormActions,
+  InfoGrid,
+  InfoItem,
+  SELECT_CLASS,
+  SectionCard,
+  daysUntil,
+  errDetail,
+  fmtDate,
+  titleCase,
+  useCanEdit,
+  useSaveEmployee,
+} from "./profile/ui";
+
+const RELATIONS = ["spouse", "child", "father", "mother", "sibling", "other"];
+
+function useInvalidateCompleteness(employeeId: number) {
+  const qc = useQueryClient();
+  return () =>
+    qc.invalidateQueries({ queryKey: ["employee-completeness", employeeId] });
+}
 
 // ── Statutory IDs + Insurance + Attendance cycle ───────────────────────
 export function StatutoryIdsCard({ employee }: { employee: EmployeeDetail }) {
-  const qc = useQueryClient();
+  const [editing, setEditing] = useState(false);
+  const [manageCyclesOpen, setManageCyclesOpen] = useState(false);
+  const { data: cycles = [] } = useQuery({
+    queryKey: ["attendance-cycles"],
+    queryFn: () => attendanceCyclesApi.list(),
+  });
+  const cycleStart = employee.attendance_cycle_start_day || 1;
+  const cycleName =
+    cycles.find((c) => c.start_day === cycleStart)?.name ??
+    (cycleStart === 1 ? "Calendar month" : `From day ${cycleStart}`);
+
+  return (
+    <SectionCard
+      title="Statutory IDs & insurance"
+      description="PF / UAN / ESIC numbers, group insurance and the attendance cycle."
+      onEdit={() => setEditing(true)}
+      editing={editing}
+    >
+      {editing ? (
+        <StatutoryIdsForm
+          employee={employee}
+          cycles={cycles}
+          onManageCycles={() => setManageCyclesOpen(true)}
+          onDone={() => setEditing(false)}
+        />
+      ) : (
+        <InfoGrid cols={3}>
+          <InfoItem
+            label="UAN"
+            value={employee.uan_number}
+            mono
+            onAdd={() => setEditing(true)}
+            hint={
+              employee.uan_number && !/^\d{12}$/.test(employee.uan_number) ? (
+                <span className="text-error">Must be 12 digits</span>
+              ) : undefined
+            }
+          />
+          <InfoItem
+            label="PF number"
+            value={employee.pf_number}
+            mono
+            onAdd={() => setEditing(true)}
+          />
+          <InfoItem
+            label="ESIC number"
+            value={employee.esic_number}
+            mono
+            onAdd={() => setEditing(true)}
+          />
+          <InfoItem
+            label="Insurance company"
+            value={employee.insurance_company}
+            onAdd={() => setEditing(true)}
+          />
+          <InfoItem
+            label="Insurance policy"
+            value={employee.insurance_policy_no}
+            mono
+            onAdd={() => setEditing(true)}
+          />
+          <InfoItem label="Attendance cycle" value={cycleName} />
+        </InfoGrid>
+      )}
+      {manageCyclesOpen && (
+        <ManageCyclesModal onClose={() => setManageCyclesOpen(false)} />
+      )}
+    </SectionCard>
+  );
+}
+
+function StatutoryIdsForm({
+  employee,
+  cycles,
+  onManageCycles,
+  onDone,
+}: {
+  employee: EmployeeDetail;
+  cycles: AttendanceCycle[];
+  onManageCycles: () => void;
+  onDone: () => void;
+}) {
   const [pf, setPf] = useState(employee.pf_number ?? "");
   const [uan, setUan] = useState(employee.uan_number ?? "");
   const [esic, setEsic] = useState(employee.esic_number ?? "");
@@ -43,131 +144,96 @@ export function StatutoryIdsCard({ employee }: { employee: EmployeeDetail }) {
   const [cycleStart, setCycleStart] = useState<number>(
     employee.attendance_cycle_start_day || 1,
   );
-  const [manageCyclesOpen, setManageCyclesOpen] = useState(false);
+  const save = useSaveEmployee(employee.id, "Statutory IDs saved");
 
-  const { data: cycles = [] } = useQuery({
-    queryKey: ["attendance-cycles"],
-    queryFn: () => attendanceCyclesApi.list(),
-  });
-
-  // If the employee's saved cycle isn't in the active list (e.g. it
-  // was deactivated later), surface it anyway so it doesn't silently
-  // disappear from the dropdown.
-  const cyclesById = new Map(cycles.map((c) => [c.start_day, c]));
-  const optionsToShow: { start_day: number; label: string }[] = cycles.map(
-    (c) => ({ start_day: c.start_day, label: c.name }),
-  );
-  if (!cyclesById.has(cycleStart)) {
-    optionsToShow.push({
-      start_day: cycleStart,
-      label: `Day ${cycleStart} (legacy / inactive)`,
-    });
+  // Keep a saved cycle visible even if it was deactivated later.
+  const options = cycles.map((c) => ({ start_day: c.start_day, label: c.name }));
+  if (!options.some((o) => o.start_day === cycleStart)) {
+    options.push({ start_day: cycleStart, label: `Day ${cycleStart} (legacy / inactive)` });
   }
-  optionsToShow.sort((a, b) => a.start_day - b.start_day);
-
-  const dirty =
-    pf !== (employee.pf_number ?? "") ||
-    uan !== (employee.uan_number ?? "") ||
-    esic !== (employee.esic_number ?? "") ||
-    insCo !== (employee.insurance_company ?? "") ||
-    insNo !== (employee.insurance_policy_no ?? "") ||
-    cycleStart !== (employee.attendance_cycle_start_day || 1);
-
-  const save = useMutation({
-    mutationFn: () =>
-      employeesApi.update(employee.id, {
-        pf_number: pf || null,
-        uan_number: uan || null,
-        esic_number: esic || null,
-        insurance_company: insCo || null,
-        insurance_policy_no: insNo || null,
-        attendance_cycle_start_day: cycleStart,
-      } as Partial<EmployeeDetail>),
-    onSuccess: () => {
-      toast.success("Statutory IDs saved");
-      qc.invalidateQueries({ queryKey: ["employee", employee.id] });
-    },
-    onError: () => toast.error("Could not save"),
-  });
+  options.sort((a, b) => a.start_day - b.start_day);
+  const uanBad = uan !== "" && !/^\d{12}$/.test(uan);
 
   return (
-    <Card className="lg:col-span-2">
-      <CardHeader>
-        <CardTitle>
-          Statutory <span className="display-em">IDs &amp; insurance</span>
-        </CardTitle>
-        <CardDescription>
-          PF / UAN / ESIC numbers, group insurance details, and the
-          attendance cycle this employee follows.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="grid md:grid-cols-2 gap-4">
-        <Field label="PF Number">
-          <Input value={pf} onChange={(e) => setPf(e.target.value)} placeholder="MH/BAN/00012345/678" />
-        </Field>
-        <Field label="UAN Number">
-          <Input value={uan} onChange={(e) => setUan(e.target.value)} placeholder="100000000000" />
-        </Field>
-        <Field label="ESIC Number">
-          <Input value={esic} onChange={(e) => setEsic(e.target.value)} placeholder="3100000000" />
-        </Field>
-        <Field label="Insurance Company">
-          <Input
-            value={insCo}
-            onChange={(e) => setInsCo(e.target.value)}
-            placeholder="HDFC ERGO General Insurance"
-          />
-        </Field>
-        <Field label="Insurance Policy ID">
-          <Input
-            value={insNo}
-            onChange={(e) => setInsNo(e.target.value)}
-            placeholder="2950 1234 5678"
-          />
-        </Field>
-        <Field label="Attendance cycle">
-          <div className="flex gap-2">
-            <select
-              value={cycleStart}
-              onChange={(e) => setCycleStart(Number(e.target.value))}
-              className="flex h-10 flex-1 rounded-md border border-input bg-card px-3 py-2 text-sm"
-            >
-              {optionsToShow.map((o) => (
-                <option key={o.start_day} value={o.start_day}>
-                  {o.label}
-                </option>
-              ))}
-            </select>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="gap-1"
-              onClick={() => setManageCyclesOpen(true)}
-            >
-              <Pencil className="h-3.5 w-3.5" /> Manage
-            </Button>
-          </div>
-          <p className="text-xs text-brand-brown-light mt-1">
-            Drives the calendar slice and payroll cut-off for this
-            employee. Manage to add/disable cycles for the whole company.
-          </p>
-        </Field>
-        <div className="md:col-span-2 flex justify-end">
-          <Button
-            disabled={!dirty || save.isPending}
-            onClick={() => save.mutate()}
-            className="gap-2"
+    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <Field
+        label="UAN"
+        help={
+          uanBad ? (
+            <span className="text-error">
+              UAN is 12 digits — the PF challan skips invalid ones.
+            </span>
+          ) : undefined
+        }
+      >
+        <Input
+          value={uan}
+          inputMode="numeric"
+          onChange={(e) => setUan(e.target.value.trim())}
+          placeholder="100000000000"
+        />
+      </Field>
+      <Field label="PF number">
+        <Input value={pf} onChange={(e) => setPf(e.target.value)} placeholder="MH/BAN/00012345/678" />
+      </Field>
+      <Field label="ESIC number">
+        <Input value={esic} onChange={(e) => setEsic(e.target.value)} placeholder="3100000000" />
+      </Field>
+      <Field label="Insurance company">
+        <Input
+          value={insCo}
+          onChange={(e) => setInsCo(e.target.value)}
+          placeholder="HDFC ERGO General Insurance"
+        />
+      </Field>
+      <Field label="Insurance policy">
+        <Input value={insNo} onChange={(e) => setInsNo(e.target.value)} placeholder="2950 1234 5678" />
+      </Field>
+      <Field
+        label="Attendance cycle"
+        help="Drives the calendar slice and payroll cut-off for this employee."
+      >
+        <div className="flex gap-2">
+          <select
+            value={cycleStart}
+            onChange={(e) => setCycleStart(Number(e.target.value))}
+            className={SELECT_CLASS}
           >
-            <Save className="h-4 w-4" />
-            {save.isPending ? "Saving…" : "Save"}
+            {options.map((o) => (
+              <option key={o.start_day} value={o.start_day}>
+                {o.label}
+              </option>
+            ))}
+          </select>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="h-10 gap-1"
+            onClick={onManageCycles}
+          >
+            <Pencil className="h-3.5 w-3.5" /> Manage
           </Button>
         </div>
-      </CardContent>
-      {manageCyclesOpen && (
-        <ManageCyclesModal onClose={() => setManageCyclesOpen(false)} />
-      )}
-    </Card>
+      </Field>
+      <FormActions
+        onCancel={onDone}
+        saving={save.isPending}
+        onSave={() =>
+          save.mutate(
+            {
+              pf_number: pf.trim() || null,
+              uan_number: uan || null,
+              esic_number: esic.trim() || null,
+              insurance_company: insCo.trim() || null,
+              insurance_policy_no: insNo.trim() || null,
+              attendance_cycle_start_day: cycleStart,
+            },
+            { onSuccess: onDone },
+          )
+        }
+      />
+    </div>
   );
 }
 
@@ -365,732 +431,832 @@ function CycleRow({
   );
 }
 
-// ── Bank account card ──────────────────────────────────────────────────
+// ── Bank account ───────────────────────────────────────────────────────
+const EMPTY_BANK: BankDetailsInput = {
+  account_no: "",
+  ifsc: "",
+  bank_name: "",
+  branch: null,
+  account_holder_name: null,
+};
+
 export function BankCard({ employeeId }: { employeeId: number }) {
   const qc = useQueryClient();
+  const refreshCompleteness = useInvalidateCompleteness(employeeId);
   const { data, isLoading } = useQuery({
     queryKey: ["employee-bank", employeeId],
     queryFn: () => bankApi.get(employeeId),
   });
-  const [draft, setDraft] = useState<BankDetailsInput>({
-    account_no: "",
-    ifsc: "",
-    bank_name: "",
-    branch: null,
-    account_holder_name: null,
-  });
+  const [editing, setEditing] = useState(false);
+  const [showNo, setShowNo] = useState(false);
+  const [draft, setDraft] = useState<BankDetailsInput>(EMPTY_BANK);
 
-  useEffect(() => {
-    if (data) {
-      setDraft({
-        account_no: data.account_no,
-        ifsc: data.ifsc,
-        bank_name: data.bank_name,
-        branch: data.branch,
-        account_holder_name: data.account_holder_name,
-      });
-    }
-  }, [data]);
+  const open = () => {
+    setDraft(
+      data
+        ? {
+            account_no: data.account_no,
+            ifsc: data.ifsc,
+            bank_name: data.bank_name,
+            branch: data.branch,
+            account_holder_name: data.account_holder_name,
+          }
+        : EMPTY_BANK,
+    );
+    setEditing(true);
+  };
 
   const save = useMutation({
     mutationFn: () => bankApi.upsert(employeeId, draft),
     onSuccess: () => {
       toast.success("Bank account saved");
       qc.invalidateQueries({ queryKey: ["employee-bank", employeeId] });
+      refreshCompleteness();
+      setEditing(false);
     },
-    onError: (e: unknown) => {
-      const detail =
-        (e as { response?: { data?: { detail?: string } } })?.response?.data
-          ?.detail ?? "Could not save";
-      toast.error(detail);
-    },
+    onError: (e) => toast.error(errDetail(e, "Could not save")),
   });
   const remove = useMutation({
     mutationFn: () => bankApi.remove(employeeId),
     onSuccess: () => {
       toast.success("Bank account removed");
       qc.invalidateQueries({ queryKey: ["employee-bank", employeeId] });
-      setDraft({
-        account_no: "",
-        ifsc: "",
-        bank_name: "",
-        branch: null,
-        account_holder_name: null,
-      });
+      refreshCompleteness();
+      setEditing(false);
     },
+    onError: (e) => toast.error(errDetail(e, "Could not remove")),
   });
 
-  if (isLoading) return null;
+  const masked = data?.account_no
+    ? showNo
+      ? data.account_no
+      : `•••• ${data.account_no.slice(-4)}`
+    : "";
 
   return (
-    <Card className="lg:col-span-2">
-      <CardHeader>
-        <CardTitle>
-          Bank <span className="display-em">account</span>
-        </CardTitle>
-        <CardDescription>
-          Salary credit account. Used by the payroll bank-file export.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="grid md:grid-cols-2 gap-4">
-        <Field label="Account holder name">
-          <Input
-            value={draft.account_holder_name ?? ""}
-            onChange={(e) =>
-              setDraft({ ...draft, account_holder_name: e.target.value || null })
+    <SectionCard
+      title="Bank account"
+      description="Salary is credited here; used by the payroll bank file."
+      onEdit={data ? open : undefined}
+      editing={editing}
+    >
+      {isLoading ? (
+        <p className="text-sm text-brand-brown-light">Loading…</p>
+      ) : editing ? (
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Field label="Account holder name">
+            <Input
+              value={draft.account_holder_name ?? ""}
+              onChange={(e) =>
+                setDraft({ ...draft, account_holder_name: e.target.value || null })
+              }
+            />
+          </Field>
+          <Field label="Account number">
+            <Input
+              value={draft.account_no}
+              inputMode="numeric"
+              onChange={(e) => setDraft({ ...draft, account_no: e.target.value.trim() })}
+            />
+          </Field>
+          <Field label="IFSC">
+            <Input
+              value={draft.ifsc}
+              onChange={(e) => setDraft({ ...draft, ifsc: e.target.value.toUpperCase().trim() })}
+              placeholder="HDFC0001234"
+            />
+          </Field>
+          <Field label="Bank name">
+            <Input
+              value={draft.bank_name}
+              onChange={(e) => setDraft({ ...draft, bank_name: e.target.value })}
+            />
+          </Field>
+          <Field label="Branch" className="sm:col-span-2">
+            <Input
+              value={draft.branch ?? ""}
+              onChange={(e) => setDraft({ ...draft, branch: e.target.value || null })}
+            />
+          </Field>
+          <FormActions
+            onCancel={() => setEditing(false)}
+            onSave={() => save.mutate()}
+            saving={save.isPending}
+            disabled={!draft.account_no || !draft.ifsc || !draft.bank_name}
+            extra={
+              data && (
+                <Button
+                  variant="ghost"
+                  className="text-destructive"
+                  disabled={remove.isPending}
+                  onClick={() => {
+                    if (window.confirm("Remove this bank account?")) remove.mutate();
+                  }}
+                >
+                  <Trash2 className="mr-1 h-4 w-4" /> Remove
+                </Button>
+              )
             }
           />
-        </Field>
-        <Field label="Account number">
-          <Input
-            value={draft.account_no}
-            onChange={(e) => setDraft({ ...draft, account_no: e.target.value })}
-          />
-        </Field>
-        <Field label="IFSC">
-          <Input
-            value={draft.ifsc}
-            onChange={(e) =>
-              setDraft({ ...draft, ifsc: e.target.value.toUpperCase() })
-            }
-            placeholder="HDFC0001234"
-          />
-        </Field>
-        <Field label="Bank name">
-          <Input
-            value={draft.bank_name}
-            onChange={(e) => setDraft({ ...draft, bank_name: e.target.value })}
-          />
-        </Field>
-        <Field label="Branch">
-          <Input
-            value={draft.branch ?? ""}
-            onChange={(e) =>
-              setDraft({ ...draft, branch: e.target.value || null })
-            }
-          />
-        </Field>
-        <div className="md:col-span-2 flex justify-end gap-2">
-          {data && (
-            <Button
-              variant="outline"
-              className="text-destructive"
-              onClick={() => remove.mutate()}
-              disabled={remove.isPending}
-            >
-              Remove
-            </Button>
-          )}
-          <Button
-            disabled={
-              !draft.account_no ||
-              !draft.ifsc ||
-              !draft.bank_name ||
-              save.isPending
-            }
-            onClick={() => save.mutate()}
-            className="gap-2"
-          >
-            <Save className="h-4 w-4" />
-            {save.isPending ? "Saving…" : "Save"}
-          </Button>
         </div>
-      </CardContent>
-    </Card>
+      ) : !data ? (
+        <EmptyState
+          message="No bank account yet — salary can't be paid by bank transfer."
+          actionLabel="Add bank account"
+          onAction={open}
+        />
+      ) : (
+        <InfoGrid>
+          <InfoItem label="Account holder" value={data.account_holder_name} onAdd={open} />
+          <InfoItem
+            label="Account number"
+            value={
+              <span className="inline-flex items-center gap-2 font-mono">
+                {masked}
+                <button
+                  type="button"
+                  className="text-brand-brown-light hover:text-brand-brown-darker"
+                  onClick={() => setShowNo((s) => !s)}
+                  aria-label={showNo ? "Hide account number" : "Show account number"}
+                >
+                  {showNo ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                </button>
+              </span>
+            }
+          />
+          <InfoItem label="Bank" value={data.bank_name} />
+          <InfoItem label="IFSC" value={data.ifsc} mono />
+          <InfoItem label="Branch" value={data.branch} onAdd={open} />
+        </InfoGrid>
+      )}
+    </SectionCard>
   );
 }
 
-// ── Family card ────────────────────────────────────────────────────────
+// ── Family ─────────────────────────────────────────────────────────────
 export function FamilyCard({ employeeId }: { employeeId: number }) {
   const qc = useQueryClient();
+  const canEdit = useCanEdit();
   const { data: members = [] } = useQuery({
     queryKey: ["employee-family", employeeId],
     queryFn: () => employeeProfileApi.listFamily(employeeId),
   });
   const [adding, setAdding] = useState<FamilyMemberInput | null>(null);
+  const refresh = () => qc.invalidateQueries({ queryKey: ["employee-family", employeeId] });
 
   const create = useMutation({
     mutationFn: (input: FamilyMemberInput) =>
       employeeProfileApi.createFamily(employeeId, input),
     onSuccess: () => {
       toast.success("Family member added");
-      qc.invalidateQueries({ queryKey: ["employee-family", employeeId] });
+      refresh();
       setAdding(null);
     },
+    onError: (e) => toast.error(errDetail(e, "Could not add")),
   });
   const update = useMutation({
     mutationFn: ({ id, body }: { id: number; body: Partial<FamilyMemberInput> }) =>
       employeeProfileApi.updateFamily(id, body),
-    onSuccess: () =>
-      qc.invalidateQueries({ queryKey: ["employee-family", employeeId] }),
+    onSuccess: () => {
+      toast.success("Saved");
+      refresh();
+    },
+    onError: (e) => toast.error(errDetail(e, "Could not save")),
   });
   const del = useMutation({
     mutationFn: (id: number) => employeeProfileApi.deleteFamily(id),
-    onSuccess: () =>
-      qc.invalidateQueries({ queryKey: ["employee-family", employeeId] }),
+    onSuccess: refresh,
+    onError: (e) => toast.error(errDetail(e, "Could not delete")),
   });
 
+  const startAdd = () =>
+    setAdding({ name: "", relation: "spouse", dob: null, is_dependent: false });
+
   return (
-    <Card className="lg:col-span-2">
-      <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <CardTitle>
-            Family <span className="display-em">details</span>
-          </CardTitle>
-          <CardDescription>
-            Spouse, children, parents — anyone the employee names as a
-            dependent for insurance/benefits.
-          </CardDescription>
-        </div>
-        <Button
-          variant="outline"
-          className="gap-2"
-          onClick={() =>
-            setAdding({ name: "", relation: "spouse", dob: null, is_dependent: false })
-          }
-        >
-          <Plus className="h-4 w-4" /> Add
-        </Button>
-      </CardHeader>
-      <CardContent className="space-y-2">
+    <SectionCard
+      title="Family"
+      description="Spouse, children and parents — dependents for insurance and benefits."
+      action={
+        canEdit &&
+        !adding && (
+          <Button variant="ghost" size="sm" className="h-8 gap-1.5" onClick={startAdd}>
+            <Plus className="h-3.5 w-3.5" /> Add
+          </Button>
+        )
+      }
+    >
+      <div className="space-y-2">
         {members.length === 0 && !adding && (
-          <p className="text-sm text-brand-brown-light">
-            No family members on record yet.
-          </p>
+          <EmptyState message="No family members on record." />
         )}
         {members.map((m) => (
           <FamilyRow
             key={m.id}
             member={m}
-            onSave={(body) => update.mutate({ id: m.id, body })}
-            onDelete={() => del.mutate(m.id)}
+            saving={update.isPending}
+            onSave={(body, done) => update.mutate({ id: m.id, body }, { onSuccess: done })}
+            onDelete={() => {
+              if (window.confirm(`Remove ${m.name}?`)) del.mutate(m.id);
+            }}
           />
         ))}
         {adding && (
-          <FamilyRow
-            member={{ id: -1, employee_id: employeeId, ...adding }}
-            isNew
-            onSave={(body) => create.mutate(body as FamilyMemberInput)}
-            onDelete={() => setAdding(null)}
+          <FamilyForm
+            initial={adding}
+            saving={create.isPending}
+            saveLabel="Add"
+            onSave={(body) => create.mutate(body)}
+            onCancel={() => setAdding(null)}
           />
         )}
-      </CardContent>
-    </Card>
+      </div>
+    </SectionCard>
   );
 }
 
 function FamilyRow({
   member,
-  isNew = false,
+  saving,
   onSave,
   onDelete,
 }: {
   member: FamilyMember;
-  isNew?: boolean;
-  onSave: (body: Partial<FamilyMemberInput>) => void;
+  saving: boolean;
+  onSave: (body: FamilyMemberInput, done: () => void) => void;
   onDelete: () => void;
 }) {
-  const [draft, setDraft] = useState<FamilyMemberInput>({
-    name: member.name,
-    relation: member.relation,
-    dob: member.dob,
-    is_dependent: member.is_dependent,
+  const canEdit = useCanEdit();
+  const [editing, setEditing] = useState(false);
+  if (editing) {
+    return (
+      <FamilyForm
+        initial={member}
+        saving={saving}
+        onSave={(body) => onSave(body, () => setEditing(false))}
+        onCancel={() => setEditing(false)}
+      />
+    );
+  }
+  return (
+    <PersonRow
+      name={member.name}
+      meta={[titleCase(member.relation), member.dob && `Born ${fmtDate(member.dob)}`]}
+      chips={member.is_dependent ? <Chip tone="info">Dependent</Chip> : null}
+      onEdit={canEdit ? () => setEditing(true) : undefined}
+      onDelete={canEdit ? onDelete : undefined}
+    />
+  );
+}
+
+function FamilyForm({
+  initial,
+  saving,
+  saveLabel = "Save",
+  onSave,
+  onCancel,
+}: {
+  initial: FamilyMemberInput;
+  saving: boolean;
+  saveLabel?: string;
+  onSave: (body: FamilyMemberInput) => void;
+  onCancel: () => void;
+}) {
+  const [d, setD] = useState<FamilyMemberInput>({
+    name: initial.name,
+    relation: initial.relation,
+    dob: initial.dob,
+    is_dependent: initial.is_dependent,
   });
   return (
-    <div className="grid grid-cols-1 md:grid-cols-[1.5fr_1fr_1fr_auto_auto] gap-2 items-end p-3 rounded-md border border-brand-brown-100/60">
+    <div className="grid gap-3 rounded-xl border border-brand-gold/40 bg-brand-gold/5 p-4 sm:grid-cols-3">
       <Field label="Name">
-        <Input value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} />
+        <Input value={d.name} onChange={(e) => setD({ ...d, name: e.target.value })} />
       </Field>
       <Field label="Relation">
         <select
-          value={draft.relation}
-          onChange={(e) => setDraft({ ...draft, relation: e.target.value })}
-          className="flex h-10 w-full rounded-md border border-input bg-card px-3 py-2 text-sm"
+          value={d.relation}
+          onChange={(e) => setD({ ...d, relation: e.target.value })}
+          className={SELECT_CLASS}
         >
-          {["spouse", "child", "father", "mother", "sibling", "other"].map((r) => (
+          {RELATIONS.map((r) => (
             <option key={r} value={r}>
-              {r}
+              {titleCase(r)}
             </option>
           ))}
         </select>
       </Field>
-      <Field label="DOB">
+      <Field label="Date of birth">
         <Input
           type="date"
-          value={draft.dob ?? ""}
-          onChange={(e) => setDraft({ ...draft, dob: e.target.value || null })}
+          value={d.dob ?? ""}
+          onChange={(e) => setD({ ...d, dob: e.target.value || null })}
         />
       </Field>
-      <label className="flex items-center gap-2 text-sm">
+      <label className="flex items-center gap-2 text-sm sm:col-span-3">
         <input
           type="checkbox"
-          checked={draft.is_dependent}
-          onChange={(e) => setDraft({ ...draft, is_dependent: e.target.checked })}
+          checked={d.is_dependent}
+          onChange={(e) => setD({ ...d, is_dependent: e.target.checked })}
         />
-        Dependent
+        Dependent (covered under insurance / benefits)
       </label>
-      <div className="flex gap-1">
-        <Button size="sm" onClick={() => onSave(draft)} disabled={!draft.name}>
-          {isNew ? "Add" : "Save"}
-        </Button>
-        <Button
-          size="sm"
-          variant="outline"
-          className="text-destructive"
-          onClick={onDelete}
-        >
-          <Trash2 className="h-3.5 w-3.5" />
-        </Button>
-      </div>
+      <FormActions
+        onCancel={onCancel}
+        onSave={() => onSave(d)}
+        saving={saving}
+        saveLabel={saveLabel}
+        disabled={!d.name.trim()}
+      />
     </div>
   );
 }
 
-// ── Passport / visa card ───────────────────────────────────────────────
+function PersonRow({
+  name,
+  meta,
+  chips,
+  onEdit,
+  onDelete,
+}: {
+  name: string;
+  meta: (string | null | false | undefined)[];
+  chips?: React.ReactNode;
+  onEdit?: () => void;
+  onDelete?: () => void;
+}) {
+  return (
+    <div className="flex items-center gap-3 rounded-xl border border-brand-brown-50 px-4 py-3">
+      <div className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-brand-brown-50 text-sm font-semibold text-brand-brown-darker">
+        {name.trim()[0]?.toUpperCase() ?? "?"}
+      </div>
+      <div className="min-w-0 flex-1">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="font-medium text-brand-brown-darker">{name}</span>
+          {chips}
+        </div>
+        <div className="text-xs text-brand-brown-light">
+          {meta.filter(Boolean).join(" · ")}
+        </div>
+      </div>
+      {onEdit && (
+        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onEdit} aria-label={`Edit ${name}`}>
+          <Pencil className="h-3.5 w-3.5" />
+        </Button>
+      )}
+      {onDelete && (
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-8 w-8 text-destructive"
+          onClick={onDelete}
+          aria-label={`Remove ${name}`}
+        >
+          <Trash2 className="h-3.5 w-3.5" />
+        </Button>
+      )}
+    </div>
+  );
+}
+
+// ── Passport / visa ────────────────────────────────────────────────────
+const EMPTY_PASSPORT: PassportInput = {
+  passport_no: "",
+  passport_country: "India",
+  passport_issue_date: null,
+  passport_expiry_date: null,
+  passport_place_of_issue: null,
+  visa_no: null,
+  visa_type: null,
+  visa_country: null,
+  visa_issue_date: null,
+  visa_expiry_date: null,
+};
+
+function expiryHint(iso: string | null): React.ReactNode {
+  if (!iso) return undefined;
+  const left = daysUntil(iso);
+  if (left < 0) return <span className="text-error">Expired</span>;
+  if (left <= 180) return <span className="text-warning">{left} days left</span>;
+  return undefined;
+}
+
 export function PassportCard({ employeeId }: { employeeId: number }) {
   const qc = useQueryClient();
   const { data, isLoading } = useQuery({
     queryKey: ["employee-passport", employeeId],
     queryFn: () => employeeProfileApi.getPassport(employeeId),
   });
-  const [draft, setDraft] = useState<PassportInput>({
-    passport_no: "",
-    passport_country: "India",
-    passport_issue_date: null,
-    passport_expiry_date: null,
-    passport_place_of_issue: null,
-    visa_no: null,
-    visa_type: null,
-    visa_country: null,
-    visa_issue_date: null,
-    visa_expiry_date: null,
-  });
+  const [editing, setEditing] = useState(false);
+  const [d, setD] = useState<PassportInput>(EMPTY_PASSPORT);
 
-  useEffect(() => {
+  const open = () => {
     if (data) {
-      setDraft({
-        passport_no: data.passport_no,
-        passport_country: data.passport_country,
-        passport_issue_date: data.passport_issue_date,
-        passport_expiry_date: data.passport_expiry_date,
-        passport_place_of_issue: data.passport_place_of_issue,
-        visa_no: data.visa_no,
-        visa_type: data.visa_type,
-        visa_country: data.visa_country,
-        visa_issue_date: data.visa_issue_date,
-        visa_expiry_date: data.visa_expiry_date,
-      });
+      const { id: _id, employee_id: _e, created_at: _c, ...rest } = data;
+      setD(rest);
+    } else {
+      setD(EMPTY_PASSPORT);
     }
-  }, [data]);
+    setEditing(true);
+  };
 
   const save = useMutation({
-    mutationFn: () => employeeProfileApi.upsertPassport(employeeId, draft),
+    mutationFn: () => employeeProfileApi.upsertPassport(employeeId, d),
     onSuccess: () => {
       toast.success("Passport details saved");
       qc.invalidateQueries({ queryKey: ["employee-passport", employeeId] });
+      setEditing(false);
     },
-    onError: () => toast.error("Could not save"),
+    onError: (e) => toast.error(errDetail(e, "Could not save")),
   });
   const remove = useMutation({
     mutationFn: () => employeeProfileApi.deletePassport(employeeId),
     onSuccess: () => {
       toast.success("Passport details removed");
       qc.invalidateQueries({ queryKey: ["employee-passport", employeeId] });
+      setEditing(false);
     },
   });
 
-  if (isLoading) return null;
+  const text = (k: keyof PassportInput, label: string, placeholder?: string) => (
+    <Field label={label}>
+      <Input
+        value={(d[k] as string | null) ?? ""}
+        placeholder={placeholder}
+        onChange={(e) =>
+          setD({
+            ...d,
+            [k]: k === "passport_no" || k === "passport_country" ? e.target.value : e.target.value || null,
+          })
+        }
+      />
+    </Field>
+  );
+  const date = (k: keyof PassportInput, label: string) => (
+    <Field label={label}>
+      <Input
+        type="date"
+        value={(d[k] as string | null) ?? ""}
+        onChange={(e) => setD({ ...d, [k]: e.target.value || null })}
+      />
+    </Field>
+  );
 
   return (
-    <Card className="lg:col-span-2">
-      <CardHeader>
-        <CardTitle>
-          Passport &amp; <span className="display-em">visa</span>
-        </CardTitle>
-        <CardDescription>
-          Recorded only when the employee travels for work or is a foreign
-          national. Optional.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="grid md:grid-cols-3 gap-4">
-        <Field label="Passport No.">
-          <Input
-            value={draft.passport_no}
-            onChange={(e) => setDraft({ ...draft, passport_no: e.target.value })}
-          />
-        </Field>
-        <Field label="Country">
-          <Input
-            value={draft.passport_country}
-            onChange={(e) =>
-              setDraft({ ...draft, passport_country: e.target.value })
+    <SectionCard
+      title="Passport & visa"
+      description="Optional — for work travel or foreign nationals."
+      onEdit={data ? open : undefined}
+      editing={editing}
+    >
+      {isLoading ? (
+        <p className="text-sm text-brand-brown-light">Loading…</p>
+      ) : editing ? (
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {text("passport_no", "Passport no.")}
+          {text("passport_country", "Country")}
+          {text("passport_place_of_issue", "Place of issue")}
+          {date("passport_issue_date", "Issued on")}
+          {date("passport_expiry_date", "Expires on")}
+          <div className="hidden lg:block" />
+          {text("visa_no", "Visa no.")}
+          {text("visa_type", "Visa type", "H1B, B1, Schengen…")}
+          {text("visa_country", "Visa country")}
+          {date("visa_issue_date", "Visa issued on")}
+          {date("visa_expiry_date", "Visa expires on")}
+          <FormActions
+            onCancel={() => setEditing(false)}
+            onSave={() => save.mutate()}
+            saving={save.isPending}
+            disabled={!d.passport_no}
+            extra={
+              data && (
+                <Button
+                  variant="ghost"
+                  className="text-destructive"
+                  disabled={remove.isPending}
+                  onClick={() => {
+                    if (window.confirm("Remove passport and visa details?")) remove.mutate();
+                  }}
+                >
+                  <Trash2 className="mr-1 h-4 w-4" /> Remove
+                </Button>
+              )
             }
           />
-        </Field>
-        <Field label="Place of issue">
-          <Input
-            value={draft.passport_place_of_issue ?? ""}
-            onChange={(e) =>
-              setDraft({ ...draft, passport_place_of_issue: e.target.value || null })
-            }
-          />
-        </Field>
-        <Field label="Issued on">
-          <Input
-            type="date"
-            value={draft.passport_issue_date ?? ""}
-            onChange={(e) =>
-              setDraft({ ...draft, passport_issue_date: e.target.value || null })
-            }
-          />
-        </Field>
-        <Field label="Expires on">
-          <Input
-            type="date"
-            value={draft.passport_expiry_date ?? ""}
-            onChange={(e) =>
-              setDraft({ ...draft, passport_expiry_date: e.target.value || null })
-            }
-          />
-        </Field>
-        <div />
-        <Field label="Visa No.">
-          <Input
-            value={draft.visa_no ?? ""}
-            onChange={(e) => setDraft({ ...draft, visa_no: e.target.value || null })}
-          />
-        </Field>
-        <Field label="Visa Type">
-          <Input
-            value={draft.visa_type ?? ""}
-            onChange={(e) => setDraft({ ...draft, visa_type: e.target.value || null })}
-            placeholder="H1B, B1, Schengen…"
-          />
-        </Field>
-        <Field label="Visa Country">
-          <Input
-            value={draft.visa_country ?? ""}
-            onChange={(e) =>
-              setDraft({ ...draft, visa_country: e.target.value || null })
-            }
-          />
-        </Field>
-        <Field label="Visa issued on">
-          <Input
-            type="date"
-            value={draft.visa_issue_date ?? ""}
-            onChange={(e) =>
-              setDraft({ ...draft, visa_issue_date: e.target.value || null })
-            }
-          />
-        </Field>
-        <Field label="Visa expires on">
-          <Input
-            type="date"
-            value={draft.visa_expiry_date ?? ""}
-            onChange={(e) =>
-              setDraft({ ...draft, visa_expiry_date: e.target.value || null })
-            }
-          />
-        </Field>
-        <div className="md:col-span-3 flex justify-end gap-2">
-          {data && (
-            <Button
-              variant="outline"
-              className="text-destructive"
-              onClick={() => remove.mutate()}
-              disabled={remove.isPending}
-            >
-              Remove
-            </Button>
-          )}
-          <Button
-            disabled={!draft.passport_no || save.isPending}
-            onClick={() => save.mutate()}
-            className="gap-2"
-          >
-            <Save className="h-4 w-4" /> Save
-          </Button>
         </div>
-      </CardContent>
-    </Card>
+      ) : !data ? (
+        <EmptyState
+          message="No passport on record."
+          actionLabel="Add passport"
+          onAction={open}
+        />
+      ) : (
+        <InfoGrid cols={3}>
+          <InfoItem label="Passport no." value={data.passport_no} mono />
+          <InfoItem label="Country" value={data.passport_country} />
+          <InfoItem label="Place of issue" value={data.passport_place_of_issue} />
+          <InfoItem label="Issued on" value={fmtDate(data.passport_issue_date)} />
+          <InfoItem
+            label="Expires on"
+            value={fmtDate(data.passport_expiry_date)}
+            hint={expiryHint(data.passport_expiry_date)}
+          />
+          {data.visa_no ? (
+            <>
+              <InfoItem
+                label="Visa"
+                value={[data.visa_type, data.visa_country].filter(Boolean).join(" · ") || data.visa_no}
+                hint={data.visa_no}
+              />
+              <InfoItem
+                label="Visa expires on"
+                value={fmtDate(data.visa_expiry_date)}
+                hint={expiryHint(data.visa_expiry_date)}
+              />
+            </>
+          ) : (
+            <InfoItem label="Visa" value="" />
+          )}
+        </InfoGrid>
+      )}
+    </SectionCard>
   );
 }
 
-// ── Nominees card ──────────────────────────────────────────────────────
+// ── Nominees ───────────────────────────────────────────────────────────
+const NOMINEE_TYPES: { value: NomineeType; label: string }[] = [
+  { value: "pf", label: "PF" },
+  { value: "gratuity", label: "Gratuity" },
+  { value: "insurance", label: "Insurance" },
+  { value: "general", label: "General" },
+];
+
 export function NomineesCard({ employeeId }: { employeeId: number }) {
   const qc = useQueryClient();
+  const canEdit = useCanEdit();
+  const refreshCompleteness = useInvalidateCompleteness(employeeId);
   const { data: nominees = [] } = useQuery({
     queryKey: ["employee-nominees", employeeId],
     queryFn: () => employeeProfileApi.listNominees(employeeId),
   });
   const [adding, setAdding] = useState<NomineeInput | null>(null);
+  const refresh = () => {
+    qc.invalidateQueries({ queryKey: ["employee-nominees", employeeId] });
+    refreshCompleteness();
+  };
 
   const create = useMutation({
-    mutationFn: (input: NomineeInput) =>
-      employeeProfileApi.createNominee(employeeId, input),
+    mutationFn: (input: NomineeInput) => employeeProfileApi.createNominee(employeeId, input),
     onSuccess: () => {
       toast.success("Nominee added");
-      qc.invalidateQueries({ queryKey: ["employee-nominees", employeeId] });
+      refresh();
       setAdding(null);
     },
+    onError: (e) => toast.error(errDetail(e, "Could not add")),
   });
   const update = useMutation({
     mutationFn: ({ id, body }: { id: number; body: Partial<NomineeInput> }) =>
       employeeProfileApi.updateNominee(id, body),
-    onSuccess: () =>
-      qc.invalidateQueries({ queryKey: ["employee-nominees", employeeId] }),
+    onSuccess: () => {
+      toast.success("Saved");
+      refresh();
+    },
+    onError: (e) => toast.error(errDetail(e, "Could not save")),
   });
   const del = useMutation({
     mutationFn: (id: number) => employeeProfileApi.deleteNominee(id),
-    onSuccess: () =>
-      qc.invalidateQueries({ queryKey: ["employee-nominees", employeeId] }),
+    onSuccess: refresh,
+    onError: (e) => toast.error(errDetail(e, "Could not delete")),
   });
 
-  const totalShare = nominees.reduce((s, n) => s + Number(n.share_pct || 0), 0);
+  // Share must total 100 within each nominee type.
+  const shareByType = new Map<string, number>();
+  for (const n of nominees) {
+    shareByType.set(n.nominee_type, (shareByType.get(n.nominee_type) ?? 0) + Number(n.share_pct || 0));
+  }
+  const offTypes = [...shareByType.entries()].filter(([, v]) => Math.abs(v - 100) > 0.01);
 
   return (
-    <Card className="lg:col-span-2">
-      <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <CardTitle>
-            Nominees · <span className="display-em">PF / Gratuity / Insurance</span>
-          </CardTitle>
-          <CardDescription>
-            Share % across nominees of the same type should total 100. Up to
-            4 nominees per employee is the standard practice.
-          </CardDescription>
-        </div>
-        <Button
-          variant="outline"
-          className="gap-2"
-          onClick={() =>
-            setAdding({
-              name: "",
-              relation: "spouse",
-              date_of_birth: null,
-              share_pct: "100",
-              nominee_type: "general",
-              address: null,
-              phone: null,
-              id_proof_url: null,
-              is_minor: false,
-              guardian_name: null,
-            })
-          }
-        >
-          <Plus className="h-4 w-4" /> Add nominee
-        </Button>
-      </CardHeader>
-      <CardContent className="space-y-3">
-        {nominees.length > 0 && (
-          <div className="text-xs text-brand-brown-light">
-            Total share across all nominees: <strong>{totalShare.toFixed(2)}%</strong>
-          </div>
-        )}
-        {nominees.length === 0 && !adding && (
-          <p className="text-sm text-brand-brown-light">
-            No nominees on record yet.
+    <SectionCard
+      title="Nominees"
+      description="PF, gratuity and insurance nominees. Shares of each type should total 100%."
+      action={
+        canEdit &&
+        !adding && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-8 gap-1.5"
+            onClick={() =>
+              setAdding({
+                name: "",
+                relation: "spouse",
+                date_of_birth: null,
+                share_pct: "100",
+                nominee_type: "pf",
+                address: null,
+                phone: null,
+                id_proof_url: null,
+                is_minor: false,
+                guardian_name: null,
+              })
+            }
+          >
+            <Plus className="h-3.5 w-3.5" /> Add
+          </Button>
+        )
+      }
+    >
+      <div className="space-y-2">
+        {offTypes.length > 0 && (
+          <p className="rounded-lg bg-warning/10 px-3 py-2 text-xs text-warning">
+            {offTypes
+              .map(([t, v]) => `${NOMINEE_TYPES.find((x) => x.value === t)?.label ?? t} shares total ${v.toFixed(0)}%`)
+              .join(" · ")}{" "}
+            — should be 100%.
           </p>
         )}
+        {nominees.length === 0 && !adding && <EmptyState message="No nominees on record." />}
         {nominees.map((n) => (
           <NomineeRow
             key={n.id}
             nominee={n}
-            onSave={(body) => update.mutate({ id: n.id, body })}
-            onDelete={() => del.mutate(n.id)}
+            saving={update.isPending}
+            onSave={(body, done) => update.mutate({ id: n.id, body }, { onSuccess: done })}
+            onDelete={() => {
+              if (window.confirm(`Remove ${n.name}?`)) del.mutate(n.id);
+            }}
           />
         ))}
         {adding && (
-          <NomineeRow
-            nominee={{ id: -1, employee_id: employeeId, ...adding } as Nominee}
-            isNew
-            onSave={(body) => create.mutate(body as NomineeInput)}
-            onDelete={() => setAdding(null)}
+          <NomineeForm
+            initial={adding}
+            saving={create.isPending}
+            saveLabel="Add"
+            onSave={(body) => create.mutate(body)}
+            onCancel={() => setAdding(null)}
           />
         )}
-      </CardContent>
-    </Card>
+      </div>
+    </SectionCard>
   );
 }
 
 function NomineeRow({
   nominee,
-  isNew = false,
+  saving,
   onSave,
   onDelete,
 }: {
   nominee: Nominee;
-  isNew?: boolean;
-  onSave: (body: Partial<NomineeInput>) => void;
+  saving: boolean;
+  onSave: (body: NomineeInput, done: () => void) => void;
   onDelete: () => void;
 }) {
-  const [draft, setDraft] = useState<NomineeInput>({
-    name: nominee.name,
-    relation: nominee.relation,
-    date_of_birth: nominee.date_of_birth,
-    share_pct: String(nominee.share_pct),
-    nominee_type: nominee.nominee_type,
-    address: nominee.address,
-    phone: nominee.phone,
-    id_proof_url: nominee.id_proof_url,
-    is_minor: nominee.is_minor,
-    guardian_name: nominee.guardian_name,
-  });
-  return (
-    <div className="rounded-md border border-brand-brown-100/60 p-3 space-y-2">
-      <div className="grid grid-cols-1 md:grid-cols-[1fr_1fr_1fr_1fr_1fr_auto] gap-2 items-end">
-        <Field label="Name">
-          <Input value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} />
-        </Field>
-        <Field label="Relation">
-          <select
-            value={draft.relation}
-            onChange={(e) => setDraft({ ...draft, relation: e.target.value })}
-            className="flex h-10 w-full rounded-md border border-input bg-card px-3 py-2 text-sm"
-          >
-            {["spouse", "child", "father", "mother", "sibling", "other"].map((r) => (
-              <option key={r} value={r}>
-                {r}
-              </option>
-            ))}
-          </select>
-        </Field>
-        <Field label="Type">
-          <select
-            value={draft.nominee_type}
-            onChange={(e) =>
-              setDraft({ ...draft, nominee_type: e.target.value as NomineeType })
-            }
-            className="flex h-10 w-full rounded-md border border-input bg-card px-3 py-2 text-sm"
-          >
-            <option value="general">General</option>
-            <option value="pf">PF</option>
-            <option value="gratuity">Gratuity</option>
-            <option value="insurance">Insurance</option>
-          </select>
-        </Field>
-        <Field label="Share %">
-          <Input
-            type="number"
-            min={0}
-            max={100}
-            step={0.01}
-            value={draft.share_pct}
-            onChange={(e) => setDraft({ ...draft, share_pct: e.target.value })}
-          />
-        </Field>
-        <Field label="DOB">
-          <Input
-            type="date"
-            value={draft.date_of_birth ?? ""}
-            onChange={(e) =>
-              setDraft({ ...draft, date_of_birth: e.target.value || null })
-            }
-          />
-        </Field>
-        <div className="flex gap-1 pb-1">
-          <Button size="sm" onClick={() => onSave(draft)} disabled={!draft.name}>
-            {isNew ? "Add" : "Save"}
-          </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            className="text-destructive"
-            onClick={onDelete}
-          >
-            <Trash2 className="h-3.5 w-3.5" />
-          </Button>
-        </div>
-      </div>
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
-        <Field label="Phone">
-          <Input
-            value={draft.phone ?? ""}
-            onChange={(e) => setDraft({ ...draft, phone: e.target.value || null })}
-          />
-        </Field>
-        <Field label="Address">
-          <Input
-            value={draft.address ?? ""}
-            onChange={(e) => setDraft({ ...draft, address: e.target.value || null })}
-          />
-        </Field>
-        <label className="flex items-center gap-2 text-sm">
-          <input
-            type="checkbox"
-            checked={draft.is_minor}
-            onChange={(e) => setDraft({ ...draft, is_minor: e.target.checked })}
-          />
-          Minor (needs guardian)
-        </label>
-        {draft.is_minor && (
-          <Field label="Guardian name">
-            <Input
-              value={draft.guardian_name ?? ""}
-              onChange={(e) =>
-                setDraft({ ...draft, guardian_name: e.target.value || null })
-              }
-            />
-          </Field>
-        )}
-      </div>
-    </div>
-  );
-}
-
-// ── Profile photo upload (drop-in for the avatar) ──────────────────────
-export function PhotoUploadButton({ employeeId }: { employeeId: number }) {
-  const qc = useQueryClient();
-  const inputRef = useRef<HTMLInputElement | null>(null);
-  const upload = useMutation({
-    mutationFn: (file: File) =>
-      employeeProfileApi.uploadPhoto(employeeId, file),
-    onSuccess: () => {
-      toast.success("Photo updated");
-      qc.invalidateQueries({ queryKey: ["employee", employeeId] });
-    },
-    onError: () => toast.error("Upload failed"),
-  });
-
-  return (
-    <>
-      <Button
-        size="sm"
-        variant="outline"
-        className="gap-2"
-        onClick={() => inputRef.current?.click()}
-      >
-        <Upload className="h-3.5 w-3.5" />
-        Photo
-      </Button>
-      <input
-        ref={inputRef}
-        type="file"
-        accept="image/jpeg,image/png,image/webp"
-        className="hidden"
-        onChange={(e) => {
-          const f = e.target.files?.[0];
-          if (f) upload.mutate(f);
-          if (inputRef.current) inputRef.current.value = "";
-        }}
+  const canEdit = useCanEdit();
+  const [editing, setEditing] = useState(false);
+  if (editing) {
+    return (
+      <NomineeForm
+        initial={nominee}
+        saving={saving}
+        onSave={(body) => onSave(body, () => setEditing(false))}
+        onCancel={() => setEditing(false)}
       />
-    </>
+    );
+  }
+  const type = NOMINEE_TYPES.find((t) => t.value === nominee.nominee_type)?.label ?? nominee.nominee_type;
+  return (
+    <PersonRow
+      name={nominee.name}
+      meta={[
+        titleCase(nominee.relation),
+        nominee.date_of_birth && `Born ${fmtDate(nominee.date_of_birth)}`,
+        nominee.phone,
+        nominee.is_minor && nominee.guardian_name && `Guardian: ${nominee.guardian_name}`,
+      ]}
+      chips={
+        <>
+          <Chip tone="gold">
+            {type} · {Number(nominee.share_pct).toFixed(0)}%
+          </Chip>
+          {nominee.is_minor && <Chip tone="info">Minor</Chip>}
+        </>
+      }
+      onEdit={canEdit ? () => setEditing(true) : undefined}
+      onDelete={canEdit ? onDelete : undefined}
+    />
   );
 }
 
-// ── Local Field shim ───────────────────────────────────────────────────
-function Field({
-  label,
-  children,
+function NomineeForm({
+  initial,
+  saving,
+  saveLabel = "Save",
+  onSave,
+  onCancel,
 }: {
-  label: string;
-  children: React.ReactNode;
+  initial: NomineeInput;
+  saving: boolean;
+  saveLabel?: string;
+  onSave: (body: NomineeInput) => void;
+  onCancel: () => void;
 }) {
+  const [d, setD] = useState<NomineeInput>({
+    name: initial.name,
+    relation: initial.relation,
+    date_of_birth: initial.date_of_birth,
+    share_pct: String(initial.share_pct),
+    nominee_type: initial.nominee_type,
+    address: initial.address,
+    phone: initial.phone,
+    id_proof_url: initial.id_proof_url,
+    is_minor: initial.is_minor,
+    guardian_name: initial.guardian_name,
+  });
   return (
-    <div className="space-y-1.5">
-      <Label>{label}</Label>
-      {children}
+    <div className="grid gap-3 rounded-xl border border-brand-gold/40 bg-brand-gold/5 p-4 sm:grid-cols-2 lg:grid-cols-3">
+      <Field label="Name">
+        <Input value={d.name} onChange={(e) => setD({ ...d, name: e.target.value })} />
+      </Field>
+      <Field label="Relation">
+        <select
+          value={d.relation}
+          onChange={(e) => setD({ ...d, relation: e.target.value })}
+          className={SELECT_CLASS}
+        >
+          {RELATIONS.map((r) => (
+            <option key={r} value={r}>
+              {titleCase(r)}
+            </option>
+          ))}
+        </select>
+      </Field>
+      <Field label="Nominee for">
+        <select
+          value={d.nominee_type}
+          onChange={(e) => setD({ ...d, nominee_type: e.target.value as NomineeType })}
+          className={SELECT_CLASS}
+        >
+          {NOMINEE_TYPES.map((t) => (
+            <option key={t.value} value={t.value}>
+              {t.label}
+            </option>
+          ))}
+        </select>
+      </Field>
+      <Field label="Share %">
+        <Input
+          type="number"
+          min={0}
+          max={100}
+          step={0.01}
+          value={d.share_pct}
+          onChange={(e) => setD({ ...d, share_pct: e.target.value })}
+        />
+      </Field>
+      <Field label="Date of birth">
+        <Input
+          type="date"
+          value={d.date_of_birth ?? ""}
+          onChange={(e) => setD({ ...d, date_of_birth: e.target.value || null })}
+        />
+      </Field>
+      <Field label="Phone">
+        <Input
+          value={d.phone ?? ""}
+          onChange={(e) => setD({ ...d, phone: e.target.value || null })}
+        />
+      </Field>
+      <Field label="Address" className="sm:col-span-2 lg:col-span-3">
+        <Input
+          value={d.address ?? ""}
+          onChange={(e) => setD({ ...d, address: e.target.value || null })}
+        />
+      </Field>
+      <label className="flex items-center gap-2 text-sm">
+        <input
+          type="checkbox"
+          checked={d.is_minor}
+          onChange={(e) => setD({ ...d, is_minor: e.target.checked })}
+        />
+        Minor (needs a guardian)
+      </label>
+      {d.is_minor && (
+        <Field label="Guardian name" className="sm:col-span-1 lg:col-span-2">
+          <Input
+            value={d.guardian_name ?? ""}
+            onChange={(e) => setD({ ...d, guardian_name: e.target.value || null })}
+          />
+        </Field>
+      )}
+      <FormActions
+        onCancel={onCancel}
+        onSave={() => onSave(d)}
+        saving={saving}
+        saveLabel={saveLabel}
+        disabled={!d.name.trim() || (d.is_minor && !d.guardian_name)}
+      />
     </div>
   );
 }

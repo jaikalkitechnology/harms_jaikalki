@@ -301,11 +301,92 @@ async def update_employee(
     db: AsyncSession, emp: Employee, payload: EmployeeUpdate
 ) -> Employee:
     data = payload.model_dump(exclude_unset=True)
+    new_doj = data.pop("date_of_joining", None)
+    if new_doj is not None and new_doj != emp.date_of_joining:
+        await change_joining_date(db, emp, new_doj)
     for key, value in data.items():
         setattr(emp, key, value)
     await db.commit()
     await db.refresh(emp)
     return emp
+
+
+async def change_joining_date(
+    db: AsyncSession, emp: Employee, new_doj: date
+) -> None:
+    """Move the joining date and keep the lifecycle in step.
+
+    The first intern / probation phase starts on the joining date, so
+    its start moves with it; while that phase is still open its end
+    (and any extension) shifts by the same number of days. Refused when
+    a finalized payslip exists for a month that ends before the new
+    date — revert that payroll run first. Does not commit.
+    """
+    from app.models import PayrollRun, Payslip
+
+    old_doj = emp.date_of_joining
+    if emp.exit_date and new_doj > emp.exit_date:
+        raise ValidationError(
+            f"Joining date cannot be after the exit date "
+            f"({emp.exit_date.isoformat()})"
+        )
+    if emp.date_of_birth and new_doj <= emp.date_of_birth:
+        raise ValidationError("Joining date must be after the date of birth")
+
+    # Finalized pay for a month the employee would no longer have worked.
+    locked = (
+        await db.execute(
+            select(Payslip.year, Payslip.month)
+            .join(PayrollRun, PayrollRun.id == Payslip.payroll_run_id)
+            .where(Payslip.employee_id == emp.id)
+            .where(or_(PayrollRun.status == "finalized", PayrollRun.disbursed.is_(True)))
+            .where(
+                or_(
+                    Payslip.year < new_doj.year,
+                    and_(Payslip.year == new_doj.year, Payslip.month < new_doj.month),
+                )
+            )
+            .order_by(Payslip.year, Payslip.month)
+        )
+    ).all()
+    if locked:
+        months = ", ".join(f"{m:02d}/{y}" for y, m in locked)
+        raise ConflictError(
+            f"Finalized payroll already pays this employee for {months}, "
+            "before the new joining date. Revert those payroll runs first."
+        )
+
+    phases = (
+        await db.execute(
+            select(EmployeeProbation)
+            .where(EmployeeProbation.employee_id == emp.id)
+            .order_by(EmployeeProbation.probation_start_date, EmployeeProbation.id)
+        )
+    ).scalars().all()
+    first = phases[0] if phases else None
+    if old_doj and first is not None and first.probation_start_date == old_doj:
+        delta = new_doj - old_doj
+        is_open = first.status in ("in_progress", "extended")
+        if is_open and len(phases) == 1:
+            first.probation_end_date += delta
+            if first.extension_end_date:
+                first.extension_end_date += delta
+            if first.phase == "probation":
+                emp.probation_end_date = (
+                    first.extension_end_date or first.probation_end_date
+                )
+        elif new_doj > first.probation_end_date:
+            raise ValidationError(
+                f"The {first.phase} period ended on "
+                f"{first.probation_end_date.isoformat()}; the joining date "
+                "cannot be after it"
+            )
+        first.probation_start_date = new_doj
+    elif old_doj and not phases and emp.is_on_probation and emp.probation_end_date:
+        # Legacy employee with no phase rows — keep the probation length.
+        emp.probation_end_date += new_doj - old_doj
+
+    emp.date_of_joining = new_doj
 
 
 async def get_employee(db: AsyncSession, employee_id: int) -> Employee:

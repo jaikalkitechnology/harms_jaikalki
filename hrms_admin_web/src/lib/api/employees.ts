@@ -98,6 +98,24 @@ export interface EmployeeListItem {
   is_on_probation: boolean;
   status: string;
   date_of_joining: string | null;
+  exit_date?: string | null;
+}
+
+export interface CompletenessItem {
+  key: string;
+  label: string;
+  /** Profile tab that fixes it. */
+  section: string;
+  done: boolean;
+}
+
+export interface Completeness {
+  employee_id: number;
+  done: number;
+  total: number;
+  percent: number;
+  missing: CompletenessItem[];
+  items: CompletenessItem[];
 }
 
 export interface EmployeeDetail extends EmployeeListItem {
@@ -168,6 +186,7 @@ export const employeesApi = {
     department_id?: number;
     category_id?: number;
     on_probation?: boolean;
+    limit?: number;
   } = {}): Promise<EmployeeListItem[]> {
     const { data } = await apiClient.get(`${v1}/employees`, { params });
     return data;
@@ -246,6 +265,16 @@ export const employeesApi = {
       `${v1}/employees/${id}/extend-probation`,
       { months, reason },
     );
+    return data;
+  },
+
+  async completeness(id: number): Promise<Completeness> {
+    const { data } = await apiClient.get(`${v1}/employees/${id}/completeness`);
+    return data;
+  },
+
+  async completenessAll(): Promise<Record<string, Completeness>> {
+    const { data } = await apiClient.get(`${v1}/employees/completeness`);
     return data;
   },
 

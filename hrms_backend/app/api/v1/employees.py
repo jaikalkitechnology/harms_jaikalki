@@ -84,6 +84,36 @@ async def list_expiring_probations(
     ]
 
 
+@router.get("/completeness")
+async def list_completeness(
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> dict[int, dict]:
+    """Profile completeness for every employee the caller can see."""
+    from app.services.profile_completeness import completeness
+
+    stmt = select(Employee)
+    allowed = await svc.visible_employee_ids(db, user)
+    if allowed is not None:
+        stmt = stmt.where(Employee.id.in_(allowed or {-1}))
+    emps = (await db.execute(stmt)).scalars().unique().all()
+    return await completeness(db, emps)
+
+
+@router.get("/{employee_id}/completeness")
+async def employee_completeness(
+    employee_id: int,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> dict:
+    from app.services.profile_completeness import completeness
+
+    emp = await svc.get_employee(db, employee_id)
+    allowed = await svc.visible_employee_ids(db, user)
+    svc.assert_can_view(user, emp, allowed)
+    return (await completeness(db, [emp]))[emp.id]
+
+
 @router.get("/{employee_id}", response_model=EmployeeOut)
 async def get_employee(
     employee_id: int,

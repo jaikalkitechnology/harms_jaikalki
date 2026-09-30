@@ -323,6 +323,7 @@ class EmployeeUpdate(BaseModel):
     reporting_to: Optional[int] = None
     salary_template_id: Optional[int] = None
     ctc_annual: Optional[Decimal] = None
+    date_of_joining: Optional[date] = None
     work_location: Optional[str] = None
     employment_type: Optional[str] = None
     work_mode: Optional[str] = None
@@ -359,6 +360,7 @@ class EmployeeListItem(BaseModel):
     is_on_probation: bool
     status: str
     date_of_joining: Optional[date]
+    exit_date: Optional[date] = None
 
 
 class EmployeeOut(BaseModel):
