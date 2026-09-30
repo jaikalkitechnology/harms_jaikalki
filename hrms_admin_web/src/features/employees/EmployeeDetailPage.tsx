@@ -927,6 +927,7 @@ interface EmployeeEditDraft {
   salary_template_id: string;
   reporting_to: string;
   ctc_annual: string;
+  date_of_joining: string;
 }
 
 function EditEmployeeModal({
@@ -973,7 +974,11 @@ function EditEmployeeModal({
       : "",
     reporting_to: employee.reporting_to ? String(employee.reporting_to) : "",
     ctc_annual: employee.ctc_annual ?? "",
+    date_of_joining: employee.date_of_joining ?? "",
   });
+  const dojChanged =
+    !!draft.date_of_joining &&
+    draft.date_of_joining !== (employee.date_of_joining ?? "");
 
   const update = useMutation({
     mutationFn: () =>
@@ -994,6 +999,7 @@ function EditEmployeeModal({
           ? Number(draft.salary_template_id)
           : null,
         reporting_to: draft.reporting_to ? Number(draft.reporting_to) : null,
+        ...(dojChanged ? { date_of_joining: draft.date_of_joining } : {}),
         ctc_annual:
           draft.ctc_annual === "" || draft.ctc_annual === null
             ? null
@@ -1142,6 +1148,31 @@ function EditEmployeeModal({
           <div className="md:col-span-2 mt-2 text-[10px] font-mono uppercase tracking-[0.3em] text-brand-gold-dark">
             ★ Org placement
           </div>
+          <div className="md:col-span-2">
+            <Label>Date of joining *</Label>
+            <Input
+              type="date"
+              value={draft.date_of_joining}
+              onChange={(e) =>
+                setDraft({ ...draft, date_of_joining: e.target.value })
+              }
+              className="md:w-1/2"
+            />
+            {dojChanged ? (
+              <p className="text-xs text-warning mt-1">
+                Changing from {employee.date_of_joining ?? "—"}. The open
+                intern / probation period moves by the same number of days,
+                attendance before the new date is hidden, and the next
+                payroll run pro-rates from it. Blocked if a finalized payroll
+                already pays a month before the new date.
+              </p>
+            ) : (
+              <p className="text-xs text-brand-brown-light mt-1">
+                Correct a wrong joining date here. It drives attendance,
+                probation, leave and payroll pro-rating.
+              </p>
+            )}
+          </div>
           <div>
             <Label>Department</Label>
             <select
@@ -1237,6 +1268,7 @@ function EditEmployeeModal({
               disabled={
                 !draft.first_name ||
                 !draft.last_name ||
+                !draft.date_of_joining ||
                 update.isPending
               }
               onClick={() => update.mutate()}
