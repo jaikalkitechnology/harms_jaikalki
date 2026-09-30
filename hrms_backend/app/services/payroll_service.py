@@ -21,12 +21,85 @@ from app.models import (
     User,
 )
 from app.services.leave_policy import get_leave_policy
-from app.services.payroll_attendance import compute_attendance_month
+from app.services.payroll_attendance import compute_attendance_month, cycle_window
 from app.services.salary_calculator import JaikalkiSalaryCalculator
 
 
 def _now() -> datetime:
     return datetime.now(timezone.utc).replace(tzinfo=None)
+
+
+def _earned_statutory(
+    breakup: dict, scaling: Decimal, earned_gross: Decimal, emp: Employee
+) -> tuple[Decimal, Decimal, Decimal, Decimal, Decimal]:
+    """PF / ESIC / PT on what was actually earned this month.
+
+    Eligibility comes from the monthly breakup (opt-outs, ESIC ceiling
+    on contractual gross). Amounts are recomputed on earned pay so a
+    part month is never charged full-month deductions.
+    Returns (pf_employee, pf_employer, esic_employee, esic_employer, pt).
+    """
+    from app.services.salary_calculator import (
+        ESIC_EMPLOYEE_RATE,
+        ESIC_EMPLOYER_RATE,
+        PF_BASIC_CAP,
+        PF_EMPLOYEE_RATE,
+        PF_EMPLOYER_RATE,
+        _pt_slab,
+        _round,
+    )
+
+    zero = Decimal("0")
+    if earned_gross <= 0:
+        return zero, zero, zero, zero, zero
+
+    if Decimal(breakup.get("pf_employee") or 0) > 0:
+        cap = Decimal(getattr(emp, "pf_basic_cap_override", None) or PF_BASIC_CAP)
+        pf_basic = min(Decimal(breakup["basic"]) * scaling, cap)
+        pf_emp = Decimal(_round(pf_basic * PF_EMPLOYEE_RATE))
+        pf_er = Decimal(_round(pf_basic * PF_EMPLOYER_RATE))
+    else:
+        pf_emp = pf_er = zero
+
+    if Decimal(breakup.get("esic_employee") or 0) > 0:
+        esic_emp = Decimal(_round(earned_gross * ESIC_EMPLOYEE_RATE))
+        esic_er = Decimal(_round(earned_gross * ESIC_EMPLOYER_RATE))
+    else:
+        esic_emp = esic_er = zero
+
+    pt = _pt_slab(getattr(emp, "pt_state", None), getattr(emp, "gender", None), earned_gross)
+    return pf_emp, pf_er, esic_emp, esic_er, Decimal(pt)
+
+
+async def _resignation_settled(db: AsyncSession, employee_id: int) -> bool:
+    from app.models import Resignation
+
+    row = (
+        await db.execute(
+            select(Resignation.id)
+            .where(Resignation.employee_id == employee_id)
+            .where(Resignation.status == "settled")
+            .limit(1)
+        )
+    ).scalar_one_or_none()
+    return row is not None
+
+
+async def set_final_payslips_hold(
+    db: AsyncSession, employee_id: int, *, on_hold: bool
+) -> int:
+    """Hold / release the final-settlement payslips of one employee.
+    Called when a resignation is settled (release) or un-settled."""
+    rows = (
+        await db.execute(
+            select(Payslip)
+            .where(Payslip.employee_id == employee_id)
+            .where(Payslip.is_final_settlement.is_(True))
+        )
+    ).scalars().all()
+    for r in rows:
+        r.on_hold = on_hold
+    return len(rows)
 
 
 # ── Run lifecycle ────────────────────────────────────────────────────
@@ -96,32 +169,18 @@ async def process_payroll(
     from calendar import monthrange
     from datetime import date as _date
 
-    period_first = _date(year, month, 1)
     period_days_int = monthrange(year, month)[1]
-    period_last = _date(year, month, period_days_int)
 
-    # Filter out fully-exited employees (their exit_date has passed
-    # before the period starts) and future-joins (DOJ after the period
-    # ends). Mid-cycle exits and mid-cycle joins do get a payslip; the
-    # inactive_days_in_period math below shrinks their pay pro-rata.
+    # Everyone on the roll, including resigned / terminated employees
+    # still serving notice. The per-employee attendance window decides
+    # below who is actually paid in this run.
     employees = (
         await db.execute(
-            # Resigned / terminated employees stay in the run while
-            # serving notice; the exit_date gate below drops them once
-            # their last working day is before the period.
             select(Employee).where(
                 Employee.status.in_(("active", "resigned", "terminated"))
             )
         )
     ).scalars().all()
-    active = []
-    for emp in employees:
-        if emp.exit_date and emp.exit_date < period_first:
-            continue
-        if emp.date_of_joining and emp.date_of_joining > period_last:
-            continue
-        active.append(emp)
-    employees = active
 
     calc = JaikalkiSalaryCalculator()
     _policy = await get_leave_policy(db)
@@ -159,6 +218,14 @@ async def process_payroll(
             if cycle_start_day is not None
             else (emp.attendance_cycle_start_day or 1)
         )
+        win_first, win_last = cycle_window(year, month, eff_cycle)
+        # Skip anyone who left before this window started or joins
+        # after it ends — they have nothing to be paid for here.
+        if emp.exit_date and emp.exit_date < win_first:
+            continue
+        if emp.date_of_joining and emp.date_of_joining > win_last:
+            continue
+
         att = await compute_attendance_month(
             db,
             emp.id,
@@ -167,62 +234,43 @@ async def process_payroll(
             cycle_start_day=eff_cycle,
             treat_all_leave_as_paid=bool(_policy.get("all_approved_paid", True)),
             sandwich_absent=bool(_policy.get("sandwich_absent_enabled", True)),
+            service_from=emp.date_of_joining,
+            service_to=emp.exit_date,
         )
-        working = att.working_days
         lop = att.days_lop
 
         # ── Divisor + scaling ────────────────────────────────────────
-        # Attendance is collected from the *cycle window* (e.g. 21-Aug
-        # → 20-Sept for the September payroll), but pay is scaled over
-        # the *target month* by default so the payslip reads
-        # ``Days Paid X / 30`` for September regardless of the cycle.
-        # ``payroll.division_basis`` in SystemConfig can flip back to
-        # legacy behaviours.
+        # Attendance comes from the cycle window (e.g. 21-Aug → 20-Sep
+        # for September). Pay is expressed over the target month so the
+        # slip reads "Days Paid X / 30" for September:
+        #     paid_days = period_days × (days_on_roll − LOP) ÷ window_days
+        # Days before joining / after exit are excluded from
+        # days_on_roll, so join/exit pro-rating stays inside the same
+        # window as the attendance it is compared against.
         if _basis == "working_days":
-            divisor = working
-            # Legacy: no separate "inactive_days_in_period" fold-in
-            # because ``working`` already excludes not-in-service days
-            # via the attendance service-window guard.
-            paid_days_num = att.days_paid
+            divisor = att.working_days
+            paid_days_num = max(Decimal("0"), att.days_paid)
         else:
-            period_days = (
-                Decimal(30)
-                if _basis == "fixed_30"
-                else Decimal(period_days_int)
+            divisor = (
+                Decimal(30) if _basis == "fixed_30" else Decimal(period_days_int)
             )
-            # Days in the target month the employee was NOT on the
-            # roll (before DOJ, after exit_date).
-            join_gap = 0
-            if emp.date_of_joining and emp.date_of_joining > period_first:
-                join_gap = min(
-                    period_days_int,
-                    (emp.date_of_joining - period_first).days,
-                )
-            exit_gap = 0
-            if emp.exit_date and emp.exit_date < period_last:
-                exit_gap = min(
-                    period_days_int,
-                    (period_last - emp.exit_date).days,
-                )
-            inactive_days = Decimal(join_gap + exit_gap)
-            paid_days_num = max(
-                Decimal("0"), period_days - lop - inactive_days
-            )
-            divisor = period_days
+            earned_days = max(Decimal("0"), att.days_on_roll - lop)
+            paid_days_num = (
+                divisor * earned_days / Decimal(att.window_days)
+                if att.window_days
+                else Decimal("0")
+            ).quantize(Decimal("0.01"))
 
         scaling = (
-            paid_days_num / divisor if divisor > 0 else Decimal("0")
+            min(Decimal("1"), paid_days_num / divisor) if divisor > 0 else Decimal("0")
         )
-        # Persist the divisor as ``working_days`` on the payslip — the
-        # PDF renders "Days Paid X / working_days", so with basis =
-        # calendar_days the row auto-formats as "28 / 30" for Sept.
         working = divisor
         paid = paid_days_num
 
         gross = (Decimal(breakup["gross"]) * scaling).quantize(Decimal("1"))
-        pf_emp = Decimal(breakup["pf_employee"])  # capped → don't scale
-        esic_emp = Decimal(breakup["esic_employee"])
-        pt = Decimal(breakup["professional_tax"])
+        pf_emp, pf_er, esic_emp, esic_er, pt = _earned_statutory(
+            breakup, scaling, gross, emp
+        )
         # TDS: placeholder zero. Real slab calc deferred (see TODO).
         tds = Decimal("0")
 
@@ -238,11 +286,20 @@ async def process_payroll(
         rb_total = sum((r.amount for r in rb_rows), Decimal("0"))
 
         deductions = pf_emp + esic_emp + pt + tds
-        net = gross - deductions + rb_total
+        # Never pay out a negative amount.
+        net = max(Decimal("0"), gross - deductions + rb_total)
 
-        pf_er = Decimal(breakup["pf_employer"])
-        esic_er = Decimal(breakup["esic_employer"])
         employer_cost = gross + pf_er + esic_er
+
+        # Final salary: resigned / terminated employee whose last
+        # working day falls inside this window. Held until the
+        # resignation is marked settled.
+        is_final = bool(
+            emp.status in ("resigned", "terminated")
+            and emp.exit_date is not None
+            and emp.exit_date <= win_last
+        )
+        on_hold = is_final and not await _resignation_settled(db, emp.id)
 
         ps = Payslip(
             payroll_run_id=run.id,
@@ -273,6 +330,8 @@ async def process_payroll(
             days_holiday=att.days_holiday,
             days_weekoff=att.days_weekoff,
             days_sandwich=att.days_sandwich,
+            is_final_settlement=is_final,
+            on_hold=on_hold,
         )
         db.add(ps)
         await db.flush()
@@ -519,6 +578,7 @@ async def list_payslips_for_employee(
         ).where(
             PayrollRun.status == "finalized",
             PayrollRun.disbursed.is_(True),
+            Payslip.on_hold.is_(False),
         )
     return (await db.execute(stmt)).scalars().all()
 
@@ -532,7 +592,12 @@ async def is_run_disbursed(db: AsyncSession, payslip: Payslip) -> bool:
             select(PayrollRun).where(PayrollRun.id == payslip.payroll_run_id)
         )
     ).scalar_one_or_none()
-    return bool(run and run.status == "finalized" and run.disbursed)
+    return bool(
+        run
+        and run.status == "finalized"
+        and run.disbursed
+        and not getattr(payslip, "on_hold", False)
+    )
 
 
 async def get_payslip(db: AsyncSession, payslip_id: int) -> Payslip:
@@ -549,6 +614,10 @@ def build_bank_csv(payslips: Sequence[Payslip], employees: dict[int, Employee]) 
     """Generate a generic CSV bank file. Returns the CSV text."""
     lines = ["employee_code,full_name,bank_account,ifsc,amount"]
     for p in payslips:
+        # Final salaries on hold are not transferred until the
+        # resignation is settled.
+        if getattr(p, "on_hold", False):
+            continue
         emp = employees.get(p.employee_id)
         if not emp:
             continue

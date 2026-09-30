@@ -478,6 +478,23 @@ export default function PayrollRunsPage() {
                       ) : (
                         <span className="font-mono">#{p.employee_id}</span>
                       )}
+                      {p.is_final_settlement && (
+                        <span
+                          className={
+                            "ml-2 rounded px-1.5 py-0.5 text-[9px] font-mono uppercase tracking-[0.15em] " +
+                            (p.on_hold
+                              ? "bg-error/15 text-error"
+                              : "bg-success/15 text-success")
+                          }
+                          title={
+                            p.on_hold
+                              ? "Final salary — held until the resignation is marked settled. Excluded from the bank file and the employee's app."
+                              : "Final salary — released after settlement."
+                          }
+                        >
+                          {p.on_hold ? "Final · On hold" : "Final · Released"}
+                        </span>
+                      )}
                     </td>
                     <td className="text-xs">
                       <span className="font-semibold text-brand-brown-darker">

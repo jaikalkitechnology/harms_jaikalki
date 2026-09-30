@@ -34,7 +34,7 @@ from calendar import monthrange
 from dataclasses import dataclass, field
 from datetime import date, timedelta
 from decimal import Decimal
-from typing import Sequence
+from typing import Optional, Sequence
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -54,6 +54,13 @@ class AttendanceMonth:
     days_holiday: Decimal = Decimal("0")
     days_weekoff: Decimal = Decimal("0")
     days_sandwich: Decimal = Decimal("0")
+    # Days in the attendance window that fall before date_of_joining or
+    # after exit_date. They are neither worked nor absent.
+    days_not_in_service: Decimal = Decimal("0")
+    # Attendance window actually used (cycle-aware).
+    window_first: Optional[date] = None
+    window_last: Optional[date] = None
+    window_days: int = 0
 
     # Per-day class for debugging / payslip annotation.
     by_date: dict[date, str] = field(default_factory=dict)
@@ -63,11 +70,32 @@ class AttendanceMonth:
         return self.days_unpaid_leave + self.days_absent
 
     @property
+    def days_on_roll(self) -> Decimal:
+        """Calendar days of the window the employee was employed."""
+        return Decimal(self.window_days) - self.days_not_in_service
+
+    @property
     def days_paid(self) -> Decimal:
         # Holidays + week-offs + present + paid leave + 0.5 of half-days
         # are all paid. We count this as (working_days - LOP) because
         # weekoffs/holidays don't enter the divisor either.
         return self.working_days - self.days_lop
+
+
+def cycle_window(year: int, month: int, cycle_start_day: int = 1) -> tuple[date, date]:
+    """Attendance window that feeds the payroll for ``year``/``month``.
+
+    cycle_start_day 1  → calendar month (1st → last day).
+    cycle_start_day N  → N of previous month → (N-1) of this month,
+                         e.g. 21 → 21-Aug … 20-Sep for September.
+    """
+    if cycle_start_day and cycle_start_day > 1:
+        prev_year = year if month > 1 else year - 1
+        prev_month = month - 1 if month > 1 else 12
+        start_day = min(cycle_start_day, monthrange(prev_year, prev_month)[1])
+        end_day = min(cycle_start_day - 1, monthrange(year, month)[1])
+        return date(prev_year, prev_month, start_day), date(year, month, end_day)
+    return date(year, month, 1), date(year, month, monthrange(year, month)[1])
 
 
 def _is_sunday(d: date) -> bool:
@@ -84,19 +112,11 @@ async def compute_attendance_month(
     cycle_start_day: int = 1,
     treat_all_leave_as_paid: bool = True,
     sandwich_absent: bool = True,
+    service_from: Optional[date] = None,
+    service_to: Optional[date] = None,
 ) -> AttendanceMonth:
-    if cycle_start_day and cycle_start_day > 1:
-        prev_year = year if month > 1 else year - 1
-        prev_month = month - 1 if month > 1 else 12
-        start_day = min(cycle_start_day, monthrange(prev_year, prev_month)[1])
-        first = date(prev_year, prev_month, start_day)
-        end_day = min(cycle_start_day - 1, monthrange(year, month)[1])
-        last = date(year, month, end_day)
-        days_in_month = (last - first).days + 1
-    else:
-        days_in_month = monthrange(year, month)[1]
-        first = date(year, month, 1)
-        last = date(year, month, days_in_month)
+    first, last = cycle_window(year, month, cycle_start_day)
+    days_in_month = (last - first).days + 1
 
     # Holidays for the month — match by date (any location).
     holidays: set[date] = {
@@ -190,10 +210,23 @@ async def compute_attendance_month(
         ).scalars().all()
     }
 
-    out = AttendanceMonth(year=year, month=month)
+    out = AttendanceMonth(
+        year=year,
+        month=month,
+        window_first=first,
+        window_last=last,
+        window_days=days_in_month,
+    )
 
     for i in range(days_in_month):
         d = first + timedelta(days=i)
+        # Before joining / after exit: not worked, not absent, not paid.
+        if (service_from is not None and d < service_from) or (
+            service_to is not None and d > service_to
+        ):
+            out.days_not_in_service += Decimal("1")
+            out.by_date[d] = "not_in_service"
+            continue
         is_holiday = d in holidays
         is_weekoff = _is_sunday(d)
         leave_info = leave_day.get(d)

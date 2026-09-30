@@ -62,6 +62,8 @@ class PayslipOut(BaseModel):
     days_weekoff: Decimal = Decimal("0")
     days_sandwich: Decimal = Decimal("0")
     pdf_url: Optional[str] = None
+    is_final_settlement: bool = False
+    on_hold: bool = False
 
 
 class ReimbursementCreate(BaseModel):
