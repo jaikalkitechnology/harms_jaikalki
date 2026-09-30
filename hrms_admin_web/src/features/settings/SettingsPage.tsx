@@ -13,6 +13,7 @@ import {
   ShieldCheck,
   ShieldOff,
   User,
+  Wallet,
 } from "lucide-react";
 
 import {
@@ -39,6 +40,7 @@ import { ROLE_LABEL, type Role } from "@/lib/constants";
 import { useThemeStore, type ThemeMode } from "@/store/theme";
 import { cn } from "@/lib/utils";
 import { fmtIst } from "@/lib/datetime";
+import { PayrollSettingsTab } from "./PayrollSettingsTab";
 
 type Tab =
   | "account"
@@ -47,12 +49,14 @@ type Tab =
   | "preferences"
   | "office"
   | "leave"
-  | "attendance";
+  | "attendance"
+  | "payroll";
 
 export default function SettingsPage() {
   const [tab, setTab] = useState<Tab>("account");
   const role = useAuthStore((s) => s.role);
   const isSuper = role === "super_admin";
+  const canPayroll = useAuthStore((s) => s.hasPermission("payroll.run"));
 
   const tabs: Array<{ id: Tab; label: string; icon: typeof User }> = [
     { id: "account", label: "Account", icon: User },
@@ -64,6 +68,9 @@ export default function SettingsPage() {
           { id: "leave", label: "Leave policy", icon: CalendarDays },
           { id: "attendance", label: "Attendance", icon: Clock },
         ] as const)
+      : []),
+    ...(isSuper || canPayroll
+      ? ([{ id: "payroll", label: "Payroll", icon: Wallet }] as const)
       : []),
     { id: "company", label: "Company", icon: Building },
   ];
@@ -100,6 +107,7 @@ export default function SettingsPage() {
       {tab === "office" && <OfficeTab />}
       {tab === "leave" && <LeavePolicyTab />}
       {tab === "attendance" && <AttendanceTab />}
+      {tab === "payroll" && <PayrollSettingsTab />}
       {tab === "company" && <CompanyTab />}
     </div>
   );

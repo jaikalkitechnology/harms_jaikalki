@@ -132,10 +132,14 @@ class JaikalkiSalaryCalculator:
         template: SalaryTemplate,
         ctc_annual: Optional[Decimal | int | float] = None,
         employee: Optional[Employee] = None,
+        pf_cap: Optional[Decimal | int | float] = None,
     ) -> SalaryBreakup:
+        """``pf_cap`` is the company PF wage ceiling to apply (from the
+        Settings register). An employee's own pf_basic_cap_override
+        still wins. Falls back to the statutory ₹15,000 when omitted."""
         if template.category == "intern":
             return self._intern(template)
-        return self._standard(template, ctc_annual, employee)
+        return self._standard(template, ctc_annual, employee, pf_cap)
 
     # ── intern ────────────────────────────────────────────────────────
     def _intern(self, t: SalaryTemplate) -> SalaryBreakup:
@@ -158,13 +162,16 @@ class JaikalkiSalaryCalculator:
         t: SalaryTemplate,
         ctc_annual: Optional[Decimal | int | float],
         emp: Optional[Employee] = None,
+        pf_cap: Optional[Decimal | int | float] = None,
     ) -> SalaryBreakup:
         # Resolve per-employee statutory overrides up-front. When no
         # employee is given (template-only preview) the defaults match
         # legacy behaviour exactly.
         pf_opt_out = bool(getattr(emp, "pf_opt_out", False))
-        pf_basic_cap = (
-            Decimal(getattr(emp, "pf_basic_cap_override", None) or PF_BASIC_CAP)
+        pf_basic_cap = Decimal(
+            getattr(emp, "pf_basic_cap_override", None)
+            or pf_cap
+            or PF_BASIC_CAP
         )
         esic_force_exempt = bool(getattr(emp, "esic_force_exempt", False))
         pt_state = getattr(emp, "pt_state", None)

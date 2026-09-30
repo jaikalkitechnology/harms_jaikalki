@@ -64,6 +64,8 @@ class PayslipOut(BaseModel):
     pdf_url: Optional[str] = None
     is_final_settlement: bool = False
     on_hold: bool = False
+    pf_wages: Decimal = Decimal("0")
+    eps_wages: Decimal = Decimal("0")
 
 
 class ReimbursementCreate(BaseModel):
@@ -147,3 +149,91 @@ class BankFileExportOut(BaseModel):
 class PayrollRunDetail(BaseModel):
     run: PayrollRunOut
     payslips: List[PayslipOut]
+
+
+# ── PF wage ceiling register ──────────────────────────────────────────
+class PfCeilingOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    cap_amount: Decimal
+    eps_cap_amount: Decimal
+    effective_from: date
+    recorded_on: date
+    mid_month_mode: str
+    reference: Optional[str] = None
+    notes: Optional[str] = None
+    # Derived fields filled in by the API.
+    applies_from: Optional[date] = None
+    status: Optional[str] = None  # past | active | scheduled
+    locked: bool = False
+
+
+class PfCeilingCreate(BaseModel):
+    cap_amount: Decimal = Field(gt=0)
+    eps_cap_amount: Optional[Decimal] = Field(default=None, gt=0)
+    effective_from: date
+    recorded_on: Optional[date] = None
+    mid_month_mode: str = Field(
+        default="day_weighted", pattern="^(day_weighted|whole_month|next_month)$"
+    )
+    reference: Optional[str] = Field(default=None, max_length=255)
+    notes: Optional[str] = None
+
+
+class PfCeilingUpdate(BaseModel):
+    cap_amount: Optional[Decimal] = Field(default=None, gt=0)
+    eps_cap_amount: Optional[Decimal] = Field(default=None, gt=0)
+    effective_from: Optional[date] = None
+    recorded_on: Optional[date] = None
+    mid_month_mode: Optional[str] = Field(
+        default=None, pattern="^(day_weighted|whole_month|next_month)$"
+    )
+    reference: Optional[str] = Field(default=None, max_length=255)
+    notes: Optional[str] = None
+
+
+class PfCapCurrentOut(BaseModel):
+    pf_cap: Decimal
+    eps_cap: Decimal
+    as_of: date
+    next_change: Optional[PfCeilingOut] = None
+
+
+class PfCeilingImpactRow(BaseModel):
+    employee_id: int
+    employee_code: str
+    name: str
+    basic: int
+    old_pf_employee: int
+    new_pf_employee: int
+    old_pf_employer: int
+    new_pf_employer: int
+    old_gross: int
+    new_gross: int
+    old_net: int
+    new_net: int
+    net_change: int
+    absorb_ctc_annual: int  # CTC needed to keep gross unchanged
+
+
+class PfCeilingImpactOut(BaseModel):
+    ceiling_id: int
+    old_cap: Decimal
+    new_cap: Decimal
+    first_full_month: str  # e.g. "2026-10"
+    effective_month_cap: Decimal  # day-weighted cap for the effective month
+    rows: List[PfCeilingImpactRow]
+
+
+class PfCeilingAbsorbRequest(BaseModel):
+    employee_ids: List[int]
+    effective_date: Optional[date] = None
+    reason: str = "PF wage ceiling change — company absorbs employer PF increase"
+
+
+class PayrollPolicyOut(BaseModel):
+    division_basis: str
+
+
+class PayrollPolicyUpdate(BaseModel):
+    division_basis: str = Field(pattern="^(calendar_days|working_days|fixed_30)$")

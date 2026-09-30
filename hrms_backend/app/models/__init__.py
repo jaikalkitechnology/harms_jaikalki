@@ -96,6 +96,7 @@ from .payroll import (
     InvestmentDeclaration,
     PayrollRun,
     Payslip,
+    PfWageCeiling,
     Reimbursement,
 )
 from .performance import (
@@ -196,6 +197,7 @@ __all__ = [
     "DwpTag",
     "PayrollRun",
     "Payslip",
+    "PfWageCeiling",
     "Reimbursement",
     "InvestmentDeclaration",
     "BankFileExport",

@@ -136,5 +136,10 @@ async def calculate(
             await db.execute(select(Employee).where(Employee.id == employee_id))
         ).scalar_one_or_none()
 
+    from datetime import date as _date
+
+    from app.services.pf_ceiling_service import cap_on
+
+    pf_cap, _eps = await cap_on(db, _date.today())
     calc = JaikalkiSalaryCalculator()
-    return calc.calculate(t, ctc_annual=ctc, employee=emp).as_dict()
+    return calc.calculate(t, ctc_annual=ctc, employee=emp, pf_cap=pf_cap).as_dict()

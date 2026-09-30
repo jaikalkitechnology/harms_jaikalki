@@ -150,6 +150,11 @@ class Payslip(Base, TimestampMixin):
     # Held back from the bank file and the employee's app until the
     # resignation is marked settled.
     on_hold: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    # PF / EPS wages actually used this month (earned basic capped at the
+    # wage-month ceiling). The ECR challan reads these so an old month's
+    # challan stays correct after the cap changes.
+    pf_wages: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=Decimal("0"))
+    eps_wages: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=Decimal("0"))
 
     pdf_url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
 
@@ -277,5 +282,39 @@ class GeneratedDocument(Base, TimestampMixin):
     file_url: Mapped[str] = mapped_column(String(500), nullable=False)
     payload: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
     generated_by: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+
+
+class PfWageCeiling(Base, TimestampMixin):
+    """Dated PF wage ceiling register (EPFO wage cap).
+
+    The cap for a payroll month is the day-weighted cap across that wage
+    month (see pf_ceiling_service.caps_for_wage_month). Records are never
+    overwritten so historical payrolls stay reproducible.
+    """
+
+    __tablename__ = "pf_wage_ceilings"
+    __table_args__ = mysql_table_args
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    cap_amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
+    # EPS (pension) has its own wage ceiling; defaults to the PF cap
+    # only if the circular raises both.
+    eps_cap_amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
+    effective_from: Mapped[date] = mapped_column(Date, nullable=False, index=True)
+    recorded_on: Mapped[date] = mapped_column(Date, nullable=False)
+    # How a mid-month effective date treats that wage month:
+    #   day_weighted — pro-rata by calendar days (default)
+    #   whole_month  — the whole effective month uses the new cap
+    #   next_month   — the new cap starts from the next wage month
+    mid_month_mode: Mapped[str] = mapped_column(
+        Enum("day_weighted", "whole_month", "next_month", name="pf_ceiling_mode"),
+        default="day_weighted",
+        nullable=False,
+    )
+    reference: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    created_by: Mapped[Optional[int]] = mapped_column(
         ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
