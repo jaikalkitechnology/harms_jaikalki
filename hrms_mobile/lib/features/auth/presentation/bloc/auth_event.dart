@@ -46,3 +46,9 @@ class AuthLogoutRequested extends AuthEvent {
 class AuthTokenRefreshRequested extends AuthEvent {
   const AuthTokenRefreshRequested();
 }
+
+/// The server rejected the refresh token mid-session (logged out on
+/// another device, password changed, revoked).
+class AuthSessionExpired extends AuthEvent {
+  const AuthSessionExpired();
+}

@@ -4,6 +4,7 @@ from typing import Optional
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.core.exceptions import UnauthorizedError
 from app.core.security import (
     create_access_token,
@@ -38,6 +39,7 @@ async def issue_token_pair(
     ip: Optional[str] = None,
     access_minutes: Optional[int] = None,
     refresh_days: Optional[int] = None,
+    persistent: bool = False,
 ) -> tuple[str, str, int]:
     """Mint a fresh access + refresh token pair for ``user``.
 
@@ -52,7 +54,9 @@ async def issue_token_pair(
         extra={"email": user.email},
         expires_minutes=access_minutes,
     )
-    refresh, jti, exp = create_refresh_token(user.id, expires_days=refresh_days)
+    refresh, jti, exp = create_refresh_token(
+        user.id, expires_days=refresh_days, persistent=persistent
+    )
     db.add(
         RefreshToken(
             user_id=user.id,
@@ -80,18 +84,36 @@ async def rotate_refresh_token(
     record = (
         await db.execute(select(RefreshToken).where(RefreshToken.jti == jti))
     ).scalar_one_or_none()
-    if not record or record.revoked or record.user_id != user_id:
+    if not record or record.user_id != user_id:
         raise UnauthorizedError("Refresh token revoked")
 
-    record.revoked = True
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    if record.revoked:
+        # Logged-out tokens have no rotated_at and are always refused.
+        rotated_ago = (
+            (now - record.rotated_at).total_seconds() if record.rotated_at else None
+        )
+        if rotated_ago is None or rotated_ago > settings.JWT_REFRESH_REUSE_GRACE_SECONDS:
+            raise UnauthorizedError("Refresh token revoked")
+    else:
+        record.revoked = True
+        record.rotated_at = now
+
     user = (
         await db.execute(select(User).where(User.id == user_id))
     ).scalar_one_or_none()
     if not user or not user.is_active:
         raise UnauthorizedError("User not found or inactive")
 
+    # Sliding session: a persistent token is renewed for the full window.
+    persistent = bool(payload.get("persistent"))
     access, new_refresh, expires_in = await issue_token_pair(
-        db, user, user_agent=user_agent, ip=ip
+        db,
+        user,
+        user_agent=user_agent,
+        ip=ip,
+        refresh_days=settings.JWT_PERSISTENT_REFRESH_DAYS if persistent else None,
+        persistent=persistent,
     )
     return user, access, new_refresh, expires_in
 

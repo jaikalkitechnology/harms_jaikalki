@@ -44,6 +44,13 @@ class Settings(BaseSettings):
     JWT_ALGORITHM: str = "HS256"
     JWT_ACCESS_TOKEN_EXPIRE_MINUTES: int = 15
     JWT_REFRESH_TOKEN_EXPIRE_DAYS: int = 30
+    # "Keep me signed in" sessions. Every refresh restarts this window, so
+    # a device that opens the app at least once a year never logs out.
+    JWT_PERSISTENT_REFRESH_DAYS: int = 365
+    # A just-rotated refresh token still works for this long, so two
+    # requests refreshing at once — or a refresh whose response was lost
+    # on a flaky network — don't sign the user out.
+    JWT_REFRESH_REUSE_GRACE_SECONDS: int = 120
 
     CORS_ORIGINS: List[str] = Field(default_factory=list)
 

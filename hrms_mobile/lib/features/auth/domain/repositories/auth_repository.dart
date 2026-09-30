@@ -10,6 +10,10 @@ abstract class AuthRepository {
 
   Future<AuthUser> me();
 
+  /// The user from the last successful [me], if any — lets the app open
+  /// signed in while offline.
+  Future<AuthUser?> cachedUser();
+
   Future<TokenPair> refresh(String refreshToken);
 
   Future<void> logout();

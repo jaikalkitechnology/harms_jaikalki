@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import '../constants/app_constants.dart';
 import '../di/injection.dart';
 import '../storage/secure_storage.dart';
+import 'session_events.dart';
 
 class AuthInterceptor extends Interceptor {
   @override
@@ -29,34 +30,52 @@ class AuthInterceptor extends Interceptor {
 }
 
 /// Handles 401 by transparently refreshing the access token and retrying once.
+///
+/// Queued, so concurrent 401s are handled one after another: the first
+/// refreshes, the rest see the new token and just retry. The stored
+/// session is only dropped when the server rejects the refresh token
+/// itself — a timeout or dropped connection during refresh keeps the
+/// user signed in so the next request can try again.
 class RefreshInterceptor extends QueuedInterceptor {
   RefreshInterceptor();
 
-  bool _refreshing = false;
+  static const _retriedKey = '_auth_retried';
 
   @override
   Future<void> onError(
     DioException err,
     ErrorInterceptorHandler handler,
   ) async {
-    final response = err.response;
-    final isUnauthorized = response?.statusCode == 401;
-    final isRefreshCall =
-        err.requestOptions.path.contains('/auth/refresh');
+    final options = err.requestOptions;
+    final isUnauthorized = err.response?.statusCode == 401;
+    final path = options.path;
+    final isAuthCall = path.contains('/auth/refresh') ||
+        path.contains('/auth/login') ||
+        path.contains('/auth/logout');
 
-    if (!isUnauthorized || isRefreshCall || _refreshing) {
+    if (!isUnauthorized || isAuthCall || options.extra[_retriedKey] == true) {
       return handler.next(err);
     }
 
-    _refreshing = true;
-    try {
-      final storage = sl<SecureStorage>();
-      final refresh = await storage.readRefreshToken();
-      if (refresh == null || refresh.isEmpty) {
-        return handler.next(err);
-      }
+    final storage = sl<SecureStorage>();
+    final sentToken = _bearer(options.headers['Authorization']);
+    final storedAccess = await storage.readAccessToken();
 
-      // Use a bare Dio so this call doesn't recurse through our interceptors.
+    // Another queued request already refreshed — retry with the new token.
+    if (storedAccess != null &&
+        storedAccess.isNotEmpty &&
+        storedAccess != sentToken) {
+      return _retry(options, storedAccess, handler, err);
+    }
+
+    final refresh = await storage.readRefreshToken();
+    if (refresh == null || refresh.isEmpty) {
+      return handler.next(err);
+    }
+
+    final String newAccess;
+    try {
+      // Bare Dio so this call doesn't recurse through our interceptors.
       final bareDio = Dio(
         BaseOptions(
           baseUrl: AppConstants.apiBaseUrl,
@@ -69,33 +88,60 @@ class RefreshInterceptor extends QueuedInterceptor {
         data: {'refresh_token': refresh},
       );
       final data = res.data!;
-      await storage.writeAccessToken(data['access_token'] as String);
+      newAccess = data['access_token'] as String;
+      await storage.writeAccessToken(newAccess);
       await storage.writeRefreshToken(data['refresh_token'] as String);
-
-      // Retry original request with new token.
-      final retryOptions = Options(
-        method: err.requestOptions.method,
-        headers: {
-          ...err.requestOptions.headers,
-          'Authorization': 'Bearer ${data['access_token']}',
-        },
-      );
-      final dio = sl<Dio>();
-      final retried = await dio.request<dynamic>(
-        err.requestOptions.path,
-        data: err.requestOptions.data,
-        queryParameters: err.requestOptions.queryParameters,
-        options: retryOptions,
-      );
-      return handler.resolve(retried);
+    } on DioException catch (e) {
+      if (isRejectedRefresh(e)) {
+        // The session is really over (logged out, revoked, expired).
+        await storage.clear();
+        SessionEvents.notifyExpired();
+        return handler.next(err);
+      }
+      // Couldn't reach the server: report that, not the 401, so callers
+      // don't treat a network blip as a logout.
+      return handler.next(e);
     } catch (_) {
-      // Refresh failed — let the 401 propagate so the UI can route to login.
-      await sl<SecureStorage>().clear();
       return handler.next(err);
-    } finally {
-      _refreshing = false;
+    }
+
+    return _retry(options, newAccess, handler, err);
+  }
+
+  Future<void> _retry(
+    RequestOptions options,
+    String accessToken,
+    ErrorInterceptorHandler handler,
+    DioException original,
+  ) async {
+    final data = options.data;
+    final retryOptions = options.copyWith(
+      // A FormData body can only be sent once.
+      data: data is FormData ? data.clone() : data,
+      headers: {...options.headers, 'Authorization': 'Bearer $accessToken'},
+      extra: {...options.extra, _retriedKey: true},
+    );
+    try {
+      final response = await sl<Dio>().fetch<dynamic>(retryOptions);
+      return handler.resolve(response);
+    } on DioException catch (e) {
+      return handler.next(e);
+    } catch (_) {
+      return handler.next(original);
     }
   }
+
+  static String? _bearer(Object? header) {
+    if (header is! String || !header.startsWith('Bearer ')) return null;
+    return header.substring(7);
+  }
+}
+
+/// True when the server refused the refresh token itself, as opposed to
+/// the request failing to reach it.
+bool isRejectedRefresh(DioException e) {
+  final code = e.response?.statusCode;
+  return code == 401 || code == 403 || code == 422;
 }
 
 class LoggingInterceptor extends Interceptor {
