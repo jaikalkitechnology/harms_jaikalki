@@ -93,14 +93,37 @@ async def process_payroll(
         db.add(run)
         await db.flush()
 
+    from calendar import monthrange
+    from datetime import date as _date
+
+    period_first = _date(year, month, 1)
+    period_days_int = monthrange(year, month)[1]
+    period_last = _date(year, month, period_days_int)
+
+    # Filter out fully-exited employees (their exit_date has passed
+    # before the period starts) and future-joins (DOJ after the period
+    # ends). Mid-cycle exits and mid-cycle joins do get a payslip; the
+    # inactive_days_in_period math below shrinks their pay pro-rata.
     employees = (
         await db.execute(
             select(Employee).where(Employee.status == "active")
         )
     ).scalars().all()
+    active = []
+    for emp in employees:
+        if emp.exit_date and emp.exit_date < period_first:
+            continue
+        if emp.date_of_joining and emp.date_of_joining > period_last:
+            continue
+        active.append(emp)
+    employees = active
 
     calc = JaikalkiSalaryCalculator()
     _policy = await get_leave_policy(db)
+    from app.services.payroll_policy import get_payroll_policy
+
+    _pay_policy = await get_payroll_policy(db)
+    _basis = _pay_policy.get("division_basis", "calendar_days")
 
     total_gross = Decimal("0")
     total_net = Decimal("0")
@@ -142,8 +165,54 @@ async def process_payroll(
         )
         working = att.working_days
         lop = att.days_lop
-        paid = att.days_paid
-        scaling = paid / working if working > 0 else Decimal("0")
+
+        # ── Divisor + scaling ────────────────────────────────────────
+        # Attendance is collected from the *cycle window* (e.g. 21-Aug
+        # → 20-Sept for the September payroll), but pay is scaled over
+        # the *target month* by default so the payslip reads
+        # ``Days Paid X / 30`` for September regardless of the cycle.
+        # ``payroll.division_basis`` in SystemConfig can flip back to
+        # legacy behaviours.
+        if _basis == "working_days":
+            divisor = working
+            # Legacy: no separate "inactive_days_in_period" fold-in
+            # because ``working`` already excludes not-in-service days
+            # via the attendance service-window guard.
+            paid_days_num = att.days_paid
+        else:
+            period_days = (
+                Decimal(30)
+                if _basis == "fixed_30"
+                else Decimal(period_days_int)
+            )
+            # Days in the target month the employee was NOT on the
+            # roll (before DOJ, after exit_date).
+            join_gap = 0
+            if emp.date_of_joining and emp.date_of_joining > period_first:
+                join_gap = min(
+                    period_days_int,
+                    (emp.date_of_joining - period_first).days,
+                )
+            exit_gap = 0
+            if emp.exit_date and emp.exit_date < period_last:
+                exit_gap = min(
+                    period_days_int,
+                    (period_last - emp.exit_date).days,
+                )
+            inactive_days = Decimal(join_gap + exit_gap)
+            paid_days_num = max(
+                Decimal("0"), period_days - lop - inactive_days
+            )
+            divisor = period_days
+
+        scaling = (
+            paid_days_num / divisor if divisor > 0 else Decimal("0")
+        )
+        # Persist the divisor as ``working_days`` on the payslip — the
+        # PDF renders "Days Paid X / working_days", so with basis =
+        # calendar_days the row auto-formats as "28 / 30" for Sept.
+        working = divisor
+        paid = paid_days_num
 
         gross = (Decimal(breakup["gross"]) * scaling).quantize(Decimal("1"))
         pf_emp = Decimal(breakup["pf_employee"])  # capped → don't scale

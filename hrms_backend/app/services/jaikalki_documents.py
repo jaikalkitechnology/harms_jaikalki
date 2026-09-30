@@ -1137,20 +1137,31 @@ def render_payslip_pdf(
     story.append(Spacer(1, 10))
 
     # ── Days paid / LOP strip ──────────────────────────────────────────
+    def _fmt_days(v) -> str:
+        from decimal import Decimal as _D
+        d = _D(str(v or 0)).normalize()
+        # ``.normalize()`` turns Decimal("30.00") into Decimal("3E+1") —
+        # switch back to a plain integer when there's no fractional part
+        # so the payslip reads "30", not "30.00" or "3E+1".
+        if d == d.to_integral_value():
+            return str(int(d))
+        return format(d, "f").rstrip("0").rstrip(".")
+
     days_strip = Table(
         [[
             Paragraph(
                 f"<font name='{FONT_REGULAR}' size=9 color='#5C3D24'>"
                 f"DAYS PAID</font>  "
                 f"<font name='{FONT_BOLD}' size=11 color='#2D1810'>"
-                f"{payslip.days_paid} / {payslip.working_days}</font>",
+                f"{_fmt_days(payslip.days_paid)} / "
+                f"{_fmt_days(payslip.working_days)}</font>",
                 s["body"],
             ),
             Paragraph(
                 f"<font name='{FONT_REGULAR}' size=9 color='#5C3D24'>"
                 f"DAYS LOP</font>  "
                 f"<font name='{FONT_BOLD}' size=11 color='#2D1810'>"
-                f"{payslip.days_lop}</font>",
+                f"{_fmt_days(payslip.days_lop)}</font>",
                 s["body"],
             ),
         ]],
