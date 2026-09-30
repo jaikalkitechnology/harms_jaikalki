@@ -1,22 +1,15 @@
-import { useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useRef, useState } from "react";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
   ArrowLeft,
-  BadgeCheck,
-  Building,
-  Calendar,
-  Clock,
   FileText,
   KeyRound,
-  Mail,
   Pencil,
-  Phone,
   ScrollText,
   ShieldOff,
   ShieldCheck,
-  User,
   UserPlus,
   X,
 } from "lucide-react";
@@ -33,10 +26,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { LoadingScreen } from "@/components/shared/LoadingScreen";
 import { PermissionGate } from "@/components/shared/PermissionGate";
+import { useAuthStore } from "@/store/auth";
 import {
   employeesApi,
   salaryTemplatesApi,
-  type SalaryBreakup,
+  type EmployeeDetail,
 } from "@/lib/api/employees";
 import { compensationApi, type SalaryRevision } from "@/lib/api/compensation";
 import {
@@ -44,290 +38,236 @@ import {
   pfCeilingApi,
   type GeneratedDocument,
 } from "@/lib/api/payroll";
-import { launchApi } from "@/lib/api/launch";
-import { CategoryBadge } from "./CategoryBadge";
+import { cn } from "@/lib/utils";
 import { OnboardingDocsCard } from "./OnboardingDocsCard";
 import { LettersDocsCard } from "./LettersDocsCard";
 import { AttendanceLeaveCard } from "./AttendanceLeaveCard";
+import { LifecycleDrawer } from "./LifecycleDrawer";
 import {
   BankCard,
   FamilyCard,
   NomineesCard,
   PassportCard,
-  PhotoUploadButton,
   StatutoryIdsCard,
 } from "./EmployeeProfileExtras";
+import { ProfileHeader } from "./profile/ProfileHeader";
+import {
+  ContactSection,
+  JobSection,
+  PersonalSection,
+  SalarySection,
+} from "./profile/sections";
+import { LifecycleTimeline } from "./profile/LifecycleTimeline";
+import { CompletenessCard, useCompleteness } from "./profile/CompletenessCard";
+import { ExitBanner, hasLeft, isSeparated } from "./profile/ExitBanner";
+import {
+  EditableProvider,
+  Field,
+  FormActions,
+  InfoGrid,
+  InfoItem,
+  SELECT_CLASS,
+  SectionCard,
+  useSaveEmployee,
+} from "./profile/ui";
 import { fmtIstDate } from "@/lib/datetime";
+
+type TabKey = "overview" | "personal" | "pay" | "statutory" | "attendance" | "documents";
+
+/** A tab shows when the user holds any one of its permissions. */
+const TABS: { key: TabKey; label: string; anyOf?: string[] }[] = [
+  { key: "overview", label: "Overview" },
+  { key: "personal", label: "Personal" },
+  { key: "pay", label: "Pay", anyOf: ["salary.view.team", "employee.update"] },
+  { key: "statutory", label: "Statutory", anyOf: ["salary.view.team", "employee.update"] },
+  { key: "attendance", label: "Attendance & leave", anyOf: ["attendance.view.all"] },
+  { key: "documents", label: "Documents", anyOf: ["employee.update", "employee.create"] },
+];
 
 export default function EmployeeDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const employeeId = Number(id);
   const queryClient = useQueryClient();
+  const [params, setParams] = useSearchParams();
+  const hasPermission = useAuthStore((s) => s.hasPermission);
+  const tabBarRef = useRef<HTMLDivElement | null>(null);
 
   const { data: employee, isLoading } = useQuery({
     queryKey: ["employee", employeeId],
     queryFn: () => employeesApi.get(employeeId),
     enabled: Number.isFinite(employeeId),
   });
-
-  const { data: breakup } = useQuery({
-    queryKey: [
-      "salary-breakup",
-      employee?.salary_template?.id,
-      employee?.ctc_annual,
-      employee?.id,
-      employee?.pf_opt_out,
-      employee?.pf_basic_cap_override,
-      employee?.esic_force_exempt,
-      employee?.pt_state,
-    ],
-    queryFn: () =>
-      salaryTemplatesApi.calculate(
-        employee!.salary_template!.id,
-        Number(employee!.ctc_annual),
-        employee!.id,
-      ),
-    enabled: !!employee?.salary_template,
-  });
-
-  const confirmMutation = useMutation({
-    mutationFn: () => employeesApi.confirm(employeeId, null),
-    onSuccess: () => {
-      toast.success("Employee confirmed");
-      queryClient.invalidateQueries({ queryKey: ["employee", employeeId] });
-      queryClient.invalidateQueries({ queryKey: ["employees"] });
-    },
-    onError: () => toast.error("Failed to confirm"),
-  });
+  const { data: completeness } = useCompleteness(employeeId);
 
   const [editOpen, setEditOpen] = useState(false);
   const [credentialOpen, setCredentialOpen] = useState(false);
+  const [lifecycleOpen, setLifecycleOpen] = useState(false);
+  const [editUnlocked, setEditUnlocked] = useState(false);
 
-  const [extendMonths, setExtendMonths] = useState(2);
-  const [extendReason, setExtendReason] = useState("");
-  const extendMutation = useMutation({
-    mutationFn: () =>
-      employeesApi.extendProbation(employeeId, extendMonths, extendReason),
-    onSuccess: () => {
-      toast.success("Probation extended");
-      setExtendReason("");
-      queryClient.invalidateQueries({ queryKey: ["employee", employeeId] });
-    },
-    onError: () => toast.error("Failed to extend probation"),
-  });
+  const tabs = TABS.filter((t) => !t.anyOf || t.anyOf.some((p) => hasPermission(p)));
+  const requested = params.get("tab") as TabKey | null;
+  const tab: TabKey = tabs.some((t) => t.key === requested) ? requested! : "overview";
+  const missingByTab = new Map<string, number>();
+  for (const m of completeness?.missing ?? []) {
+    missingByTab.set(m.section, (missingByTab.get(m.section) ?? 0) + 1);
+  }
 
-  const resignationUnlock = useMutation({
-    mutationFn: (unlocked: boolean) =>
-      launchApi.setResignationUnlock(employeeId, unlocked),
-    onSuccess: (r) => {
-      toast.success(
-        r.resignation_unlocked
-          ? "Resignation submission unlocked for this employee"
-          : "Resignation submission locked again",
-      );
-      queryClient.invalidateQueries({ queryKey: ["employee", employeeId] });
-    },
-    onError: (e: any) =>
-      toast.error(e?.response?.data?.detail ?? "Could not toggle"),
-  });
+  const go = (key: string) => {
+    const next = tabs.some((t) => t.key === key) ? key : "overview";
+    setParams(
+      (p) => {
+        p.set("tab", next);
+        return p;
+      },
+      { replace: true },
+    );
+    tabBarRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
 
   if (isLoading || !employee) return <LoadingScreen label="Loading employee…" />;
 
-  const probationDaysLeft = employee.probation_end_date
-    ? Math.ceil(
-        (new Date(employee.probation_end_date).getTime() - Date.now()) /
-          (1000 * 60 * 60 * 24),
-      )
-    : null;
+  const canEdit =
+    hasPermission("employee.update") && (!hasLeft(employee) || editUnlocked);
+  const refreshEmployee = () => {
+    queryClient.invalidateQueries({ queryKey: ["employee", employeeId] });
+    queryClient.invalidateQueries({ queryKey: ["employee-completeness", employeeId] });
+    queryClient.invalidateQueries({ queryKey: ["lifecycle", employeeId] });
+    queryClient.invalidateQueries({ queryKey: ["employees"] });
+  };
 
   return (
-    <div className="space-y-6">
-      <button
-        onClick={() => navigate("/employees")}
-        className="flex items-center gap-2 text-sm text-brand-brown-light hover:text-brand-brown-darker"
-      >
-        <ArrowLeft className="h-4 w-4" /> Back to directory
-      </button>
+    <EditableProvider value={canEdit}>
+      <div className="space-y-5">
+        <button
+          onClick={() => navigate("/employees")}
+          className="flex items-center gap-2 text-sm text-brand-brown-light hover:text-brand-brown-darker"
+        >
+          <ArrowLeft className="h-4 w-4" /> Back to directory
+        </button>
 
-      <div className="flex items-start gap-6 flex-wrap">
-        <div className="h-24 w-24 rounded-2xl bg-brand-gold/15 grid place-items-center text-brand-brown-darker shrink-0">
-          {employee.photo_url ? (
-            <img
-              src={employee.photo_url}
-              alt=""
-              className="h-full w-full object-cover rounded-2xl"
-            />
-          ) : (
-            <User className="h-10 w-10" />
+        {isSeparated(employee) && (
+          <ExitBanner
+            employee={employee}
+            editUnlocked={editUnlocked}
+            onToggleEdit={() => setEditUnlocked((u) => !u)}
+          />
+        )}
+
+        <ProfileHeader
+          employee={employee}
+          onEdit={() => setEditOpen(true)}
+          onCredentials={() => setCredentialOpen(true)}
+          onManageLifecycle={() => setLifecycleOpen(true)}
+          onOpenCompleteness={() => go("overview")}
+        />
+
+        <div
+          ref={tabBarRef}
+          className="sticky top-0 z-20 -mx-1 scroll-mt-4 bg-surface-cream/95 px-1 pt-1 backdrop-blur"
+        >
+          <nav
+            role="tablist"
+            aria-label="Profile sections"
+            className="flex gap-1 overflow-x-auto border-b border-brand-brown-100"
+          >
+            {tabs.map((t) => {
+              const missing = missingByTab.get(t.key) ?? 0;
+              return (
+                <button
+                  key={t.key}
+                  role="tab"
+                  aria-selected={tab === t.key}
+                  onClick={() => go(t.key)}
+                  className={cn(
+                    "-mb-px flex shrink-0 items-center gap-1.5 border-b-2 px-4 py-2.5 text-sm font-medium transition-colors",
+                    tab === t.key
+                      ? "border-brand-gold-dark text-brand-brown-darker"
+                      : "border-transparent text-brand-brown-light hover:text-brand-brown-darker",
+                  )}
+                >
+                  {t.label}
+                  {missing > 0 && (
+                    <span
+                      className="grid h-4 min-w-4 place-items-center rounded-full bg-warning/15 px-1 text-[10px] font-semibold text-warning"
+                      title={`${missing} item${missing === 1 ? "" : "s"} missing`}
+                    >
+                      {missing}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </nav>
+        </div>
+
+        <div role="tabpanel" className="space-y-4">
+          {tab === "overview" && (
+            <div className="grid items-start gap-4 lg:grid-cols-3">
+              <div className="space-y-4 lg:col-span-2">
+                <JobSection employee={employee} />
+                <LifecycleTimeline employee={employee} />
+              </div>
+              <CompletenessCard employeeId={employee.id} onGo={go} />
+            </div>
+          )}
+
+          {tab === "personal" && (
+            <>
+              <div className="grid items-start gap-4 lg:grid-cols-2">
+                <PersonalSection employee={employee} />
+                <ContactSection employee={employee} />
+              </div>
+              <PermissionGate permission="employee.update">
+                <div className="grid items-start gap-4 lg:grid-cols-2">
+                  <FamilyCard employeeId={employee.id} />
+                  <NomineesCard employeeId={employee.id} />
+                </div>
+                <PassportCard employeeId={employee.id} />
+              </PermissionGate>
+            </>
+          )}
+
+          {tab === "pay" && (
+            <>
+              <PermissionGate permission="salary.view.team">
+                <SalarySection employee={employee} />
+                <CompensationHistoryCard employee={employee} />
+              </PermissionGate>
+              <PermissionGate permission="employee.update">
+                <BankCard employeeId={employee.id} />
+              </PermissionGate>
+            </>
+          )}
+
+          {tab === "statutory" && (
+            <>
+              <PermissionGate permission="employee.update">
+                <StatutoryIdsCard employee={employee} />
+              </PermissionGate>
+              <PermissionGate permission="salary.view.team">
+                <StatutoryOverridesCard employee={employee} />
+              </PermissionGate>
+            </>
+          )}
+
+          {tab === "attendance" && <AttendanceLeaveCard employeeId={employee.id} />}
+
+          {tab === "documents" && (
+            <>
+              <PermissionGate permission="employee.update">
+                <OnboardingDocsCard employeeId={employee.id} />
+                <LettersDocsCard
+                  employeeId={employee.id}
+                  employeeCode={employee.employee_code}
+                />
+              </PermissionGate>
+              <PermissionGate permission="employee.create">
+                <DocumentsCard employeeId={employee.id} />
+              </PermissionGate>
+            </>
           )}
         </div>
-        <div className="flex-1 min-w-0">
-          <div className="text-[10px] font-mono uppercase tracking-[0.3em] text-brand-gold-dark">
-            ★ {employee.employee_code}
-          </div>
-          <h1 className="font-display text-3xl font-bold text-brand-brown-darker">
-            {employee.first_name} {employee.last_name}
-          </h1>
-          <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-brand-brown-light">
-            {employee.designation && <span>{employee.designation.name}</span>}
-            {employee.department && <span>· {employee.department.name}</span>}
-          </div>
-          <div className="mt-3 flex items-center gap-2">
-            <CategoryBadge code={employee.category?.code} />
-            {employee.is_on_probation ? (
-              <span className="text-[10px] font-mono uppercase tracking-[0.2em] px-2 py-1 rounded bg-warning/10 text-warning">
-                On Probation
-                {probationDaysLeft !== null &&
-                  ` · ${probationDaysLeft} days left`}
-              </span>
-            ) : (
-              <span className="text-[10px] font-mono uppercase tracking-[0.2em] px-2 py-1 rounded bg-success/10 text-success">
-                Confirmed
-              </span>
-            )}
-          </div>
-        </div>
-        <PermissionGate permission="employee.update">
-          <div className="flex flex-col gap-2 shrink-0">
-            <Button
-              variant="outline"
-              className="gap-2"
-              onClick={() => setEditOpen(true)}
-            >
-              <Pencil className="size-4" /> Edit
-            </Button>
-            <PhotoUploadButton employeeId={employee.id} />
-            <Button
-              variant="outline"
-              className="gap-2"
-              onClick={() => setCredentialOpen(true)}
-            >
-              <KeyRound className="size-4" /> Credentials
-            </Button>
-          </div>
-        </PermissionGate>
-      </div>
-
-      <div className="grid lg:grid-cols-2 gap-4">
-        <Card>
-          <CardHeader>
-            <CardTitle>Work info</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3 text-sm">
-            <Row icon={Building} label="Department" value={employee.department?.name} />
-            <Row icon={BadgeCheck} label="Designation" value={employee.designation?.name} />
-            <Row
-              icon={Calendar}
-              label="Date of joining"
-              value={employee.date_of_joining}
-            />
-            <Row
-              icon={Clock}
-              label="Probation ends"
-              value={employee.probation_end_date}
-            />
-            <Row
-              icon={Calendar}
-              label="Confirmed on"
-              value={employee.confirmation_date ?? "—"}
-            />
-            <Row icon={Building} label="Work location" value={employee.work_location} />
-            <Row icon={Building} label="Work mode" value={employee.work_mode} />
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Contact</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3 text-sm">
-            <Row icon={Mail} label="Personal email" value={employee.personal_email} />
-            <Row icon={Phone} label="Personal phone" value={employee.personal_phone} />
-            <Row icon={User} label="Date of birth" value={employee.date_of_birth} />
-            <Row icon={User} label="Gender" value={employee.gender} />
-            <Row icon={User} label="Marital status" value={employee.marital_status} />
-            <Row icon={User} label="Blood group" value={employee.blood_group} />
-          </CardContent>
-        </Card>
-
-        <PermissionGate permission="salary.view.team">
-          <Card className="lg:col-span-2">
-            <CardHeader>
-              <CardTitle>
-                Salary <span className="display-em">breakup</span>
-              </CardTitle>
-              <CardDescription>
-                {employee.salary_template?.template_name ?? "No template"}
-                {breakup &&
-                  ` · CTC ₹${(breakup.total_ctc_annual / 100000).toFixed(2)}L`}
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              {!breakup ? (
-                <p className="text-sm text-brand-brown-light">
-                  No salary template assigned.
-                </p>
-              ) : breakup.is_intern ? (
-                <div className="space-y-2">
-                  <p className="text-sm">
-                    Intern — receives travel reimbursement only (max ₹
-                    {breakup.travel_expense_max.toLocaleString()}/mo).
-                  </p>
-                </div>
-              ) : (
-                <SalaryGrid breakup={breakup} />
-              )}
-            </CardContent>
-          </Card>
-        </PermissionGate>
-
-        <PermissionGate permission="salary.view.team">
-          <CompensationHistoryCard employee={employee} />
-        </PermissionGate>
-
-        <PermissionGate permission="salary.view.team">
-          <StatutoryOverridesCard employee={employee} />
-        </PermissionGate>
-
-        <PermissionGate permission="attendance.view.all">
-          <AttendanceLeaveCard employeeId={employee.id} />
-        </PermissionGate>
-
-        <PermissionGate permission="employee.update">
-          <BankCard employeeId={employee.id} />
-        </PermissionGate>
-
-        <PermissionGate permission="employee.update">
-          <StatutoryIdsCard employee={employee} />
-        </PermissionGate>
-
-        <PermissionGate permission="employee.update">
-          <FamilyCard employeeId={employee.id} />
-        </PermissionGate>
-
-        <PermissionGate permission="employee.update">
-          <NomineesCard employeeId={employee.id} />
-        </PermissionGate>
-
-        <PermissionGate permission="employee.update">
-          <PassportCard employeeId={employee.id} />
-        </PermissionGate>
-
-        <PermissionGate permission="employee.update">
-          <OnboardingDocsCard employeeId={employee.id} />
-        </PermissionGate>
-
-        <PermissionGate permission="employee.update">
-          <LettersDocsCard
-            employeeId={employee.id}
-            employeeCode={employee.employee_code}
-          />
-        </PermissionGate>
-
-        <PermissionGate permission="employee.create">
-          <DocumentsCard employeeId={employee.id} />
-        </PermissionGate>
 
         {editOpen && (
           <EditEmployeeModal
@@ -335,10 +275,7 @@ export default function EmployeeDetailPage() {
             onClose={() => setEditOpen(false)}
             onSaved={() => {
               setEditOpen(false);
-              queryClient.invalidateQueries({
-                queryKey: ["employee", employeeId],
-              });
-              queryClient.invalidateQueries({ queryKey: ["employees"] });
+              refreshEmployee();
             }}
           />
         )}
@@ -352,246 +289,23 @@ export default function EmployeeDetailPage() {
           />
         )}
 
-        {employee.is_on_probation && (
-          <PermissionGate permission="employee.update">
-            <Card className="lg:col-span-2">
-              <CardHeader>
-                <CardTitle>
-                  Probation <span className="display-em">actions</span>
-                </CardTitle>
-                <CardDescription>
-                  HR can confirm the employee or extend the probation by up to 2 months.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="grid md:grid-cols-2 gap-6">
-                <div>
-                  <Label className="mb-2 block">Confirm</Label>
-                  <Button
-                    onClick={() => confirmMutation.mutate()}
-                    disabled={confirmMutation.isPending}
-                  >
-                    Mark as confirmed
-                  </Button>
-                </div>
-                <div>
-                  <Label className="mb-2 block">Extend probation</Label>
-                  <div className="space-y-2">
-                    <div className="flex gap-2 items-center">
-                      <Input
-                        type="number"
-                        min={1}
-                        max={6}
-                        value={extendMonths}
-                        onChange={(e) =>
-                          setExtendMonths(Number(e.target.value || 1))
-                        }
-                        className="w-20"
-                      />
-                      <span className="text-sm text-brand-brown-light">months</span>
-                    </div>
-                    <Input
-                      placeholder="Reason for extension"
-                      value={extendReason}
-                      onChange={(e) => setExtendReason(e.target.value)}
-                    />
-                    <Button
-                      variant="outline"
-                      onClick={() => extendMutation.mutate()}
-                      disabled={
-                        extendMutation.isPending || extendReason.length < 5
-                      }
-                    >
-                      Extend probation
-                    </Button>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </PermissionGate>
+        {lifecycleOpen && (
+          <LifecycleDrawer
+            employeeId={employee.id}
+            employeeName={`${employee.first_name} ${employee.last_name}`}
+            onClose={() => {
+              setLifecycleOpen(false);
+              refreshEmployee();
+            }}
+          />
         )}
-
-        <PermissionGate permission="approval.act">
-          <Card className="lg:col-span-2">
-            <CardHeader>
-              <CardTitle>
-                Resignation <span className="display-em">access</span>
-              </CardTitle>
-              <CardDescription>
-                Resignation submission from the mobile app is locked by
-                default. Toggle this on when the employee has formally
-                requested to resign (e.g. via email). The lock auto-resets
-                once they submit, so this is a one-shot per request.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="flex flex-wrap items-center justify-between gap-3">
-              <div className="text-sm">
-                Current state:{" "}
-                {employee.resignation_unlocked ? (
-                  <span className="font-semibold text-success">
-                    Unlocked — employee can submit
-                  </span>
-                ) : (
-                  <span className="font-semibold text-brand-brown-light">
-                    Locked
-                  </span>
-                )}
-              </div>
-              <div className="flex gap-2">
-                <Button
-                  variant={
-                    employee.resignation_unlocked ? "outline" : "default"
-                  }
-                  onClick={() => resignationUnlock.mutate(true)}
-                  disabled={
-                    resignationUnlock.isPending || employee.resignation_unlocked
-                  }
-                >
-                  Unlock submission
-                </Button>
-                <Button
-                  variant="outline"
-                  onClick={() => resignationUnlock.mutate(false)}
-                  disabled={
-                    resignationUnlock.isPending ||
-                    !employee.resignation_unlocked
-                  }
-                >
-                  Lock again
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        </PermissionGate>
       </div>
-    </div>
+    </EditableProvider>
   );
 }
 
-function Row({
-  icon: Icon,
-  label,
-  value,
-}: {
-  icon: React.ComponentType<{ className?: string }>;
-  label: string;
-  value: string | null | undefined;
-}) {
-  return (
-    <div className="flex items-start gap-3">
-      <Icon className="h-4 w-4 text-brand-gold-dark mt-0.5" />
-      <div className="min-w-0">
-        <div className="text-[10px] font-mono uppercase tracking-[0.2em] text-brand-brown-light">
-          {label}
-        </div>
-        <div className="text-brand-brown-darker">{value || "—"}</div>
-      </div>
-    </div>
-  );
-}
-
-function SalaryGrid({ breakup }: { breakup: SalaryBreakup }) {
-  const inr = (n: number) => `₹${n.toLocaleString("en-IN")}`;
-  const earnings = (
-    [
-      ["Basic", breakup.basic],
-      ["HRA", breakup.hra],
-      ["Other Allowance", breakup.other_allowance],
-      ["Special Allowance", breakup.special_allowance],
-      ["Conveyance", breakup.conveyance],
-      ["Medical Allowance", breakup.medical_allowance],
-      ["LTA", breakup.lta],
-      ["Food Coupon", breakup.food_coupon],
-    ] as [string, number][]
-  ).filter(([, v]) => v > 0);
-
-  return (
-    <div className="grid md:grid-cols-3 gap-6 text-sm">
-      <div>
-        <div className="text-[10px] font-mono uppercase tracking-[0.2em] text-brand-brown-light mb-2">
-          Earnings (monthly)
-        </div>
-        <dl className="space-y-1.5">
-          {earnings.map(([k, v]) => (
-            <div key={k} className="flex justify-between">
-              <dt className="text-brand-brown-light">{k}</dt>
-              <dd className="font-medium">{inr(v)}</dd>
-            </div>
-          ))}
-          <div className="flex justify-between pt-2 border-t border-brand-brown-100 font-semibold">
-            <dt>Gross</dt>
-            <dd>{inr(breakup.gross)}</dd>
-          </div>
-        </dl>
-      </div>
-
-      <div>
-        <div className="text-[10px] font-mono uppercase tracking-[0.2em] text-brand-brown-light mb-2">
-          Deductions
-        </div>
-        <dl className="space-y-1.5">
-          <div className="flex justify-between">
-            <dt className="text-brand-brown-light">PF (Employee)</dt>
-            <dd>{inr(breakup.pf_employee)}</dd>
-          </div>
-          <div className="flex justify-between">
-            <dt className="text-brand-brown-light">ESIC (Employee)</dt>
-            <dd>{inr(breakup.esic_employee)}</dd>
-          </div>
-          <div className="flex justify-between">
-            <dt className="text-brand-brown-light">Professional Tax</dt>
-            <dd>{inr(breakup.professional_tax)}</dd>
-          </div>
-          <div className="flex justify-between pt-2 border-t border-brand-brown-100 font-semibold">
-            <dt>Total</dt>
-            <dd>{inr(breakup.total_deductions)}</dd>
-          </div>
-          <div className="flex justify-between pt-2 border-t border-brand-brown-100 text-brand-gold-dark font-semibold">
-            <dt>Net Salary</dt>
-            <dd>{inr(breakup.net_salary)}</dd>
-          </div>
-        </dl>
-      </div>
-
-      <div>
-        <div className="text-[10px] font-mono uppercase tracking-[0.2em] text-brand-brown-light mb-2">
-          Employer cost
-        </div>
-        <dl className="space-y-1.5">
-          <div className="flex justify-between">
-            <dt className="text-brand-brown-light">PF (Employer)</dt>
-            <dd>{inr(breakup.pf_employer)}</dd>
-          </div>
-          <div className="flex justify-between">
-            <dt className="text-brand-brown-light">ESIC (Employer)</dt>
-            <dd>{inr(breakup.esic_employer)}</dd>
-          </div>
-          <div className="flex justify-between pt-2 border-t border-brand-brown-100 font-semibold">
-            <dt>CTC / month</dt>
-            <dd>{inr(breakup.total_ctc_monthly)}</dd>
-          </div>
-          <div className="flex justify-between pt-2 border-t border-brand-brown-100 text-brand-gold-dark font-semibold">
-            <dt>CTC / year</dt>
-            <dd>{inr(breakup.total_ctc_annual)}</dd>
-          </div>
-        </dl>
-      </div>
-    </div>
-  );
-}
-
-function StatutoryOverridesCard({
-  employee,
-}: {
-  employee: import("@/lib/api/employees").EmployeeDetail;
-}) {
-  const queryClient = useQueryClient();
-  const [pfOptOut, setPfOptOut] = useState(employee.pf_opt_out);
-  const [pfCap, setPfCap] = useState<string>(
-    employee.pf_basic_cap_override ?? "",
-  );
-  const [esicExempt, setEsicExempt] = useState(employee.esic_force_exempt);
-  const [epsMember, setEpsMember] = useState(employee.eps_member ?? true);
-  const [ptState, setPtState] = useState<string>(employee.pt_state ?? "");
+function StatutoryOverridesCard({ employee }: { employee: EmployeeDetail }) {
+  const [editing, setEditing] = useState(false);
   const { data: companyCap } = useQuery({
     queryKey: ["pf-cap-current"],
     queryFn: pfCeilingApi.current,
@@ -599,137 +313,170 @@ function StatutoryOverridesCard({
   const companyCapLabel = companyCap
     ? `₹${Number(companyCap.pf_cap).toLocaleString("en-IN")}`
     : "the company cap";
-
-  const dirty =
-    pfOptOut !== employee.pf_opt_out ||
-    (pfCap || "") !== (employee.pf_basic_cap_override ?? "") ||
-    esicExempt !== employee.esic_force_exempt ||
-    epsMember !== (employee.eps_member ?? true) ||
-    (ptState || "") !== (employee.pt_state ?? "");
-
-  const save = useMutation({
-    mutationFn: () =>
-      employeesApi.update(employee.id, {
-        pf_opt_out: pfOptOut,
-        pf_basic_cap_override: pfCap === "" ? null : pfCap,
-        esic_force_exempt: esicExempt,
-        eps_member: epsMember,
-        pt_state: ptState === "" ? null : ptState,
-      } as Partial<import("@/lib/api/employees").EmployeeDetail>),
-    onSuccess: () => {
-      toast.success("Statutory overrides saved");
-      queryClient.invalidateQueries({ queryKey: ["employee", employee.id] });
-      queryClient.invalidateQueries({ queryKey: ["salary-breakup"] });
-    },
-    onError: (e: unknown) => {
-      const detail =
-        (e as { response?: { data?: { detail?: string } } })?.response?.data
-          ?.detail ?? "Could not save";
-      toast.error(detail);
-    },
-  });
+  const epsMember = employee.eps_member ?? true;
 
   return (
-    <Card className="lg:col-span-2">
-      <CardHeader>
-        <CardTitle>
-          Statutory <span className="display-em">overrides</span>
-        </CardTitle>
-        <CardDescription>
-          Per-employee deviations from the salary template — PF opt-out for
-          high earners, custom PF basic cap, ESIC exemption (e.g. expats /
-          contractors), and the state used for Professional Tax.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="grid md:grid-cols-2 gap-4">
-        <label className="flex items-start gap-3 text-sm">
-          <input
-            type="checkbox"
-            className="mt-1 accent-brand-gold-dark"
-            checked={pfOptOut}
-            onChange={(e) => setPfOptOut(e.target.checked)}
+    <SectionCard
+      title="Statutory overrides"
+      description="Per-employee exceptions to the salary template's PF, ESIC and PT rules."
+      onEdit={() => setEditing(true)}
+      editing={editing}
+    >
+      {editing ? (
+        <StatutoryOverridesForm
+          employee={employee}
+          companyCapLabel={companyCapLabel}
+          onDone={() => setEditing(false)}
+        />
+      ) : (
+        <InfoGrid cols={3}>
+          <InfoItem
+            label="Provident fund"
+            value={employee.pf_opt_out ? "Opted out (Form 11)" : "Contributes"}
           />
-          <div>
-            <div className="font-medium">PF opt-out</div>
-            <div className="text-xs text-brand-brown-light">
-              Skips both employee and employer PF contributions. Use only when
-              the employee has a valid Form 11 declaration.
-            </div>
-          </div>
-        </label>
-        <label className="flex items-start gap-3 text-sm">
-          <input
-            type="checkbox"
-            className="mt-1 accent-brand-gold-dark"
-            checked={esicExempt}
-            onChange={(e) => setEsicExempt(e.target.checked)}
+          <InfoItem
+            label="PF wage cap"
+            value={
+              employee.pf_basic_cap_override
+                ? `₹${Number(employee.pf_basic_cap_override).toLocaleString("en-IN")} (override)`
+                : `${companyCapLabel} (company)`
+            }
           />
-          <div>
-            <div className="font-medium">ESIC force-exempt</div>
-            <div className="text-xs text-brand-brown-light">
-              Skips ESIC even when gross is ≤ ₹21,000. Useful for
-              international employees or contractor arrangements.
-            </div>
-          </div>
-        </label>
-        <label className="flex items-start gap-3 text-sm">
-          <input
-            type="checkbox"
-            className="mt-1 accent-brand-gold-dark"
-            checked={epsMember}
-            disabled={pfOptOut}
-            onChange={(e) => setEpsMember(e.target.checked)}
+          <InfoItem
+            label="EPS (pension)"
+            value={employee.pf_opt_out ? "—" : epsMember ? "Member" : "Not a member"}
           />
-          <div>
-            <div className="font-medium">EPS (pension) member</div>
-            <div className="text-xs text-brand-brown-light">
-              Untick for members who joined EPF on or after 1 Sep 2014 with
-              basic above ₹15,000, or who are 58+. The PF challan then shows
-              EPS wages and EPS contribution as 0, and the whole employer share
-              goes to EPF.
-            </div>
-          </div>
-        </label>
-        <div>
-          <Label>PF basic cap override (₹)</Label>
-          <Input
-            type="number"
-            min={0}
-            step={1}
-            value={pfCap}
-            placeholder={`Company cap ${companyCapLabel}`}
-            onChange={(e) => setPfCap(e.target.value)}
+          <InfoItem
+            label="ESIC"
+            value={employee.esic_force_exempt ? "Exempt (forced)" : "As per gross (≤ ₹21,000)"}
           />
-          <p className="text-xs text-brand-brown-light mt-1">
-            Leave blank to use the company PF cap ({companyCapLabel}) from
-            Settings → Payroll.
-          </p>
-        </div>
-        <div>
-          <Label>Professional Tax state</Label>
-          <select
-            value={ptState}
-            onChange={(e) => setPtState(e.target.value)}
-            className="flex h-10 w-full rounded-md border border-input bg-card px-3 py-2 text-sm"
-          >
-            <option value="">— No PT —</option>
-            <option value="MH">Maharashtra</option>
-          </select>
-          <p className="text-xs text-brand-brown-light mt-1">
-            Maharashtra slab: ₹175 (₹7,501–₹10,000), ₹200 above. Women
-            up to ₹25,000/m are exempt.
-          </p>
-        </div>
-        <div className="md:col-span-2 flex justify-end">
-          <Button
-            disabled={!dirty || save.isPending}
-            onClick={() => save.mutate()}
-          >
-            {save.isPending ? "Saving…" : "Save overrides"}
-          </Button>
-        </div>
-      </CardContent>
-    </Card>
+          <InfoItem
+            label="Professional tax"
+            value={employee.pt_state === "MH" ? "Maharashtra" : employee.pt_state || "No PT"}
+          />
+        </InfoGrid>
+      )}
+    </SectionCard>
+  );
+}
+
+function StatutoryOverridesForm({
+  employee,
+  companyCapLabel,
+  onDone,
+}: {
+  employee: EmployeeDetail;
+  companyCapLabel: string;
+  onDone: () => void;
+}) {
+  const [pfOptOut, setPfOptOut] = useState(employee.pf_opt_out);
+  const [pfCap, setPfCap] = useState<string>(employee.pf_basic_cap_override ?? "");
+  const [esicExempt, setEsicExempt] = useState(employee.esic_force_exempt);
+  const [epsMember, setEpsMember] = useState(employee.eps_member ?? true);
+  const [ptState, setPtState] = useState<string>(employee.pt_state ?? "");
+  const save = useSaveEmployee(employee.id, "Statutory overrides saved");
+
+  return (
+    <div className="grid gap-4 md:grid-cols-2">
+      <Check
+        checked={pfOptOut}
+        onChange={setPfOptOut}
+        title="PF opt-out"
+        help="Skips both employee and employer PF. Only with a valid Form 11 declaration."
+      />
+      <Check
+        checked={esicExempt}
+        onChange={setEsicExempt}
+        title="ESIC force-exempt"
+        help="Skips ESIC even when gross is ≤ ₹21,000 — e.g. international staff or contractors."
+      />
+      <Check
+        checked={epsMember}
+        onChange={setEpsMember}
+        disabled={pfOptOut}
+        title="EPS (pension) member"
+        help="Untick for members who joined EPF on or after 1 Sep 2014 with basic above ₹15,000, or who are 58+. The PF challan then shows EPS as 0 and the full share goes to EPF."
+      />
+      <div />
+      <Field
+        label="PF wage cap override (₹)"
+        help={`Leave blank to use the company cap (${companyCapLabel}) from Settings → Payroll.`}
+      >
+        <Input
+          type="number"
+          min={0}
+          step={1}
+          value={pfCap}
+          placeholder={`Company cap ${companyCapLabel}`}
+          onChange={(e) => setPfCap(e.target.value)}
+        />
+      </Field>
+      <Field
+        label="Professional tax state"
+        help="Maharashtra: ₹175 (₹7,501–₹10,000), ₹200 above. Women up to ₹25,000/m are exempt."
+      >
+        <select
+          value={ptState}
+          onChange={(e) => setPtState(e.target.value)}
+          className={SELECT_CLASS}
+        >
+          <option value="">— No PT —</option>
+          <option value="MH">Maharashtra</option>
+          {ptState && ptState !== "MH" && <option value={ptState}>{ptState}</option>}
+        </select>
+      </Field>
+      <FormActions
+        onCancel={onDone}
+        saving={save.isPending}
+        onSave={() =>
+          save.mutate(
+            {
+              pf_opt_out: pfOptOut,
+              pf_basic_cap_override: pfCap === "" ? null : pfCap,
+              esic_force_exempt: esicExempt,
+              eps_member: epsMember,
+              pt_state: ptState === "" ? null : ptState,
+            },
+            { onSuccess: onDone },
+          )
+        }
+      />
+    </div>
+  );
+}
+
+function Check({
+  checked,
+  onChange,
+  title,
+  help,
+  disabled = false,
+}: {
+  checked: boolean;
+  onChange: (v: boolean) => void;
+  title: string;
+  help: string;
+  disabled?: boolean;
+}) {
+  return (
+    <label
+      className={cn(
+        "flex items-start gap-3 rounded-xl border border-brand-brown-50 p-3 text-sm",
+        disabled && "opacity-50",
+      )}
+    >
+      <input
+        type="checkbox"
+        className="mt-1 accent-brand-gold-dark"
+        checked={checked}
+        disabled={disabled}
+        onChange={(e) => onChange(e.target.checked)}
+      />
+      <div>
+        <div className="font-medium">{title}</div>
+        <div className="text-xs text-brand-brown-light">{help}</div>
+      </div>
+    </label>
   );
 }
 

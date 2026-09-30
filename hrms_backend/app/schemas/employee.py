@@ -360,6 +360,7 @@ class EmployeeListItem(BaseModel):
     is_on_probation: bool
     status: str
     date_of_joining: Optional[date]
+    exit_date: Optional[date] = None
 
 
 class EmployeeOut(BaseModel):
