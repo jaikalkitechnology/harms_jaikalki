@@ -48,6 +48,21 @@ class MeResponseModel {
             List<String>.from(json['permissions'] as List? ?? const []),
       );
 
+  /// Same shape as the `/auth/me` response, for the offline cache.
+  static Map<String, dynamic> toJson(AuthUser u) => {
+        'user': {
+          'id': u.id,
+          'email': u.email,
+          'full_name': u.fullName,
+          'phone': u.phone,
+          'is_active': u.isActive,
+        },
+        'role': u.role,
+        'role_level': u.roleLevel,
+        'roles': u.roles,
+        'permissions': u.permissions,
+      };
+
   AuthUser toEntity() => AuthUser(
         id: user.id,
         email: user.email,

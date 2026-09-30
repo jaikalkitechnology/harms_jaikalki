@@ -17,7 +17,8 @@ class _LoginFormState extends State<LoginForm> {
   final _email = TextEditingController();
   final _password = TextEditingController();
   bool _obscure = true;
-  bool _remember = false;
+  // Stay signed in unless the user opts out (shared device).
+  bool _remember = true;
 
   @override
   void dispose() {

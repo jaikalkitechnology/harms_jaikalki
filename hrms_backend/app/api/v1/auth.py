@@ -36,7 +36,7 @@ async def login(
 ) -> TokenPair:
     user = await authenticate_user(db, body.email, body.password)
     refresh_days = (
-        settings.JWT_REFRESH_TOKEN_EXPIRE_DAYS if body.remember_me else 7
+        settings.JWT_PERSISTENT_REFRESH_DAYS if body.remember_me else 7
     )
     access, refresh, expires_in = await issue_token_pair(
         db,
@@ -44,6 +44,7 @@ async def login(
         user_agent=request.headers.get("user-agent"),
         ip=request.client.host if request.client else None,
         refresh_days=refresh_days,
+        persistent=body.remember_me,
     )
     return TokenPair(access_token=access, refresh_token=refresh, expires_in=expires_in)
 

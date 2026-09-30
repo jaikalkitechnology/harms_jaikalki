@@ -1,8 +1,12 @@
+import 'dart:async';
+
 import 'package:bloc/bloc.dart';
+import 'package:dio/dio.dart';
 import 'package:equatable/equatable.dart';
 import 'package:local_auth/local_auth.dart';
 
 import '../../../../core/di/injection.dart';
+import '../../../../core/network/session_events.dart';
 import '../../../../core/push/push_notifications_service.dart';
 import '../../../../core/storage/secure_storage.dart';
 import '../../../launch/data/launch_api.dart';
@@ -27,11 +31,29 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     on<AuthBiometricToggleRequested>(_onBiometricToggle);
     on<AuthLogoutRequested>(_onLogout);
     on<AuthTokenRefreshRequested>(_onRefresh);
+    on<AuthSessionExpired>(_onSessionExpired);
+    _expiredSub =
+        SessionEvents.expired.listen((_) => add(const AuthSessionExpired()));
   }
 
   final AuthRepository _repository;
   final SecureStorage _storage;
   final LocalAuthentication _localAuth;
+  late final StreamSubscription<void> _expiredSub;
+
+  @override
+  Future<void> close() {
+    _expiredSub.cancel();
+    return super.close();
+  }
+
+  /// The server said the session is invalid — as opposed to the request
+  /// not getting through (offline, timeout, server down).
+  static bool _isAuthFailure(Object e) {
+    if (e is! DioException) return false;
+    final code = e.response?.statusCode;
+    return code == 401 || code == 403;
+  }
 
   /// Device can do biometric OR device-credential (PIN/pattern) auth.
   Future<bool> _deviceCanAuth() async {
@@ -49,16 +71,25 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
   ) async {
     emit(state.copyWith(status: AuthStatus.loading, clearError: true));
     final access = await _storage.readAccessToken();
-    if (access == null || access.isEmpty) {
-      // No live access token, but the user may have opted in to
-      // biometric with a still-valid refresh token — surface the
-      // biometric button on the login screen in that case.
-      final bioEnabled = await _storage.isBiometricEnabled();
-      final refresh = await _storage.readRefreshToken();
-      final canBio = bioEnabled &&
-          refresh != null &&
-          refresh.isNotEmpty &&
-          await _deviceCanAuth();
+    final refresh = await _storage.readRefreshToken();
+    final hasAccess = access != null && access.isNotEmpty;
+    final hasRefresh = refresh != null && refresh.isNotEmpty;
+    final bioEnabled = await _storage.isBiometricEnabled();
+
+    if (!hasAccess && !hasRefresh) {
+      emit(state.copyWith(
+        status: AuthStatus.unauthenticated,
+        clearUser: true,
+        biometricEnabled: false,
+        biometricAvailable: false,
+      ));
+      return;
+    }
+
+    if (!hasAccess && bioEnabled) {
+      // Soft-signed-out with biometric on: the refresh token is kept
+      // behind the fingerprint / face prompt on the login screen.
+      final canBio = await _deviceCanAuth();
       emit(state.copyWith(
         status: AuthStatus.unauthenticated,
         clearUser: true,
@@ -67,21 +98,45 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       ));
       return;
     }
+
     try {
+      // Only a refresh token left (access token lost) — mint a new pair.
+      // An expired access token is refreshed by the interceptor.
+      if (!hasAccess) await _repository.refresh(refresh!);
       final user = await _repository.me();
       emit(state.copyWith(
         status: AuthStatus.authenticated,
         user: user,
-        biometricEnabled: await _storage.isBiometricEnabled(),
+        biometricEnabled: bioEnabled,
         biometricAvailable: await _deviceCanAuth(),
       ));
       _registerPushToken();
-    } catch (_) {
-      await _storage.clear();
+    } catch (e) {
+      if (_isAuthFailure(e)) {
+        await _storage.clear();
+        emit(state.copyWith(
+          status: AuthStatus.unauthenticated,
+          clearUser: true,
+          biometricEnabled: false,
+        ));
+        return;
+      }
+      // Offline or server unreachable: keep the session and open with
+      // the last known user. Requests recover once the network is back.
+      final cached = await _repository.cachedUser();
+      if (cached != null) {
+        emit(state.copyWith(
+          status: AuthStatus.authenticated,
+          user: cached,
+          biometricEnabled: bioEnabled,
+          biometricAvailable: await _deviceCanAuth(),
+        ));
+        return;
+      }
       emit(state.copyWith(
         status: AuthStatus.unauthenticated,
         clearUser: true,
-        biometricEnabled: false,
+        errorMessage: 'Cannot reach the server. Check your network.',
       ));
     }
   }
@@ -189,7 +244,14 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           biometricAvailable: true,
         ));
         _registerPushToken();
-      } catch (_) {
+      } catch (e) {
+        if (!_isAuthFailure(e)) {
+          emit(state.copyWith(
+            status: AuthStatus.unauthenticated,
+            errorMessage: 'Cannot reach the server. Check your network.',
+          ));
+          return;
+        }
         await _storage.clear();
         emit(state.copyWith(
           status: AuthStatus.unauthenticated,
@@ -300,10 +362,23 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         user: user,
       ));
       _registerPushToken();
-    } catch (_) {
+    } catch (e) {
+      // A network failure leaves the current session as it is.
+      if (!_isAuthFailure(e)) return;
       await _storage.clear();
       emit(const AuthState(status: AuthStatus.unauthenticated));
     }
+  }
+
+  Future<void> _onSessionExpired(
+    AuthSessionExpired event,
+    Emitter<AuthState> emit,
+  ) async {
+    if (!state.isAuthenticated) return;
+    emit(const AuthState(
+      status: AuthStatus.unauthenticated,
+      errorMessage: 'Your session has ended. Please sign in again.',
+    ));
   }
 
   /// Fire-and-forget — never blocks the UI on a token registration.

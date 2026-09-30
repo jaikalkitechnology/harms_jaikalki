@@ -48,8 +48,12 @@ def create_refresh_token(
     subject: str | int,
     *,
     expires_days: int | None = None,
+    persistent: bool = False,
 ) -> tuple[str, str, datetime]:
-    """Returns (token, jti, expires_at). Caller persists the jti for revocation."""
+    """Returns (token, jti, expires_at). Caller persists the jti for revocation.
+
+    ``persistent`` marks a "keep me signed in" session; rotation keeps
+    renewing it for JWT_PERSISTENT_REFRESH_DAYS."""
     jti = secrets.token_urlsafe(32)
     expire = _now() + timedelta(
         days=expires_days or settings.JWT_REFRESH_TOKEN_EXPIRE_DAYS
@@ -61,6 +65,8 @@ def create_refresh_token(
         "jti": jti,
         "type": "refresh",
     }
+    if persistent:
+        payload["persistent"] = True
     token = jwt.encode(payload, settings.JWT_SECRET_KEY, algorithm=ALGO)
     return token, jti, expire
 

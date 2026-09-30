@@ -1,8 +1,11 @@
+import 'dart:convert';
+
 import '../../../../core/storage/secure_storage.dart';
 import '../../domain/entities/auth_user.dart';
 import '../../domain/entities/token_pair.dart';
 import '../../domain/repositories/auth_repository.dart';
 import '../datasources/auth_remote_datasource.dart';
+import '../models/user_model.dart';
 
 class AuthRepositoryImpl implements AuthRepository {
   AuthRepositoryImpl({
@@ -55,8 +58,25 @@ class AuthRepositoryImpl implements AuthRepository {
 
   @override
   Future<AuthUser> me() async {
-    final res = await _remote.me();
-    return res.toEntity();
+    final user = (await _remote.me()).toEntity();
+    try {
+      await _storage.writeCachedUser(jsonEncode(MeResponseModel.toJson(user)));
+    } catch (_) {
+      // The cache is best-effort.
+    }
+    return user;
+  }
+
+  @override
+  Future<AuthUser?> cachedUser() async {
+    final raw = await _storage.readCachedUser();
+    if (raw == null || raw.isEmpty) return null;
+    try {
+      final json = jsonDecode(raw) as Map<String, dynamic>;
+      return MeResponseModel.fromJson(json).toEntity();
+    } catch (_) {
+      return null;
+    }
   }
 
   @override

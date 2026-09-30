@@ -19,6 +19,9 @@ class RefreshToken(Base, TimestampMixin):
     jti: Mapped[str] = mapped_column(String(64), unique=True, nullable=False, index=True)
     expires_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     revoked: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    # Set when this token was exchanged for a new pair (as opposed to a
+    # logout). Lets a retry within the grace window succeed.
+    rotated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     user_agent: Mapped[str | None] = mapped_column(String(255), nullable=True)
     ip: Mapped[str | None] = mapped_column(String(64), nullable=True)
 
