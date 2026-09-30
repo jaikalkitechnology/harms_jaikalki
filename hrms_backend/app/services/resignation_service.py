@@ -21,6 +21,11 @@ def _now() -> datetime:
     return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
+def separation_employee_status(separation_type: Optional[str]) -> str:
+    """Employee.status value the admin list renders as a red badge."""
+    return "terminated" if separation_type == "termination" else "resigned"
+
+
 # Default NDC checklist — items HR/IT must clear before final settlement.
 DEFAULT_NDC: dict[str, bool] = {
     "assets_returned": False,
@@ -176,11 +181,10 @@ async def admin_initiate(
     db.add(res)
 
     # Reflect the separation on the employee record so attendance,
-    # payroll and mobile flows all see the correct exit_date, and set
-    # the account inactive if the LWD is already in the past.
+    # payroll and the employee list all see it. Payroll keeps paying
+    # resigned / terminated employees until exit_date passes.
     employee.exit_date = proposed_last_working_day
-    if not lwd_in_future:
-        employee.status = "inactive"
+    employee.status = separation_employee_status(separation_type)
     # Lock any future self-service resignation attempts.
     employee.resignation_unlocked = False
 
@@ -298,6 +302,9 @@ async def manager_decision(
         # respect the last working day immediately (matches the admin-
         # initiated separation path).
         target.exit_date = res.actual_last_working_day
+        target.status = separation_employee_status(
+            getattr(res, "separation_type", "resignation")
+        )
     else:
         res.status = "rejected"
     await db.commit()
@@ -355,7 +362,9 @@ async def settle(
         )
     ).scalar_one_or_none()
     if emp:
-        emp.status = "separated"
+        emp.status = separation_employee_status(
+            getattr(res, "separation_type", "resignation")
+        )
         emp.exit_date = res.actual_last_working_day or _now().date()
 
     await db.commit()

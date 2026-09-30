@@ -239,6 +239,8 @@ function statusLabel(e: EmployeeListItem): string {
     case "resigned":
       return "Resigned";
     case "exited":
+    case "separated":
+    case "inactive":
       return "Exited";
     case "terminated":
       return "Terminated";
@@ -255,7 +257,8 @@ function StatusBadge({ employee }: { employee: EmployeeListItem }) {
   const label = statusLabel(employee);
   let cls = "bg-success/10 text-success";
   if (employee.status === "resigned" || employee.status === "exited" ||
-      employee.status === "terminated" || employee.status === "absconded") {
+      employee.status === "terminated" || employee.status === "absconded" ||
+      employee.status === "separated" || employee.status === "inactive") {
     cls = "bg-error/15 text-error";
   } else if (employee.status === "on_leave") {
     cls = "bg-info/15 text-info";
