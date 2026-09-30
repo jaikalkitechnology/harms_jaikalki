@@ -10,6 +10,7 @@ import {
   Play,
   RotateCcw,
   Trash2,
+  X,
 } from "lucide-react";
 
 import {
@@ -22,7 +23,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { LoadingScreen } from "@/components/shared/LoadingScreen";
-import { payrollApi, type PayrollRun } from "@/lib/api/payroll";
+import { payrollApi, type EcrCheck, type PayrollRun } from "@/lib/api/payroll";
 import { employeesApi } from "@/lib/api/employees";
 import { attendanceCyclesApi } from "@/lib/api/employeeProfile";
 import { API_BASE_URL } from "@/lib/constants";
@@ -67,6 +68,7 @@ export default function PayrollRunsPage() {
   const [month, setMonth] = useState(now.getMonth() + 1);
   const [cycle, setCycle] = useState<number>(0); // 0 = per-employee
   const [selected, setSelected] = useState<PayrollRun | null>(null);
+  const [ecrFor, setEcrFor] = useState<PayrollRun | null>(null);
 
   const { data: employees = [] } = useQuery({
     queryKey: ["employees-all"],
@@ -367,12 +369,7 @@ export default function PayrollRunsPage() {
                         size="sm"
                         variant="outline"
                         className="h-8 gap-1"
-                        onClick={() =>
-                          download(
-                            payrollApi.pfChallanUrl(r.id),
-                            `pf-ecr-${r.year}-${String(r.month).padStart(2, "0")}.txt`,
-                          )
-                        }
+                        onClick={() => setEcrFor(r)}
                       >
                         <Landmark className="h-3.5 w-3.5" /> PF challan
                       </Button>
@@ -542,6 +539,190 @@ export default function PayrollRunsPage() {
           </CardContent>
         </Card>
       )}
+
+      {ecrFor && <EcrCheckModal run={ecrFor} onClose={() => setEcrFor(null)} />}
+    </div>
+  );
+}
+
+function EcrCheckModal({
+  run,
+  onClose,
+}: {
+  run: PayrollRun;
+  onClose: () => void;
+}) {
+  const { data, isLoading, isError } = useQuery<EcrCheck>({
+    queryKey: ["pf-ecr-check", run.id],
+    queryFn: () => payrollApi.checkPfChallan(run.id),
+  });
+  const label = `${MONTHS[run.month - 1]} ${run.year}`;
+  const filename = `pf-ecr-${run.year}-${String(run.month).padStart(2, "0")}.txt`;
+
+  const onDownload = () => {
+    if (
+      data &&
+      !data.ok &&
+      !confirm(
+        `The file has ${data.errors} error(s) and the EPFO portal will likely reject it. Download anyway?`,
+      )
+    )
+      return;
+    download(payrollApi.pfChallanUrl(run.id), filename);
+  };
+
+  const errors = data?.issues.filter((i) => i.level === "error") ?? [];
+  const warnings = data?.issues.filter((i) => i.level === "warning") ?? [];
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+      role="dialog"
+      aria-modal="true"
+    >
+      <Card className="max-h-[92vh] w-full max-w-3xl overflow-y-auto">
+        <CardHeader className="flex flex-row items-start justify-between gap-2">
+          <div>
+            <CardTitle>PF challan check — {label}</CardTitle>
+            <CardDescription>
+              Checked against the EPFO ECR rules before download.
+            </CardDescription>
+          </div>
+          <Button variant="ghost" size="sm" onClick={onClose} aria-label="Close">
+            <X className="h-4 w-4" />
+          </Button>
+        </CardHeader>
+        <CardContent className="space-y-4 text-sm">
+          {isLoading && <p className="text-brand-brown-light">Checking…</p>}
+          {isError && <p className="text-error">Could not run the check.</p>}
+          {data && (
+            <>
+              <div
+                className={`rounded-md px-3 py-2 font-medium ${
+                  data.ok
+                    ? "bg-success/10 text-success"
+                    : "bg-error/10 text-error"
+                }`}
+              >
+                {data.ok
+                  ? `Ready to upload — ${data.totals.members} member(s), no errors${
+                      data.warnings ? `, ${data.warnings} warning(s)` : ""
+                    }.`
+                  : `${data.errors} error(s) found. Fix them before uploading.`}
+              </div>
+
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                {[
+                  ["EPF wages", data.totals.epf_wages],
+                  ["EE share (12%)", data.totals.epf_contri],
+                  ["EPS (8.33%)", data.totals.eps_contri],
+                  ["EPF − EPS", data.totals.epf_eps_diff],
+                ].map(([k, v]) => (
+                  <div key={k} className="rounded-md border border-brand-brown-50 p-2">
+                    <div className="text-xs text-brand-brown-light">{k}</div>
+                    <div className="font-semibold">{inr(v)}</div>
+                  </div>
+                ))}
+              </div>
+              <p className="text-xs text-brand-brown-light">
+                Ceilings for {data.wage_month}: PF {inr(data.ceilings.pf)} · EPS{" "}
+                {inr(data.ceilings.eps)} · EDLI {inr(data.ceilings.edli)}
+              </p>
+
+              {errors.length > 0 && (
+                <IssueList title="Errors" tone="text-error" items={errors} />
+              )}
+              {warnings.length > 0 && (
+                <IssueList title="Warnings" tone="text-warning" items={warnings} />
+              )}
+              {data.excluded.length > 0 && (
+                <div>
+                  <div className="mb-1 font-medium">
+                    Left out of the file ({data.excluded.length})
+                  </div>
+                  <ul className="space-y-1 text-xs">
+                    {data.excluded.map((x) => (
+                      <li key={x.employee_id}>
+                        <span className="font-mono">{x.employee_code}</span> {x.name} —{" "}
+                        {x.reason}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[640px] text-xs">
+                  <thead className="text-left text-brand-brown-light">
+                    <tr>
+                      <th className="py-1">Member</th>
+                      <th>UAN</th>
+                      <th className="text-right">Gross</th>
+                      <th className="text-right">EPF</th>
+                      <th className="text-right">EPS</th>
+                      <th className="text-right">EDLI</th>
+                      <th className="text-right">EE</th>
+                      <th className="text-right">EPS ctr</th>
+                      <th className="text-right">Diff</th>
+                      <th className="text-right">NCP</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {data.rows.map((r) => (
+                      <tr key={r.employee_id} className="border-t border-brand-brown-50">
+                        <td className="py-1">{r.name}</td>
+                        <td className="font-mono">{r.uan}</td>
+                        <td className="text-right">{r.gross_wages}</td>
+                        <td className="text-right">{r.epf_wages}</td>
+                        <td className="text-right">{r.eps_wages}</td>
+                        <td className="text-right">{r.edli_wages}</td>
+                        <td className="text-right">{r.epf_contri}</td>
+                        <td className="text-right">{r.eps_contri}</td>
+                        <td className="text-right">{r.epf_eps_diff}</td>
+                        <td className="text-right">{r.ncp_days}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          )}
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={onClose}>
+              Close
+            </Button>
+            <Button disabled={!data || data.rows.length === 0} onClick={onDownload}>
+              <Download className="mr-1 h-4 w-4" />
+              {data && !data.ok ? "Download anyway" : "Download ECR"}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+function IssueList({
+  title,
+  tone,
+  items,
+}: {
+  title: string;
+  tone: string;
+  items: { employee_code: string; name: string; message: string }[];
+}) {
+  return (
+    <div>
+      <div className={`mb-1 font-medium ${tone}`}>
+        {title} ({items.length})
+      </div>
+      <ul className="space-y-1 text-xs">
+        {items.map((i, n) => (
+          <li key={n}>
+            <span className="font-mono">{i.employee_code}</span> {i.name} — {i.message}
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }

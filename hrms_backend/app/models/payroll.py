@@ -155,6 +155,7 @@ class Payslip(Base, TimestampMixin):
     # challan stays correct after the cap changes.
     pf_wages: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=Decimal("0"))
     eps_wages: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=Decimal("0"))
+    edli_wages: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=Decimal("0"))
 
     pdf_url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
 
@@ -302,6 +303,10 @@ class PfWageCeiling(Base, TimestampMixin):
     # EPS (pension) has its own wage ceiling; defaults to the PF cap
     # only if the circular raises both.
     eps_cap_amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
+    # EDLI (insurance) wage ceiling — ₹15,000 unless the circular changes it.
+    edli_cap_amount: Mapped[Decimal] = mapped_column(
+        Numeric(12, 2), nullable=False, default=Decimal("15000")
+    )
     effective_from: Mapped[date] = mapped_column(Date, nullable=False, index=True)
     recorded_on: Mapped[date] = mapped_column(Date, nullable=False)
     # How a mid-month effective date treats that wage month:

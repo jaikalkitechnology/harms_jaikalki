@@ -50,6 +50,7 @@ async def ensure_seed(db: AsyncSession) -> None:
             PfWageCeiling(
                 cap_amount=BASELINE_CAP,
                 eps_cap_amount=BASELINE_CAP,
+                edli_cap_amount=BASELINE_CAP,
                 effective_from=BASELINE_FROM,
                 recorded_on=BASELINE_FROM,
                 mid_month_mode="day_weighted",
@@ -70,7 +71,10 @@ async def list_ceilings(db: AsyncSession) -> Sequence[PfWageCeiling]:
     ).scalars().all()
 
 
-def _pick(records: Sequence[PfWageCeiling], d: date) -> tuple[Decimal, Decimal]:
+def _pick_all(
+    records: Sequence[PfWageCeiling], d: date
+) -> tuple[Decimal, Decimal, Decimal]:
+    """(pf_cap, eps_cap, edli_cap) in force on ``d``."""
     best: Optional[PfWageCeiling] = None
     best_from: Optional[date] = None
     for r in records:
@@ -82,8 +86,17 @@ def _pick(records: Sequence[PfWageCeiling], d: date) -> tuple[Decimal, Decimal]:
         ):
             best, best_from = r, start
     if best is None:
-        return BASELINE_CAP, BASELINE_CAP
-    return Decimal(best.cap_amount), Decimal(best.eps_cap_amount)
+        return BASELINE_CAP, BASELINE_CAP, BASELINE_CAP
+    return (
+        Decimal(best.cap_amount),
+        Decimal(best.eps_cap_amount),
+        Decimal(best.edli_cap_amount or BASELINE_CAP),
+    )
+
+
+def _pick(records: Sequence[PfWageCeiling], d: date) -> tuple[Decimal, Decimal]:
+    pf, eps, _edli = _pick_all(records, d)
+    return pf, eps
 
 
 async def cap_on(db: AsyncSession, d: date) -> tuple[Decimal, Decimal]:
@@ -103,6 +116,26 @@ def weighted_caps(
         eps_total += eps
     q = Decimal("0.01")
     return (pf_total / days).quantize(q), (eps_total / days).quantize(q)
+
+
+def weighted_ceilings(
+    records: Sequence[PfWageCeiling], year: int, month: int
+) -> dict[str, Decimal]:
+    """Day-weighted PF / EPS / EDLI ceilings for a wage month."""
+    days = monthrange(year, month)[1]
+    totals = [Decimal(0), Decimal(0), Decimal(0)]
+    for day in range(1, days + 1):
+        for i, v in enumerate(_pick_all(records, date(year, month, day))):
+            totals[i] += v
+    q = Decimal("0.01")
+    pf, eps, edli = ((t / days).quantize(q) for t in totals)
+    return {"pf": pf, "eps": eps, "edli": edli}
+
+
+async def ceilings_for_wage_month(
+    db: AsyncSession, year: int, month: int
+) -> dict[str, Decimal]:
+    return weighted_ceilings(await list_ceilings(db), year, month)
 
 
 async def caps_for_wage_month(
@@ -137,6 +170,9 @@ def _validate(payload: dict) -> None:
     eps = payload.get("eps_cap_amount")
     if eps is not None and Decimal(eps) <= 0:
         raise ValidationError("EPS cap must be greater than zero")
+    edli = payload.get("edli_cap_amount")
+    if edli is not None and Decimal(edli) <= 0:
+        raise ValidationError("EDLI cap must be greater than zero")
     mode = payload.get("mid_month_mode")
     if mode is not None and mode not in MODES:
         raise ValidationError(f"mid_month_mode must be one of {', '.join(MODES)}")
@@ -159,6 +195,9 @@ async def create(
         cap_amount=Decimal(payload["cap_amount"]),
         eps_cap_amount=Decimal(
             payload.get("eps_cap_amount") or BASELINE_CAP
+        ),
+        edli_cap_amount=Decimal(
+            payload.get("edli_cap_amount") or BASELINE_CAP
         ),
         effective_from=payload["effective_from"],
         recorded_on=payload.get("recorded_on") or date.today(),
@@ -189,6 +228,7 @@ async def update(db: AsyncSession, ceiling_id: int, payload: dict) -> PfWageCeil
     for key in (
         "cap_amount",
         "eps_cap_amount",
+        "edli_cap_amount",
         "effective_from",
         "recorded_on",
         "mid_month_mode",
