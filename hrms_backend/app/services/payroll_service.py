@@ -30,19 +30,25 @@ def _now() -> datetime:
 
 
 def _earned_statutory(
-    breakup: dict, scaling: Decimal, earned_gross: Decimal, emp: Employee
-) -> tuple[Decimal, Decimal, Decimal, Decimal, Decimal]:
+    breakup: dict,
+    scaling: Decimal,
+    earned_gross: Decimal,
+    emp: Employee,
+    pf_cap: Decimal,
+) -> tuple[Decimal, Decimal, Decimal, Decimal, Decimal, Decimal]:
     """PF / ESIC / PT on what was actually earned this month.
 
     Eligibility comes from the monthly breakup (opt-outs, ESIC ceiling
     on contractual gross). Amounts are recomputed on earned pay so a
     part month is never charged full-month deductions.
-    Returns (pf_employee, pf_employer, esic_employee, esic_employer, pt).
+    ``pf_cap`` is the wage-month cap from the PF ceiling register; an
+    employee's own pf_basic_cap_override wins.
+    Returns (pf_employee, pf_employer, esic_employee, esic_employer, pt,
+    pf_wages).
     """
     from app.services.salary_calculator import (
         ESIC_EMPLOYEE_RATE,
         ESIC_EMPLOYER_RATE,
-        PF_BASIC_CAP,
         PF_EMPLOYEE_RATE,
         PF_EMPLOYER_RATE,
         _pt_slab,
@@ -51,15 +57,16 @@ def _earned_statutory(
 
     zero = Decimal("0")
     if earned_gross <= 0:
-        return zero, zero, zero, zero, zero
+        return zero, zero, zero, zero, zero, zero
 
     if Decimal(breakup.get("pf_employee") or 0) > 0:
-        cap = Decimal(getattr(emp, "pf_basic_cap_override", None) or PF_BASIC_CAP)
+        cap = Decimal(getattr(emp, "pf_basic_cap_override", None) or pf_cap)
         pf_basic = min(Decimal(breakup["basic"]) * scaling, cap)
+        pf_wages = Decimal(_round(pf_basic))
         pf_emp = Decimal(_round(pf_basic * PF_EMPLOYEE_RATE))
         pf_er = Decimal(_round(pf_basic * PF_EMPLOYER_RATE))
     else:
-        pf_emp = pf_er = zero
+        pf_emp = pf_er = pf_wages = zero
 
     if Decimal(breakup.get("esic_employee") or 0) > 0:
         esic_emp = Decimal(_round(earned_gross * ESIC_EMPLOYEE_RATE))
@@ -68,7 +75,7 @@ def _earned_statutory(
         esic_emp = esic_er = zero
 
     pt = _pt_slab(getattr(emp, "pt_state", None), getattr(emp, "gender", None), earned_gross)
-    return pf_emp, pf_er, esic_emp, esic_er, Decimal(pt)
+    return pf_emp, pf_er, esic_emp, esic_er, Decimal(pt), pf_wages
 
 
 async def _resignation_settled(db: AsyncSession, employee_id: int) -> bool:
@@ -187,6 +194,11 @@ async def process_payroll(
     from app.services.payroll_policy import get_payroll_policy
 
     _pay_policy = await get_payroll_policy(db)
+    # PF wage ceiling for this wage month (day-weighted across the
+    # calendar month, independent of the attendance cycle window).
+    from app.services.pf_ceiling_service import caps_for_wage_month
+
+    _pf_cap, _eps_cap = await caps_for_wage_month(db, year, month)
     _basis = _pay_policy.get("division_basis", "calendar_days")
 
     total_gross = Decimal("0")
@@ -206,6 +218,7 @@ async def process_payroll(
             emp.salary_template,
             ctc_annual=emp.ctc_annual or None,
             employee=emp,
+            pf_cap=_pf_cap,
         ).as_dict()
 
         # Per-day class breakdown: holidays + Sundays drop out of the
@@ -268,9 +281,10 @@ async def process_payroll(
         paid = paid_days_num
 
         gross = (Decimal(breakup["gross"]) * scaling).quantize(Decimal("1"))
-        pf_emp, pf_er, esic_emp, esic_er, pt = _earned_statutory(
-            breakup, scaling, gross, emp
+        pf_emp, pf_er, esic_emp, esic_er, pt, pf_wages = _earned_statutory(
+            breakup, scaling, gross, emp, _pf_cap
         )
+        eps_wages = min(pf_wages, _eps_cap).quantize(Decimal("1"))
         # TDS: placeholder zero. Real slab calc deferred (see TODO).
         tds = Decimal("0")
 
@@ -332,6 +346,8 @@ async def process_payroll(
             days_sandwich=att.days_sandwich,
             is_final_settlement=is_final,
             on_hold=on_hold,
+            pf_wages=pf_wages,
+            eps_wages=eps_wages,
         )
         db.add(ps)
         await db.flush()
@@ -495,11 +511,12 @@ def build_pf_ecr(
     employees: dict[int, "Employee"],
 ) -> str:
     """EPFO ECR (Electronic Challan-cum-Return) text file, '#~#'
-    delimited, one line per member with a UAN. PF wages are capped at
-    ₹15,000; EPS = 8.33% of capped wages, EPF = employee 12% and the
-    employer balance. Only employees with a UAN and non-zero PF are
-    included — file this on the EPFO Unified Portal."""
-    PF_CAP = Decimal("15000")
+    delimited, one line per member with a UAN. PF / EPS wages come from
+    the payslip (earned basic capped at that wage month's ceiling from
+    the PF ceiling register); EPS = 8.33% of EPS wages, EPF = employee
+    12% and the employer balance. Only employees with a UAN and non-zero
+    PF are included — file this on the EPFO Unified Portal."""
+    LEGACY_CAP = Decimal("15000")
     lines: list[str] = []
     for p in payslips:
         e = employees.get(p.employee_id)
@@ -508,10 +525,16 @@ def build_pf_ecr(
         pf_emp = Decimal(p.pf_employee or 0)
         if pf_emp <= 0:
             continue
-        # Derive PF wages from the capped basic the calculator used.
-        pf_wages = min(Decimal(p.basic or 0), PF_CAP)
+        # Payslips from before PF wages were stored fall back to the old
+        # statutory ₹15,000 cap on basic.
+        pf_wages = Decimal(getattr(p, "pf_wages", 0) or 0)
+        if pf_wages <= 0:
+            pf_wages = min(Decimal(p.basic or 0), LEGACY_CAP)
         pf_wages = pf_wages.quantize(Decimal("1"))
-        eps_wages = pf_wages
+        eps_wages = Decimal(getattr(p, "eps_wages", 0) or 0)
+        if eps_wages <= 0:
+            eps_wages = min(pf_wages, LEGACY_CAP)
+        eps_wages = eps_wages.quantize(Decimal("1"))
         edli_wages = pf_wages
         eps_contri = (eps_wages * Decimal("0.0833")).quantize(Decimal("1"))
         epf_contri = pf_emp.quantize(Decimal("1"))

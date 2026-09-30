@@ -316,6 +316,9 @@ async def attendance_payroll_export(
     ])
 
     calc = JaikalkiSalaryCalculator()
+    from app.services.pf_ceiling_service import cap_on
+
+    _report_pf_cap, _ = await cap_on(db, to_date)
     for e in employees:
         rows = (
             await db.execute(
@@ -338,7 +341,8 @@ async def attendance_payroll_export(
         if e.salary_template_id and e.salary_template_id in tpl_by_id:
             tpl = tpl_by_id[e.salary_template_id]
             br = calc.calculate(
-                tpl, ctc_annual=e.ctc_annual or None, employee=e
+                tpl, ctc_annual=e.ctc_annual or None, employee=e,
+                pf_cap=_report_pf_cap,
             )
             d_ = br.as_dict()
             if not d_.get("is_intern"):

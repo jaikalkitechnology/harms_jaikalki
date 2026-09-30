@@ -164,6 +164,8 @@ _PENDING_COLUMNS: list[tuple[str, str, str, str | None]] = [
     ("payslips", "days_sandwich", "DECIMAL(5,2) NOT NULL DEFAULT 0", None),
     ("payslips", "is_final_settlement", "BOOLEAN NOT NULL DEFAULT FALSE", None),
     ("payslips", "on_hold", "BOOLEAN NOT NULL DEFAULT FALSE", None),
+    ("payslips", "pf_wages", "DECIMAL(12,2) NOT NULL DEFAULT 0", None),
+    ("payslips", "eps_wages", "DECIMAL(12,2) NOT NULL DEFAULT 0", None),
     ("payroll_runs", "cycle_start_day", "INT NOT NULL DEFAULT 1", None),
     (
         "payroll_runs",

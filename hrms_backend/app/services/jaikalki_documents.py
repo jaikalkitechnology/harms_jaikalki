@@ -206,10 +206,14 @@ async def generate_offer_letter(
     letter_no = await _next_letter_number(
         db, doc_type="offer_letter", year=letter_date.year
     )
+    from app.services.pf_ceiling_service import cap_on
+
+    pf_cap, _eps = await cap_on(db, letter_date)
     breakup = JaikalkiSalaryCalculator().calculate(
         employee.salary_template,
         ctc_annual=employee.ctc_annual or None,
         employee=employee,
+        pf_cap=pf_cap,
     ).as_dict()
 
     pdf_bytes = _render_offer_letter(

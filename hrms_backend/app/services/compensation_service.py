@@ -131,8 +131,11 @@ async def propose(
             )
         ).scalar_one_or_none()
         if template:
+            from app.services.pf_ceiling_service import cap_on
+
+            pf_cap, _eps = await cap_on(db, effective_date)
             breakup = JaikalkiSalaryCalculator().calculate(
-                template, new_ctc, employee=emp
+                template, new_ctc, employee=emp, pf_cap=pf_cap
             )
             breakup_snapshot = {
                 "monthly": {

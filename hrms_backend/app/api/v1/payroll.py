@@ -672,3 +672,159 @@ async def process_intern_reimbursement(
         "interns": len(by_intern),
         "by_intern": {str(k): str(v) for k, v in by_intern.items()},
     }
+
+
+# ── PF wage ceiling register ──────────────────────────────────────────
+from app.schemas.payroll import (  # noqa: E402
+    PayrollPolicyOut,
+    PayrollPolicyUpdate,
+    PfCapCurrentOut,
+    PfCeilingAbsorbRequest,
+    PfCeilingCreate,
+    PfCeilingImpactOut,
+    PfCeilingOut,
+    PfCeilingUpdate,
+)
+from app.services import pf_ceiling_service as pf_svc  # noqa: E402
+
+
+async def _ceiling_out(db: AsyncSession, rec, today: date) -> PfCeilingOut:
+    out = PfCeilingOut.model_validate(rec)
+    out.applies_from = pf_svc.applies_from(rec)
+    out.locked = await pf_svc._locked_by_payroll(db, out.applies_from)
+    return out
+
+
+@router.get("/pf-ceilings", response_model=list[PfCeilingOut], tags=["payroll"])
+async def list_pf_ceilings(
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(get_current_user),
+):
+    today = date.today()
+    records = await pf_svc.list_ceilings(db)
+    outs = [await _ceiling_out(db, r, today) for r in records]
+    # Status: the record currently in force is "active"; earlier ones
+    # "past"; later ones "scheduled".
+    active_idx = None
+    for i, o in enumerate(outs):
+        if o.applies_from and o.applies_from <= today:
+            active_idx = i
+    for i, o in enumerate(outs):
+        if active_idx is not None and i == active_idx:
+            o.status = "active"
+        elif o.applies_from and o.applies_from > today:
+            o.status = "scheduled"
+        else:
+            o.status = "past"
+    return outs
+
+
+@router.get("/pf-ceilings/current", response_model=PfCapCurrentOut, tags=["payroll"])
+async def current_pf_cap(
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(get_current_user),
+):
+    today = date.today()
+    pf_cap, eps_cap = await pf_svc.cap_on(db, today)
+    upcoming = [
+        r for r in await pf_svc.list_ceilings(db) if pf_svc.applies_from(r) > today
+    ]
+    nxt = None
+    if upcoming:
+        upcoming.sort(key=pf_svc.applies_from)
+        nxt = await _ceiling_out(db, upcoming[0], today)
+        nxt.status = "scheduled"
+    return PfCapCurrentOut(pf_cap=pf_cap, eps_cap=eps_cap, as_of=today, next_change=nxt)
+
+
+@router.post(
+    "/pf-ceilings",
+    response_model=PfCeilingOut,
+    status_code=status.HTTP_201_CREATED,
+    tags=["payroll"],
+)
+async def create_pf_ceiling(
+    payload: PfCeilingCreate,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_permission("payroll.run")),
+):
+    rec = await pf_svc.create(db, payload.model_dump(), actor=user)
+    return await _ceiling_out(db, rec, date.today())
+
+
+@router.put("/pf-ceilings/{ceiling_id}", response_model=PfCeilingOut, tags=["payroll"])
+async def update_pf_ceiling(
+    ceiling_id: int,
+    payload: PfCeilingUpdate,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_permission("payroll.run")),
+):
+    rec = await pf_svc.update(db, ceiling_id, payload.model_dump(exclude_unset=True))
+    return await _ceiling_out(db, rec, date.today())
+
+
+@router.delete(
+    "/pf-ceilings/{ceiling_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    tags=["payroll"],
+)
+async def delete_pf_ceiling(
+    ceiling_id: int,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_permission("payroll.run")),
+):
+    await pf_svc.delete(db, ceiling_id)
+
+
+@router.get(
+    "/pf-ceilings/{ceiling_id}/impact",
+    response_model=PfCeilingImpactOut,
+    tags=["payroll"],
+)
+async def pf_ceiling_impact(
+    ceiling_id: int,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_permission("payroll.run")),
+):
+    return await pf_svc.impact(db, ceiling_id)
+
+
+@router.post("/pf-ceilings/{ceiling_id}/absorb", tags=["payroll"])
+async def pf_ceiling_absorb(
+    ceiling_id: int,
+    payload: PfCeilingAbsorbRequest,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_permission("payroll.run")),
+):
+    return await pf_svc.absorb(
+        db,
+        ceiling_id,
+        employee_ids=payload.employee_ids,
+        effective_date=payload.effective_date,
+        reason=payload.reason,
+        actor=user,
+    )
+
+
+# ── Payroll policy (payslip divisor) ──────────────────────────────────
+@router.get("/policy", response_model=PayrollPolicyOut, tags=["payroll"])
+async def get_payroll_policy_endpoint(
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(get_current_user),
+):
+    from app.services.payroll_policy import get_payroll_policy
+
+    pol = await get_payroll_policy(db)
+    return PayrollPolicyOut(division_basis=pol.get("division_basis", "calendar_days"))
+
+
+@router.put("/policy", response_model=PayrollPolicyOut, tags=["payroll"])
+async def set_payroll_policy_endpoint(
+    payload: PayrollPolicyUpdate,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_permission("payroll.run")),
+):
+    from app.services.payroll_policy import set_payroll_policy
+
+    pol = await set_payroll_policy(db, payload.model_dump(), actor=user)
+    return PayrollPolicyOut(division_basis=pol.get("division_basis", "calendar_days"))

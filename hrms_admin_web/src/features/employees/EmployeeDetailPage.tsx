@@ -39,7 +39,11 @@ import {
   type SalaryBreakup,
 } from "@/lib/api/employees";
 import { compensationApi, type SalaryRevision } from "@/lib/api/compensation";
-import { payrollApi, type GeneratedDocument } from "@/lib/api/payroll";
+import {
+  payrollApi,
+  pfCeilingApi,
+  type GeneratedDocument,
+} from "@/lib/api/payroll";
 import { launchApi } from "@/lib/api/launch";
 import { CategoryBadge } from "./CategoryBadge";
 import { OnboardingDocsCard } from "./OnboardingDocsCard";
@@ -587,6 +591,13 @@ function StatutoryOverridesCard({
   );
   const [esicExempt, setEsicExempt] = useState(employee.esic_force_exempt);
   const [ptState, setPtState] = useState<string>(employee.pt_state ?? "");
+  const { data: companyCap } = useQuery({
+    queryKey: ["pf-cap-current"],
+    queryFn: pfCeilingApi.current,
+  });
+  const companyCapLabel = companyCap
+    ? `₹${Number(companyCap.pf_cap).toLocaleString("en-IN")}`
+    : "the company cap";
 
   const dirty =
     pfOptOut !== employee.pf_opt_out ||
@@ -665,11 +676,12 @@ function StatutoryOverridesCard({
             min={0}
             step={1}
             value={pfCap}
-            placeholder="Default ₹15,000"
+            placeholder={`Company cap ${companyCapLabel}`}
             onChange={(e) => setPfCap(e.target.value)}
           />
           <p className="text-xs text-brand-brown-light mt-1">
-            Leave blank to use the statutory ₹15,000 cap.
+            Leave blank to use the company PF cap ({companyCapLabel}) from
+            Settings → Payroll.
           </p>
         </div>
         <div>

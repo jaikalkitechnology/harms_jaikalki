@@ -199,3 +199,101 @@ export const payrollApi = {
     return `${API_BASE_URL}${v1}/payroll/payslips/${payslipId}/pdf`;
   },
 };
+
+// ── PF wage ceiling register + payroll policy ────────────────────────
+export type PfMidMonthMode = "day_weighted" | "whole_month" | "next_month";
+
+export interface PfCeiling {
+  id: number;
+  cap_amount: string;
+  eps_cap_amount: string;
+  effective_from: string;
+  recorded_on: string;
+  mid_month_mode: PfMidMonthMode;
+  reference: string | null;
+  notes: string | null;
+  applies_from: string | null;
+  status: "past" | "active" | "scheduled" | null;
+  locked: boolean;
+}
+
+export interface PfCeilingInput {
+  cap_amount: number;
+  eps_cap_amount?: number | null;
+  effective_from: string;
+  recorded_on?: string | null;
+  mid_month_mode: PfMidMonthMode;
+  reference?: string | null;
+  notes?: string | null;
+}
+
+export interface PfCapCurrent {
+  pf_cap: string;
+  eps_cap: string;
+  as_of: string;
+  next_change: PfCeiling | null;
+}
+
+export interface PfImpactRow {
+  employee_id: number;
+  employee_code: string;
+  name: string;
+  basic: number;
+  old_pf_employee: number;
+  new_pf_employee: number;
+  old_pf_employer: number;
+  new_pf_employer: number;
+  old_gross: number;
+  new_gross: number;
+  old_net: number;
+  new_net: number;
+  net_change: number;
+  absorb_ctc_annual: number;
+}
+
+export interface PfImpact {
+  ceiling_id: number;
+  old_cap: string;
+  new_cap: string;
+  first_full_month: string;
+  effective_month_cap: string;
+  rows: PfImpactRow[];
+}
+
+export type DivisionBasis = "calendar_days" | "working_days" | "fixed_30";
+
+export const pfCeilingApi = {
+  async list(): Promise<PfCeiling[]> {
+    return (await apiClient.get(`${v1}/payroll/pf-ceilings`)).data;
+  },
+  async current(): Promise<PfCapCurrent> {
+    return (await apiClient.get(`${v1}/payroll/pf-ceilings/current`)).data;
+  },
+  async create(body: PfCeilingInput): Promise<PfCeiling> {
+    return (await apiClient.post(`${v1}/payroll/pf-ceilings`, body)).data;
+  },
+  async update(id: number, body: Partial<PfCeilingInput>): Promise<PfCeiling> {
+    return (await apiClient.put(`${v1}/payroll/pf-ceilings/${id}`, body)).data;
+  },
+  async remove(id: number): Promise<void> {
+    await apiClient.delete(`${v1}/payroll/pf-ceilings/${id}`);
+  },
+  async impact(id: number): Promise<PfImpact> {
+    return (await apiClient.get(`${v1}/payroll/pf-ceilings/${id}/impact`)).data;
+  },
+  async absorb(
+    id: number,
+    body: { employee_ids: number[]; effective_date?: string; reason?: string },
+  ): Promise<{
+    created: { employee_id: number; revision_id: number; new_ctc_annual: number }[];
+    skipped: { employee_id: number; reason: string }[];
+  }> {
+    return (await apiClient.post(`${v1}/payroll/pf-ceilings/${id}/absorb`, body)).data;
+  },
+  async getPolicy(): Promise<{ division_basis: DivisionBasis }> {
+    return (await apiClient.get(`${v1}/payroll/policy`)).data;
+  },
+  async setPolicy(division_basis: DivisionBasis): Promise<{ division_basis: DivisionBasis }> {
+    return (await apiClient.put(`${v1}/payroll/policy`, { division_basis })).data;
+  },
+};
