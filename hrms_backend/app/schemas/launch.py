@@ -131,6 +131,19 @@ class AdminSeparationCreate(BaseModel):
     manager_comment: Optional[str] = None
 
 
+class AdminSeparationUpdate(BaseModel):
+    """Partial edit — only the fields sent are changed."""
+
+    separation_type: Optional[str] = Field(
+        default=None, pattern="^(resignation|termination)$"
+    )
+    proposed_last_working_day: Optional[date] = None
+    actual_last_working_day: Optional[date] = None
+    reason: Optional[str] = None
+    notice_period_days: Optional[int] = Field(default=None, ge=0, le=180)
+    manager_comment: Optional[str] = None
+
+
 class SeparationEmailRequest(BaseModel):
     """Send the generated letter to the employee (and optional CCs)."""
 

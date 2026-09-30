@@ -23,6 +23,7 @@ from sqlalchemy import select
 from app.models import Resignation, User
 from app.schemas.launch import (
     AdminSeparationCreate,
+    AdminSeparationUpdate,
     AuditLogOut,
     BroadcastResult,
     BulkImportResult,
@@ -707,3 +708,41 @@ async def email_separation_letter(
         from app.core.exceptions import ValidationError as _V
         raise _V(f"Could not send email: {err}")
     return {"sent": True, "to": to_email, "cc": payload.cc or []}
+
+
+@router.patch(
+    "/separations/{resignation_id}",
+    response_model=ResignationOut,
+    tags=["separations"],
+)
+async def admin_update_separation(
+    resignation_id: int,
+    payload: AdminSeparationUpdate,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_permission("employee.update")),
+):
+    return await resignation_service.admin_update(
+        db, resignation_id, fields=payload.model_dump(exclude_unset=True)
+    )
+
+
+@router.post("/separations/{resignation_id}/undo", tags=["separations"])
+async def admin_undo_separation(
+    resignation_id: int,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_permission("employee.update")),
+):
+    return await resignation_service.admin_undo(db, resignation_id)
+
+
+@router.delete(
+    "/separations/{resignation_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    tags=["separations"],
+)
+async def admin_delete_separation(
+    resignation_id: int,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_permission("employee.update")),
+):
+    await resignation_service.admin_delete(db, resignation_id)

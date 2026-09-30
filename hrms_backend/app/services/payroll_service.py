@@ -106,7 +106,12 @@ async def process_payroll(
     # inactive_days_in_period math below shrinks their pay pro-rata.
     employees = (
         await db.execute(
-            select(Employee).where(Employee.status == "active")
+            # Resigned / terminated employees stay in the run while
+            # serving notice; the exit_date gate below drops them once
+            # their last working day is before the period.
+            select(Employee).where(
+                Employee.status.in_(("active", "resigned", "terminated"))
+            )
         )
     ).scalars().all()
     active = []
