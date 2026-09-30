@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
 from typing import Optional, Sequence
 
 from sqlalchemy import select
@@ -61,10 +61,12 @@ def _earned_statutory(
 
     if Decimal(breakup.get("pf_employee") or 0) > 0:
         cap = Decimal(getattr(emp, "pf_basic_cap_override", None) or pf_cap)
-        pf_basic = min(Decimal(breakup["basic"]) * scaling, cap)
-        pf_wages = Decimal(_round(pf_basic))
-        pf_emp = Decimal(_round(pf_basic * PF_EMPLOYEE_RATE))
-        pf_er = Decimal(_round(pf_basic * PF_EMPLOYER_RATE))
+        # Round PF wages to whole rupees first and derive contributions
+        # from that figure — the EPFO portal checks employee share ==
+        # round(12% x EPF wages) on every ECR row.
+        pf_wages = Decimal(_round(min(Decimal(breakup["basic"]) * scaling, cap)))
+        pf_emp = Decimal(_round(pf_wages * PF_EMPLOYEE_RATE))
+        pf_er = Decimal(_round(pf_wages * PF_EMPLOYER_RATE))
     else:
         pf_emp = pf_er = pf_wages = zero
 
@@ -196,9 +198,10 @@ async def process_payroll(
     _pay_policy = await get_payroll_policy(db)
     # PF wage ceiling for this wage month (day-weighted across the
     # calendar month, independent of the attendance cycle window).
-    from app.services.pf_ceiling_service import caps_for_wage_month
+    from app.services.pf_ceiling_service import ceilings_for_wage_month
 
-    _pf_cap, _eps_cap = await caps_for_wage_month(db, year, month)
+    _ceil = await ceilings_for_wage_month(db, year, month)
+    _pf_cap, _eps_cap, _edli_cap = _ceil["pf"], _ceil["eps"], _ceil["edli"]
     _basis = _pay_policy.get("division_basis", "calendar_days")
 
     total_gross = Decimal("0")
@@ -284,7 +287,14 @@ async def process_payroll(
         pf_emp, pf_er, esic_emp, esic_er, pt, pf_wages = _earned_statutory(
             breakup, scaling, gross, emp, _pf_cap
         )
-        eps_wages = min(pf_wages, _eps_cap).quantize(Decimal("1"))
+        eps_wages = (
+            min(pf_wages, _eps_cap).quantize(Decimal("1"), rounding=ROUND_HALF_UP)
+            if getattr(emp, "eps_member", True)
+            else Decimal("0")
+        )
+        edli_wages = min(pf_wages, _edli_cap).quantize(
+            Decimal("1"), rounding=ROUND_HALF_UP
+        )
         # TDS: placeholder zero. Real slab calc deferred (see TODO).
         tds = Decimal("0")
 
@@ -348,6 +358,7 @@ async def process_payroll(
             on_hold=on_hold,
             pf_wages=pf_wages,
             eps_wages=eps_wages,
+            edli_wages=edli_wages,
         )
         db.add(ps)
         await db.flush()
@@ -505,70 +516,152 @@ def build_run_csv(
     return buf.getvalue()
 
 
+# ── PF ECR (EPFO Electronic Challan-cum-Return) ───────────────────────
+# One line per member, 11 fields joined by "#~#", no header row:
+#   UAN, Name, Gross wages, EPF wages, EPS wages, EDLI wages,
+#   EPF contribution (employee 12%), EPS contribution (8.33% of EPS wages),
+#   EPF-EPS difference (employee share − EPS), NCP days, Refund of advances
+_ECR_LEGACY_CAP = Decimal("15000")
+_ECR_EE_RATE = Decimal("0.12")
+_ECR_EPS_RATE = Decimal("0.0833")
+
+
+def _r(v) -> int:
+    """Round half up to whole rupees, as the EPFO portal does."""
+    return int(Decimal(str(v or 0)).quantize(Decimal("1"), rounding=ROUND_HALF_UP))
+
+
+def _ecr_name(e: "Employee") -> str:
+    name = f"{e.first_name or ''} {e.last_name or ''}".upper()
+    name = name.replace("#", " ").replace("~", " ")
+    return " ".join(name.split())
+
+
+def ecr_rows(
+    payslips: Sequence[Payslip], employees: dict[int, "Employee"]
+) -> tuple[list[dict], list[dict]]:
+    """Build ECR rows. Returns (rows, excluded) where excluded lists
+    employees with PF deducted but no UAN on record."""
+    rows: list[dict] = []
+    excluded: list[dict] = []
+    for p in payslips:
+        e = employees.get(p.employee_id)
+        if e is None or Decimal(p.pf_employee or 0) <= 0:
+            continue
+        uan = (e.uan_number or "").strip()
+        if not uan:
+            excluded.append({
+                "employee_id": e.id,
+                "employee_code": e.employee_code,
+                "name": _ecr_name(e),
+                "reason": "No UAN on record",
+            })
+            continue
+
+        stored = Decimal(getattr(p, "pf_wages", 0) or 0) > 0
+        if stored:
+            epf_wages = _r(p.pf_wages)
+            eps_wages = _r(getattr(p, "eps_wages", 0))
+            edli_raw = Decimal(getattr(p, "edli_wages", 0) or 0)
+            edli_wages = _r(edli_raw) if edli_raw > 0 else min(epf_wages, int(_ECR_LEGACY_CAP))
+        else:
+            # Payslips from before PF wages were stored: earned basic
+            # capped at the old ₹15,000 ceiling.
+            working = Decimal(p.working_days or 0)
+            ratio = (Decimal(p.days_paid or 0) / working) if working > 0 else Decimal(1)
+            epf_wages = _r(min(Decimal(p.basic or 0) * min(ratio, Decimal(1)), _ECR_LEGACY_CAP))
+            eps_wages = epf_wages if getattr(e, "eps_member", True) else 0
+            edli_wages = epf_wages
+
+        ee = _r(Decimal(epf_wages) * _ECR_EE_RATE)
+        eps = _r(Decimal(eps_wages) * _ECR_EPS_RATE)
+        rows.append({
+            "employee_id": e.id,
+            "employee_code": e.employee_code,
+            "uan": uan,
+            "name": _ecr_name(e),
+            "gross_wages": _r(p.gross),
+            "epf_wages": epf_wages,
+            "eps_wages": eps_wages,
+            "edli_wages": edli_wages,
+            "epf_contri": ee,
+            "eps_contri": eps,
+            "epf_eps_diff": ee - eps,
+            "ncp_days": _r(p.days_lop),
+            "refund": 0,
+            "payslip_pf_employee": _r(p.pf_employee),
+        })
+    return rows, excluded
+
+
+_ECR_FIELDS = (
+    "uan", "name", "gross_wages", "epf_wages", "eps_wages", "edli_wages",
+    "epf_contri", "eps_contri", "epf_eps_diff", "ncp_days", "refund",
+)
+
+
+def ecr_text(rows: list[dict]) -> str:
+    """Data rows only — the EPFO portal rejects header / comment lines."""
+    lines = ["#~#".join(str(r[f]) for f in _ECR_FIELDS) for r in rows]
+    return "\n".join(lines) + ("\n" if lines else "")
+
+
+def validate_ecr_rows(
+    rows: list[dict],
+    *,
+    pf_cap: Decimal,
+    eps_cap: Decimal,
+    edli_cap: Decimal,
+    days_in_month: int,
+) -> list[dict]:
+    """Check every row against the portal's rules. Each issue is
+    {employee_code, name, level: error|warning, message}."""
+    issues: list[dict] = []
+
+    def add(r, level, msg):
+        issues.append({"employee_code": r["employee_code"], "name": r["name"],
+                       "level": level, "message": msg})
+
+    eps_limit = _r(eps_cap)
+    edli_limit = _r(edli_cap)
+    pf_limit = _r(pf_cap)
+    for r in rows:
+        if not (r["uan"].isdigit() and len(r["uan"]) == 12):
+            add(r, "error", f"UAN '{r['uan']}' must be 12 digits")
+        if r["epf_contri"] != _r(Decimal(r["epf_wages"]) * _ECR_EE_RATE):
+            add(r, "error", "EPF contribution is not 12% of EPF wages")
+        if r["eps_contri"] != _r(Decimal(r["eps_wages"]) * _ECR_EPS_RATE):
+            add(r, "error", "EPS contribution is not 8.33% of EPS wages")
+        if r["epf_eps_diff"] != r["epf_contri"] - r["eps_contri"] or r["epf_eps_diff"] < 0:
+            add(r, "error", "EPF-EPS difference must equal EPF contribution − EPS contribution")
+        if r["epf_wages"] > r["gross_wages"]:
+            add(r, "error", "EPF wages exceed gross wages")
+        if r["eps_wages"] > r["epf_wages"]:
+            add(r, "error", "EPS wages exceed EPF wages")
+        if r["edli_wages"] > r["epf_wages"]:
+            add(r, "error", "EDLI wages exceed EPF wages")
+        if r["eps_wages"] > eps_limit:
+            add(r, "error", f"EPS wages exceed the EPS ceiling (₹{eps_limit:,})")
+        if r["edli_wages"] > edli_limit:
+            add(r, "error", f"EDLI wages exceed the EDLI ceiling (₹{edli_limit:,})")
+        if not (0 <= r["ncp_days"] <= days_in_month):
+            add(r, "error", f"NCP days must be between 0 and {days_in_month}")
+        if r["epf_wages"] > pf_limit:
+            add(r, "warning", f"EPF wages above the PF ceiling (₹{pf_limit:,}) — "
+                              "fine only if this member contributes on higher wages")
+        if r["payslip_pf_employee"] != r["epf_contri"]:
+            add(r, "warning", f"Payslip deducted ₹{r['payslip_pf_employee']:,} PF but the "
+                              f"challan shows ₹{r['epf_contri']:,}")
+    return issues
+
+
 def build_pf_ecr(
     run: PayrollRun,
     payslips: Sequence[Payslip],
     employees: dict[int, "Employee"],
 ) -> str:
-    """EPFO ECR (Electronic Challan-cum-Return) text file, '#~#'
-    delimited, one line per member with a UAN. PF / EPS wages come from
-    the payslip (earned basic capped at that wage month's ceiling from
-    the PF ceiling register); EPS = 8.33% of EPS wages, EPF = employee
-    12% and the employer balance. Only employees with a UAN and non-zero
-    PF are included — file this on the EPFO Unified Portal."""
-    LEGACY_CAP = Decimal("15000")
-    lines: list[str] = []
-    for p in payslips:
-        e = employees.get(p.employee_id)
-        if not e or not (e.uan_number or "").strip():
-            continue
-        pf_emp = Decimal(p.pf_employee or 0)
-        if pf_emp <= 0:
-            continue
-        # Payslips from before PF wages were stored fall back to the old
-        # statutory ₹15,000 cap on basic.
-        pf_wages = Decimal(getattr(p, "pf_wages", 0) or 0)
-        if pf_wages <= 0:
-            pf_wages = min(Decimal(p.basic or 0), LEGACY_CAP)
-        pf_wages = pf_wages.quantize(Decimal("1"))
-        eps_wages = Decimal(getattr(p, "eps_wages", 0) or 0)
-        if eps_wages <= 0:
-            eps_wages = min(pf_wages, LEGACY_CAP)
-        eps_wages = eps_wages.quantize(Decimal("1"))
-        edli_wages = pf_wages
-        eps_contri = (eps_wages * Decimal("0.0833")).quantize(Decimal("1"))
-        epf_contri = pf_emp.quantize(Decimal("1"))
-        # Employer EPF share = employer total − EPS.
-        er_total = Decimal(p.pf_employer or 0).quantize(Decimal("1"))
-        er_epf = max(Decimal("0"), er_total - eps_contri)
-        diff = (epf_contri + er_epf) - epf_contri  # employer EPF portion
-        ncp_days = int(Decimal(p.days_lop or 0))
-        name = f"{e.first_name} {e.last_name}".strip().upper()
-        lines.append(
-            "#~#".join(
-                str(x)
-                for x in [
-                    (e.uan_number or "").strip(),
-                    name,
-                    int(pf_wages),       # Gross wages
-                    int(pf_wages),       # EPF wages
-                    int(eps_wages),      # EPS wages
-                    int(edli_wages),     # EDLI wages
-                    int(epf_contri),     # EPF contri remitted (employee)
-                    int(eps_contri),     # EPS contri remitted
-                    int(diff),           # EPF EPS diff remitted (employer EPF)
-                    ncp_days,            # NCP days
-                    0,                   # Refund of advances
-                ]
-            )
-        )
-    header = (
-        f"# Jaikalki PF ECR — {run.year}-{run.month:02d} "
-        f"(cycle start {run.cycle_start_day})\n"
-        f"# UAN#~#Name#~#GrossWages#~#EPFWages#~#EPSWages#~#EDLIWages"
-        f"#~#EPFContri#~#EPSContri#~#EPFEPSDiff#~#NCPDays#~#Refund\n"
-    )
-    return header + "\n".join(lines) + ("\n" if lines else "")
+    rows, _excluded = ecr_rows(payslips, employees)
+    return ecr_text(rows)
 
 
 # ── Reads ─────────────────────────────────────────────────────────────

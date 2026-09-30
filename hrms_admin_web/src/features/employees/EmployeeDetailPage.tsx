@@ -590,6 +590,7 @@ function StatutoryOverridesCard({
     employee.pf_basic_cap_override ?? "",
   );
   const [esicExempt, setEsicExempt] = useState(employee.esic_force_exempt);
+  const [epsMember, setEpsMember] = useState(employee.eps_member ?? true);
   const [ptState, setPtState] = useState<string>(employee.pt_state ?? "");
   const { data: companyCap } = useQuery({
     queryKey: ["pf-cap-current"],
@@ -603,6 +604,7 @@ function StatutoryOverridesCard({
     pfOptOut !== employee.pf_opt_out ||
     (pfCap || "") !== (employee.pf_basic_cap_override ?? "") ||
     esicExempt !== employee.esic_force_exempt ||
+    epsMember !== (employee.eps_member ?? true) ||
     (ptState || "") !== (employee.pt_state ?? "");
 
   const save = useMutation({
@@ -611,6 +613,7 @@ function StatutoryOverridesCard({
         pf_opt_out: pfOptOut,
         pf_basic_cap_override: pfCap === "" ? null : pfCap,
         esic_force_exempt: esicExempt,
+        eps_member: epsMember,
         pt_state: ptState === "" ? null : ptState,
       } as Partial<import("@/lib/api/employees").EmployeeDetail>),
     onSuccess: () => {
@@ -666,6 +669,24 @@ function StatutoryOverridesCard({
             <div className="text-xs text-brand-brown-light">
               Skips ESIC even when gross is ≤ ₹21,000. Useful for
               international employees or contractor arrangements.
+            </div>
+          </div>
+        </label>
+        <label className="flex items-start gap-3 text-sm">
+          <input
+            type="checkbox"
+            className="mt-1 accent-brand-gold-dark"
+            checked={epsMember}
+            disabled={pfOptOut}
+            onChange={(e) => setEpsMember(e.target.checked)}
+          />
+          <div>
+            <div className="font-medium">EPS (pension) member</div>
+            <div className="text-xs text-brand-brown-light">
+              Untick for members who joined EPF on or after 1 Sep 2014 with
+              basic above ₹15,000, or who are 58+. The PF challan then shows
+              EPS wages and EPS contribution as 0, and the whole employer share
+              goes to EPF.
             </div>
           </div>
         </label>

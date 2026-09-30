@@ -151,6 +151,50 @@ async def export_pf_challan(
     )
 
 
+@router.get("/runs/{run_id}/pf-challan/check")
+async def check_pf_challan(
+    run_id: int,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_permission("payroll.run")),
+):
+    """Validate the ECR against the EPFO portal's rules before download."""
+    from calendar import monthrange
+
+    from app.services.pf_ceiling_service import ceilings_for_wage_month
+
+    run = await payroll_service.get_run(db, run_id)
+    emps = (await db.execute(select(Employee))).scalars().all()
+    by_id = {e.id: e for e in emps}
+    rows, excluded = payroll_service.ecr_rows(run.payslips, by_id)
+    ceil = await ceilings_for_wage_month(db, run.year, run.month)
+    issues = payroll_service.validate_ecr_rows(
+        rows,
+        pf_cap=ceil["pf"],
+        eps_cap=ceil["eps"],
+        edli_cap=ceil["edli"],
+        days_in_month=monthrange(run.year, run.month)[1],
+    )
+    errors = sum(1 for i in issues if i["level"] == "error")
+    return {
+        "run_id": run.id,
+        "wage_month": f"{run.year}-{run.month:02d}",
+        "ceilings": {k: str(v) for k, v in ceil.items()},
+        "rows": rows,
+        "excluded": excluded,
+        "issues": issues,
+        "errors": errors,
+        "warnings": len(issues) - errors,
+        "ok": errors == 0,
+        "totals": {
+            "members": len(rows),
+            "epf_wages": sum(r["epf_wages"] for r in rows),
+            "epf_contri": sum(r["epf_contri"] for r in rows),
+            "eps_contri": sum(r["eps_contri"] for r in rows),
+            "epf_eps_diff": sum(r["epf_eps_diff"] for r in rows),
+        },
+    }
+
+
 @router.get("/runs/{run_id}", response_model=PayrollRunDetail)
 async def get_run(
     run_id: int,

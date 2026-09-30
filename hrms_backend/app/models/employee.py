@@ -153,6 +153,10 @@ class Employee(Base, TimestampMixin):
     pf_opt_out: Mapped[bool] = mapped_column(
         Boolean, default=False, nullable=False
     )
+    # EPS (pension) membership. False for members who aren't eligible
+    # (e.g. joined after 1 Sep 2014 with wages above the ceiling, or
+    # aged 58+): EPS wages / contribution are 0 in the PF challan.
+    eps_member: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     pf_basic_cap_override: Mapped[Optional[Decimal]] = mapped_column(
         Numeric(10, 2), nullable=True
     )

@@ -330,6 +330,7 @@ class EmployeeUpdate(BaseModel):
     # Per-employee statutory overrides
     pf_opt_out: Optional[bool] = None
     pf_basic_cap_override: Optional[Decimal] = None
+    eps_member: Optional[bool] = None
     esic_force_exempt: Optional[bool] = None
     pt_state: Optional[str] = Field(default=None, max_length=64)
     # Statutory IDs
@@ -392,6 +393,7 @@ class EmployeeOut(BaseModel):
     resignation_unlocked: bool = False
     pf_opt_out: bool = False
     pf_basic_cap_override: Optional[Decimal] = None
+    eps_member: bool = True
     esic_force_exempt: bool = False
     pt_state: Optional[str] = None
     pf_number: Optional[str] = None

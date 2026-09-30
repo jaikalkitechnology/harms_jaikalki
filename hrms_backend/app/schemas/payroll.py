@@ -66,6 +66,7 @@ class PayslipOut(BaseModel):
     on_hold: bool = False
     pf_wages: Decimal = Decimal("0")
     eps_wages: Decimal = Decimal("0")
+    edli_wages: Decimal = Decimal("0")
 
 
 class ReimbursementCreate(BaseModel):
@@ -157,6 +158,7 @@ class PfCeilingOut(BaseModel):
     id: int
     cap_amount: Decimal
     eps_cap_amount: Decimal
+    edli_cap_amount: Decimal = Decimal("15000")
     effective_from: date
     recorded_on: date
     mid_month_mode: str
@@ -171,6 +173,7 @@ class PfCeilingOut(BaseModel):
 class PfCeilingCreate(BaseModel):
     cap_amount: Decimal = Field(gt=0)
     eps_cap_amount: Optional[Decimal] = Field(default=None, gt=0)
+    edli_cap_amount: Optional[Decimal] = Field(default=None, gt=0)
     effective_from: date
     recorded_on: Optional[date] = None
     mid_month_mode: str = Field(
@@ -183,6 +186,7 @@ class PfCeilingCreate(BaseModel):
 class PfCeilingUpdate(BaseModel):
     cap_amount: Optional[Decimal] = Field(default=None, gt=0)
     eps_cap_amount: Optional[Decimal] = Field(default=None, gt=0)
+    edli_cap_amount: Optional[Decimal] = Field(default=None, gt=0)
     effective_from: Optional[date] = None
     recorded_on: Optional[date] = None
     mid_month_mode: Optional[str] = Field(

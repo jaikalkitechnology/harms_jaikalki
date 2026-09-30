@@ -50,6 +50,7 @@ async def ensure_seed(db: AsyncSession) -> None:
             PfWageCeiling(
                 cap_amount=BASELINE_CAP,
                 eps_cap_amount=BASELINE_CAP,
+                edli_cap_amount=BASELINE_CAP,
                 effective_from=BASELINE_FROM,
                 recorded_on=BASELINE_FROM,
                 mid_month_mode="day_weighted",
@@ -70,7 +71,10 @@ async def list_ceilings(db: AsyncSession) -> Sequence[PfWageCeiling]:
     ).scalars().all()
 
 
-def _pick(records: Sequence[PfWageCeiling], d: date) -> tuple[Decimal, Decimal]:
+def _pick_all(
+    records: Sequence[PfWageCeiling], d: date
+) -> tuple[Decimal, Decimal, Decimal]:
+    """(pf_cap, eps_cap, edli_cap) in force on ``d``."""
     best: Optional[PfWageCeiling] = None
     best_from: Optional[date] = None
     for r in records:
@@ -82,8 +86,17 @@ def _pick(records: Sequence[PfWageCeiling], d: date) -> tuple[Decimal, Decimal]:
         ):
             best, best_from = r, start
     if best is None:
-        return BASELINE_CAP, BASELINE_CAP
-    return Decimal(best.cap_amount), Decimal(best.eps_cap_amount)
+        return BASELINE_CAP, BASELINE_CAP, BASELINE_CAP
+    return (
+        Decimal(best.cap_amount),
+        Decimal(best.eps_cap_amount),
+        Decimal(best.edli_cap_amount or BASELINE_CAP),
+    )
+
+
+def _pick(records: Sequence[PfWageCeiling], d: date) -> tuple[Decimal, Decimal]:
+    pf, eps, _edli = _pick_all(records, d)
+    return pf, eps
 
 
 async def cap_on(db: AsyncSession, d: date) -> tuple[Decimal, Decimal]:
@@ -103,6 +116,26 @@ def weighted_caps(
         eps_total += eps
     q = Decimal("0.01")
     return (pf_total / days).quantize(q), (eps_total / days).quantize(q)
+
+
+def weighted_ceilings(
+    records: Sequence[PfWageCeiling], year: int, month: int
+) -> dict[str, Decimal]:
+    """Day-weighted PF / EPS / EDLI ceilings for a wage month."""
+    days = monthrange(year, month)[1]
+    totals = [Decimal(0), Decimal(0), Decimal(0)]
+    for day in range(1, days + 1):
+        for i, v in enumerate(_pick_all(records, date(year, month, day))):
+            totals[i] += v
+    q = Decimal("0.01")
+    pf, eps, edli = ((t / days).quantize(q) for t in totals)
+    return {"pf": pf, "eps": eps, "edli": edli}
+
+
+async def ceilings_for_wage_month(
+    db: AsyncSession, year: int, month: int
+) -> dict[str, Decimal]:
+    return weighted_ceilings(await list_ceilings(db), year, month)
 
 
 async def caps_for_wage_month(
@@ -137,6 +170,9 @@ def _validate(payload: dict) -> None:
     eps = payload.get("eps_cap_amount")
     if eps is not None and Decimal(eps) <= 0:
         raise ValidationError("EPS cap must be greater than zero")
+    edli = payload.get("edli_cap_amount")
+    if edli is not None and Decimal(edli) <= 0:
+        raise ValidationError("EDLI cap must be greater than zero")
     mode = payload.get("mid_month_mode")
     if mode is not None and mode not in MODES:
         raise ValidationError(f"mid_month_mode must be one of {', '.join(MODES)}")
@@ -159,6 +195,9 @@ async def create(
         cap_amount=Decimal(payload["cap_amount"]),
         eps_cap_amount=Decimal(
             payload.get("eps_cap_amount") or BASELINE_CAP
+        ),
+        edli_cap_amount=Decimal(
+            payload.get("edli_cap_amount") or BASELINE_CAP
         ),
         effective_from=payload["effective_from"],
         recorded_on=payload.get("recorded_on") or date.today(),
@@ -189,6 +228,7 @@ async def update(db: AsyncSession, ceiling_id: int, payload: dict) -> PfWageCeil
     for key in (
         "cap_amount",
         "eps_cap_amount",
+        "edli_cap_amount",
         "effective_from",
         "recorded_on",
         "mid_month_mode",
@@ -330,36 +370,65 @@ async def absorb(
     actor: User,
 ) -> dict:
     """Create salary revisions (pending approval) that raise CTC so each
-    selected employee's gross stays the same under the new cap."""
+    selected employee's gross stays the same under the new cap.
+
+    Each revision is committed on its own, so one failure never blocks
+    the rest. Everything the loop needs is captured as plain values up
+    front: a rollback expires loaded ORM objects, and touching an
+    expired object in async code raises MissingGreenlet.
+    """
+    from app.models import Employee, SalaryRevision
     from app.services import compensation_service
 
     rec = await get(db, ceiling_id)
-    wanted = set(employee_ids)
-    targets = []
-    async for e, _t, _old, _new, _oc, _nc in _affected(db, rec):
-        if e.id in wanted:
-            targets.append(e.id)
+    eff = effective_date or rec.effective_from
+    actor_id = actor.id
     preview = {r["employee_id"]: r for r in (await impact(db, ceiling_id))["rows"]}
+
+    open_ids = set(
+        (
+            await db.execute(
+                select(SalaryRevision.employee_id).where(
+                    SalaryRevision.employee_id.in_(employee_ids),
+                    SalaryRevision.status.in_(("draft", "pending_approval", "approved")),
+                )
+            )
+        ).scalars().all()
+    )
 
     created: list[dict] = []
     skipped: list[dict] = []
     for emp_id in employee_ids:
         row = preview.get(emp_id)
-        if row is None or emp_id not in targets:
+        if row is None:
             skipped.append({"employee_id": emp_id, "reason": "Not affected by this cap"})
             continue
+        if emp_id in open_ids:
+            skipped.append({
+                "employee_id": emp_id,
+                "reason": f"{row['name']} already has an open salary revision",
+            })
+            continue
+        proposer = await db.get(User, actor_id)
         try:
             rev = await compensation_service.propose(
                 db,
-                proposer=actor,
+                proposer=proposer,
                 employee_id=emp_id,
                 new_ctc_annual=row["absorb_ctc_annual"],
-                effective_date=effective_date or rec.effective_from,
-                reason=reason,
+                effective_date=eff,
+                reason="other",
+                notes=reason,
             )
-            created.append({"employee_id": emp_id, "revision_id": rev.id,
-                            "new_ctc_annual": row["absorb_ctc_annual"]})
-        except Exception as exc:  # e.g. an open revision already exists
+            created.append({
+                "employee_id": emp_id,
+                "revision_id": rev.id,
+                "new_ctc_annual": row["absorb_ctc_annual"],
+            })
+        except Exception as exc:
             await db.rollback()
-            skipped.append({"employee_id": emp_id, "reason": str(getattr(exc, "detail", exc))})
+            detail = getattr(exc, "detail", None)
+            if not isinstance(detail, str) or not detail.strip():
+                detail = f"{exc.__class__.__name__}: {str(exc).splitlines()[0][:160]}"
+            skipped.append({"employee_id": emp_id, "reason": f"{row['name']}: {detail}"})
     return {"created": created, "skipped": skipped}

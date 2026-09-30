@@ -49,7 +49,53 @@ export interface Payslip {
   days_sandwich: string;
   is_final_settlement?: boolean;
   on_hold?: boolean;
+  pf_wages?: string;
+  eps_wages?: string;
+  edli_wages?: string;
   pdf_url: string | null;
+}
+
+export interface EcrRow {
+  employee_id: number;
+  employee_code: string;
+  uan: string;
+  name: string;
+  gross_wages: number;
+  epf_wages: number;
+  eps_wages: number;
+  edli_wages: number;
+  epf_contri: number;
+  eps_contri: number;
+  epf_eps_diff: number;
+  ncp_days: number;
+  refund: number;
+  payslip_pf_employee: number;
+}
+
+export interface EcrIssue {
+  employee_code: string;
+  name: string;
+  level: "error" | "warning";
+  message: string;
+}
+
+export interface EcrCheck {
+  run_id: number;
+  wage_month: string;
+  ceilings: { pf: string; eps: string; edli: string };
+  rows: EcrRow[];
+  excluded: { employee_id: number; employee_code: string; name: string; reason: string }[];
+  issues: EcrIssue[];
+  errors: number;
+  warnings: number;
+  ok: boolean;
+  totals: {
+    members: number;
+    epf_wages: number;
+    epf_contri: number;
+    eps_contri: number;
+    epf_eps_diff: number;
+  };
 }
 
 export interface Reimbursement {
@@ -123,6 +169,12 @@ export const payrollApi = {
   },
   pfChallanUrl(id: number): string {
     return `${API_BASE_URL}${v1}/payroll/runs/${id}/pf-challan.txt`;
+  },
+  async checkPfChallan(id: number): Promise<EcrCheck> {
+    const { data } = await apiClient.get(
+      `${v1}/payroll/runs/${id}/pf-challan/check`,
+    );
+    return data;
   },
   async pendingReimbursements(): Promise<Reimbursement[]> {
     const { data } = await apiClient.get(
@@ -207,6 +259,7 @@ export interface PfCeiling {
   id: number;
   cap_amount: string;
   eps_cap_amount: string;
+  edli_cap_amount: string;
   effective_from: string;
   recorded_on: string;
   mid_month_mode: PfMidMonthMode;
@@ -220,6 +273,7 @@ export interface PfCeiling {
 export interface PfCeilingInput {
   cap_amount: number;
   eps_cap_amount?: number | null;
+  edli_cap_amount?: number | null;
   effective_from: string;
   recorded_on?: string | null;
   mid_month_mode: PfMidMonthMode;

@@ -119,6 +119,7 @@ export interface EmployeeDetail extends EmployeeListItem {
   work_mode: string;
   resignation_unlocked: boolean;
   pf_opt_out: boolean;
+  eps_member?: boolean;
   pf_basic_cap_override: string | null;
   esic_force_exempt: boolean;
   pt_state: string | null;

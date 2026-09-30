@@ -21,8 +21,11 @@ import {
   type PfMidMonthMode,
 } from "@/lib/api/payroll";
 
-const inr = (v: string | number) =>
-  `₹${Number(v).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
+const inr = (v: string | number) => {
+  const n = Number(v);
+  const abs = Math.abs(n).toLocaleString("en-IN", { maximumFractionDigits: 2 });
+  return n < 0 ? `−₹${abs}` : `₹${abs}`;
+};
 
 const MODE_LABEL: Record<PfMidMonthMode, string> = {
   day_weighted: "Pro-rata by date",
@@ -193,6 +196,7 @@ function PfCeilingCard() {
             <tr>
               <th className="px-4 py-2">PF cap</th>
               <th>EPS cap</th>
+              <th>EDLI cap</th>
               <th>Effective from</th>
               <th>Mid-month</th>
               <th>Recorded on</th>
@@ -204,7 +208,7 @@ function PfCeilingCard() {
           <tbody>
             {isLoading && (
               <tr>
-                <td colSpan={8} className="py-6 text-center text-brand-brown-light">
+                <td colSpan={9} className="py-6 text-center text-brand-brown-light">
                   Loading…
                 </td>
               </tr>
@@ -213,6 +217,7 @@ function PfCeilingCard() {
               <tr key={r.id} className="border-t border-brand-brown-50">
                 <td className="px-4 py-2 font-semibold">{inr(r.cap_amount)}</td>
                 <td>{inr(r.eps_cap_amount)}</td>
+                <td>{inr(r.edli_cap_amount)}</td>
                 <td>{r.effective_from}</td>
                 <td className="text-xs">
                   {r.effective_from.endsWith("-01") ? "—" : MODE_LABEL[r.mid_month_mode]}
@@ -308,6 +313,7 @@ function CeilingEditor({
   const [form, setForm] = useState<PfCeilingInput>({
     cap_amount: record ? Number(record.cap_amount) : 25000,
     eps_cap_amount: record ? Number(record.eps_cap_amount) : 15000,
+    edli_cap_amount: record ? Number(record.edli_cap_amount) : 15000,
     effective_from: record?.effective_from ?? today,
     recorded_on: record?.recorded_on ?? today,
     mid_month_mode: record?.mid_month_mode ?? "day_weighted",
@@ -346,7 +352,7 @@ function CeilingEditor({
           </Button>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
             <div>
               <Label>PF wage cap (₹ / month)</Label>
               <Input
@@ -368,6 +374,19 @@ function CeilingEditor({
               />
             </div>
             <div>
+              <Label>EDLI wage cap (₹ / month)</Label>
+              <Input
+                type="number"
+                min={1}
+                value={form.edli_cap_amount ?? ""}
+                onChange={(e) =>
+                  setForm({ ...form, edli_cap_amount: Number(e.target.value) || null })
+                }
+              />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
               <Label>Effective from</Label>
               <Input
                 type="date"
@@ -385,8 +404,9 @@ function CeilingEditor({
             </div>
           </div>
           <p className="text-xs text-brand-brown-light">
-            EPS (pension) has its own ceiling. Leave it at ₹15,000 unless the
-            circular raises the pension ceiling as well.
+            EPS (pension) and EDLI (insurance) have their own ceilings. Leave
+            them at ₹15,000 unless the circular raises those ceilings as well —
+            the PF challan caps columns 5 and 6 at these amounts.
           </p>
 
           {midMonth && (
@@ -460,7 +480,7 @@ function ImpactModal({ record, onClose }: { record: PfCeiling; onClose: () => vo
         `${res.created.length} salary revision(s) created — approve them on the Salary Revisions page` +
           (res.skipped.length ? ` · ${res.skipped.length} skipped` : ""),
       );
-      res.skipped.forEach((s) => toast.message(`Employee #${s.employee_id}: ${s.reason}`));
+      res.skipped.forEach((s) => toast.message(`Skipped — ${s.reason}`));
       setSelected(new Set());
     },
     onError: (e) => toast.error(errDetail(e, "Could not create revisions")),
