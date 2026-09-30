@@ -244,6 +244,32 @@ export const launchApi = {
     );
     return res.data;
   },
+  updateSeparation: async (
+    id: number,
+    body: {
+      separation_type?: "resignation" | "termination";
+      proposed_last_working_day?: string;
+      actual_last_working_day?: string | null;
+      reason?: string | null;
+      notice_period_days?: number;
+      manager_comment?: string | null;
+    },
+  ) => {
+    const { data } = await apiClient.patch<Resignation>(
+      `${v1}/separations/${id}`,
+      body,
+    );
+    return data;
+  },
+  undoSeparation: async (id: number) => {
+    const { data } = await apiClient.post<{ action: string; status: string }>(
+      `${v1}/separations/${id}/undo`,
+    );
+    return data;
+  },
+  deleteSeparation: async (id: number) => {
+    await apiClient.delete(`${v1}/separations/${id}`);
+  },
   separationPdfUrl: (id: number) =>
     `${API_BASE_URL}${v1}/separations/${id}/pdf`,
   emailSeparationLetter: async (

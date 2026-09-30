@@ -16,6 +16,7 @@ import { Label } from "@/components/ui/label";
 import { LoadingScreen } from "@/components/shared/LoadingScreen";
 import { launchApi, type Resignation } from "@/lib/api/launch";
 import { employeesApi } from "@/lib/api/employees";
+import { SeparationActions } from "./SeparationActions";
 
 const TYPE_LABEL: Record<string, string> = {
   resignation: "Resignation",
@@ -148,7 +149,15 @@ export default function SeparationsPage() {
                         onClick={() => setEmailingId(r.id)}
                       >
                         <Mail className="h-3 w-3 mr-1" /> Email
-                      </Button>
+                      </Button>{" "}
+                      <SeparationActions
+                        resignation={r}
+                        employeeLabel={
+                          emp
+                            ? `${emp.first_name} ${emp.last_name}`
+                            : `Employee #${r.employee_id}`
+                        }
+                      />
                     </td>
                   </tr>
                 );

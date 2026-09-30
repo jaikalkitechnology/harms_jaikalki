@@ -391,6 +391,109 @@ async def cancel(
     return res
 
 
+# ── Admin corrections: edit / undo / delete ───────────────────────────
+_ACCEPTED_STATES = ("accepted", "in_notice", "ndc_pending", "cleared", "settled")
+
+
+async def _employee_of(db: AsyncSession, res: Resignation) -> Optional[Employee]:
+    return (
+        await db.execute(select(Employee).where(Employee.id == res.employee_id))
+    ).scalar_one_or_none()
+
+
+def _restore_employee(emp: Employee) -> None:
+    """Put a separated employee back on the roll."""
+    if emp.status in ("resigned", "terminated", "separated", "inactive"):
+        emp.status = "active"
+    emp.exit_date = None
+
+
+async def admin_update(
+    db: AsyncSession,
+    resignation_id: int,
+    *,
+    fields: dict,
+) -> Resignation:
+    """Edit a separation. When it's already accepted, keep the employee's
+    exit_date / status in sync with the new values."""
+    res = await get(db, resignation_id)
+    if "separation_type" in fields and fields["separation_type"] not in (
+        "resignation",
+        "termination",
+    ):
+        raise ValidationError("separation_type must be resignation or termination")
+    for key in (
+        "separation_type",
+        "proposed_last_working_day",
+        "actual_last_working_day",
+        "reason",
+        "notice_period_days",
+        "manager_comment",
+    ):
+        if key in fields:
+            setattr(res, key, fields[key])
+
+    if res.status in _ACCEPTED_STATES:
+        emp = await _employee_of(db, res)
+        if emp is not None:
+            emp.exit_date = (
+                res.actual_last_working_day or res.proposed_last_working_day
+            )
+            emp.status = separation_employee_status(res.separation_type)
+    await db.commit()
+    await db.refresh(res)
+    return res
+
+
+async def admin_undo(db: AsyncSession, resignation_id: int) -> dict:
+    """Step the separation back one stage.
+
+    settled                      → cleared   (settlement cleared)
+    accepted / in_notice /
+    ndc_pending / cleared /
+    rejected                     → manager_review, employee back on roll
+    """
+    res = await get(db, resignation_id)
+    if res.status == "settled":
+        res.status = "cleared"
+        res.final_settlement_amount = None
+        res.final_settled_at = None
+        res.exit_interview_notes = None
+        await db.commit()
+        return {"action": "settlement_undone", "status": res.status}
+
+    if res.status in ("accepted", "in_notice", "ndc_pending", "cleared", "rejected"):
+        was = res.status
+        res.status = "manager_review"
+        res.manager_decision_at = None
+        res.manager_decision_by = None
+        res.actual_last_working_day = None
+        res.hr_cleared_at = None
+        emp = await _employee_of(db, res)
+        if emp is not None:
+            _restore_employee(emp)
+        await db.commit()
+        return {
+            "action": "rejection_undone" if was == "rejected" else "decision_undone",
+            "status": res.status,
+        }
+
+    raise ValidationError(
+        f"Nothing to undo — this separation is '{res.status}'. "
+        "Use Delete to remove it."
+    )
+
+
+async def admin_delete(db: AsyncSession, resignation_id: int) -> None:
+    """Remove the separation record and put the employee back on roll."""
+    res = await get(db, resignation_id)
+    emp = await _employee_of(db, res)
+    if emp is not None and res.status in _ACCEPTED_STATES:
+        _restore_employee(emp)
+    await db.delete(res)
+    await db.commit()
+
+
 async def get(db: AsyncSession, resignation_id: int) -> Resignation:
     r = (
         await db.execute(

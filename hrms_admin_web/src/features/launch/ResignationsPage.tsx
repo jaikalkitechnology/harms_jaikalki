@@ -28,6 +28,7 @@ import { launchApi, type Resignation } from "@/lib/api/launch";
 import { employeesApi } from "@/lib/api/employees";
 import { fmtIstDate } from "@/lib/datetime";
 import { API_BASE_URL } from "@/lib/constants";
+import { SeparationActions } from "./SeparationActions";
 
 const STATUS_COLOR: Record<string, string> = {
   submitted: "bg-info/15 text-info",
@@ -274,11 +275,21 @@ export default function ResignationsPage() {
                         LWD {r.proposed_last_working_day}
                       </span>
                     </CardTitle>
-                    <span
-                      className={`rounded-full px-2 py-0.5 text-[10px] uppercase ${STATUS_COLOR[r.status] ?? ""}`}
-                    >
-                      {r.status.replaceAll("_", " ")}
-                    </span>
+                    <div className="flex items-center gap-2">
+                      <span
+                        className={`rounded-full px-2 py-0.5 text-[10px] uppercase ${STATUS_COLOR[r.status] ?? ""}`}
+                      >
+                        {r.status.replaceAll("_", " ")}
+                      </span>
+                      <SeparationActions
+                        resignation={r}
+                        employeeLabel={
+                          emp
+                            ? `${emp.first_name} ${emp.last_name}`
+                            : `Employee #${r.employee_id}`
+                        }
+                      />
+                    </div>
                   </div>
                   <CardDescription>
                     Notice {r.notice_period_days} days · Requested{" "}
