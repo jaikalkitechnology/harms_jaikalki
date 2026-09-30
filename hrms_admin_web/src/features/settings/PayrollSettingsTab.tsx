@@ -21,8 +21,11 @@ import {
   type PfMidMonthMode,
 } from "@/lib/api/payroll";
 
-const inr = (v: string | number) =>
-  `₹${Number(v).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
+const inr = (v: string | number) => {
+  const n = Number(v);
+  const abs = Math.abs(n).toLocaleString("en-IN", { maximumFractionDigits: 2 });
+  return n < 0 ? `−₹${abs}` : `₹${abs}`;
+};
 
 const MODE_LABEL: Record<PfMidMonthMode, string> = {
   day_weighted: "Pro-rata by date",
@@ -460,7 +463,7 @@ function ImpactModal({ record, onClose }: { record: PfCeiling; onClose: () => vo
         `${res.created.length} salary revision(s) created — approve them on the Salary Revisions page` +
           (res.skipped.length ? ` · ${res.skipped.length} skipped` : ""),
       );
-      res.skipped.forEach((s) => toast.message(`Employee #${s.employee_id}: ${s.reason}`));
+      res.skipped.forEach((s) => toast.message(`Skipped — ${s.reason}`));
       setSelected(new Set());
     },
     onError: (e) => toast.error(errDetail(e, "Could not create revisions")),
