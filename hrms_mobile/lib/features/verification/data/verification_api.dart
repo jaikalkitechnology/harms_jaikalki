@@ -1,7 +1,6 @@
-import 'dart:io';
-
 import 'package:dio/dio.dart';
 import 'package:http_parser/http_parser.dart';
+import 'package:image_picker/image_picker.dart' show XFile;
 
 import 'verification_models.dart';
 
@@ -36,11 +35,13 @@ class VerificationApi {
   /// public URL the backend stored it at, ready to be put into
   /// `form_data`, the `photos[]` list, or `signature_url`.
   Future<String> uploadFile({
-    required File file,
+    required XFile file,
     required String kind, // photo | signature | document
     String? fieldKey,
   }) async {
-    final ext = file.path.split('.').last.toLowerCase();
+    // XFile.name is the real file name on web too (path is a blob: URL).
+    final name = file.name.isNotEmpty ? file.name : file.path.split('/').last;
+    final ext = name.split('.').last.toLowerCase();
     final mime = switch (ext) {
       'jpg' || 'jpeg' => MediaType('image', 'jpeg'),
       'png' => MediaType('image', 'png'),
@@ -52,9 +53,9 @@ class VerificationApi {
     final form = FormData.fromMap({
       'kind': kind,
       if (fieldKey != null) 'field_key': fieldKey,
-      'file': await MultipartFile.fromFile(
-        file.path,
-        filename: file.path.split('/').last,
+      'file': MultipartFile.fromBytes(
+        await file.readAsBytes(),
+        filename: name,
         contentType: mime,
       ),
     });

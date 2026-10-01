@@ -1,8 +1,10 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
-import 'package:open_filex/open_filex.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../../../core/di/injection.dart';
+import '../../../core/files/file_saver.dart';
 import '../../../core/theme/app_colors.dart';
 import '../data/exam_api.dart';
 import '../data/exam_models.dart';
@@ -39,14 +41,12 @@ class _MyCertificatesPageState extends State<MyCertificatesPage> {
     );
   }
 
-  Future<void> _download(CertificateOut cert, {bool open = true}) async {
+  Future<void> _download(CertificateOut cert) async {
     setState(() => _busy.add(cert.id));
     try {
-      final file = await sl<ExamApi>().downloadCertificate(cert);
-      _toast('Saved to ${file.path.split('/').last}');
-      if (open) {
-        await OpenFilex.open(file.path, type: 'application/pdf');
-      }
+      final pdf = await sl<ExamApi>().certificatePdf(cert);
+      final problem = await saveAndOpenBytes(pdf.bytes, filename: pdf.filename);
+      _toast(problem ?? 'Downloaded ${pdf.filename}', error: problem != null);
     } catch (e) {
       _toast('Download failed: $e', error: true);
     } finally {
@@ -57,9 +57,15 @@ class _MyCertificatesPageState extends State<MyCertificatesPage> {
   Future<void> _share(CertificateOut cert) async {
     setState(() => _busy.add(cert.id));
     try {
-      final file = await sl<ExamApi>().downloadCertificate(cert);
+      final pdf = await sl<ExamApi>().certificatePdf(cert);
       await Share.shareXFiles(
-        [XFile(file.path, mimeType: 'application/pdf')],
+        [
+          XFile.fromData(
+            Uint8List.fromList(pdf.bytes),
+            name: pdf.filename,
+            mimeType: 'application/pdf',
+          ),
+        ],
         text: 'Jaikalki Certificate · ${cert.certificateNumber}',
         subject: cert.title,
       );
@@ -101,7 +107,7 @@ class _MyCertificatesPageState extends State<MyCertificatesPage> {
                       'No certificates issued yet.\nFinish a course or pass an exam to earn one.',
                       textAlign: TextAlign.center,
                       style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            color: AppColors.brandBrownLight,
+                            color: AppColors.textMuted,
                           ),
                     ),
                   ),

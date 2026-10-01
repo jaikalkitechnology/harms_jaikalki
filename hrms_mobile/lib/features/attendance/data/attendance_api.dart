@@ -1,7 +1,6 @@
-import 'dart:io';
-
 import 'package:dio/dio.dart';
 import 'package:http_parser/http_parser.dart';
+import 'package:image_picker/image_picker.dart' show XFile;
 
 import 'attendance_models.dart';
 
@@ -33,7 +32,7 @@ class AttendanceApi {
     required double lat,
     required double lng,
     required String workMode,
-    File? selfie,
+    XFile? selfie,
     String? notes,
   }) async {
     final form = FormData.fromMap({
@@ -42,8 +41,9 @@ class AttendanceApi {
       'work_mode': workMode,
       if (notes != null) 'notes': notes,
       if (selfie != null)
-        'selfie': await MultipartFile.fromFile(
-          selfie.path,
+        // Bytes, not a path: the browser has no file system.
+        'selfie': MultipartFile.fromBytes(
+          await selfie.readAsBytes(),
           filename: 'selfie.jpg',
           contentType: MediaType('image', 'jpeg'),
         ),

@@ -1,7 +1,4 @@
-import 'dart:io';
-
 import 'package:dio/dio.dart';
-import 'package:path_provider/path_provider.dart';
 
 import 'exam_models.dart';
 
@@ -68,33 +65,18 @@ class ExamApi {
         .toList();
   }
 
-  /// Download the certificate PDF and save it to the app's downloads
-  /// directory. Returns the local file path so callers can open or
-  /// share it.
-  Future<File> downloadCertificate(CertificateOut cert) async {
+  /// Certificate PDF bytes plus a file name — works on web too.
+  Future<({List<int> bytes, String filename})> certificatePdf(
+    CertificateOut cert,
+  ) async {
     final res = await _dio.get<List<int>>(
       '$_v1/exams/certificates/${cert.id}/pdf',
-      options: Options(
-        responseType: ResponseType.bytes,
-        followRedirects: true,
-      ),
+      options: Options(responseType: ResponseType.bytes),
     );
     final bytes = res.data ?? const <int>[];
-    if (bytes.isEmpty) {
-      throw StateError('Empty PDF response');
-    }
-    final dir = await _writableDir();
-    final safe = cert.certificateNumber.replaceAll(RegExp(r'[^A-Za-z0-9._-]'), '-');
-    final file = File('${dir.path}/$safe.pdf');
-    await file.writeAsBytes(bytes, flush: true);
-    return file;
-  }
-
-  Future<Directory> _writableDir() async {
-    try {
-      return await getApplicationDocumentsDirectory();
-    } catch (_) {
-      return Directory.systemTemp;
-    }
+    if (bytes.isEmpty) throw StateError('Empty PDF response');
+    final safe =
+        cert.certificateNumber.replaceAll(RegExp(r'[^A-Za-z0-9._-]'), '-');
+    return (bytes: bytes, filename: '$safe.pdf');
   }
 }

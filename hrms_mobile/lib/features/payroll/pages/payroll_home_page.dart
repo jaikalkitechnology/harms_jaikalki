@@ -1,12 +1,9 @@
-import 'dart:io';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
-import 'package:open_filex/open_filex.dart';
-import 'package:path_provider/path_provider.dart';
 
 import '../../../core/di/injection.dart';
+import '../../../core/files/file_saver.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../employees/cubit/employees_cubit.dart' show LoadStatus;
 import '../cubit/payroll_cubit.dart';
@@ -165,19 +162,20 @@ class _PayslipCard extends StatelessWidget {
                       final bytes = await api.downloadPayslipPdf(
                         payslip.id,
                       );
-                      final dir = await getTemporaryDirectory();
-                      final f = File(
-                        '${dir.path}/payslip_${payslip.year}_'
-                        '${payslip.month}.pdf',
+                      final month =
+                          payslip.month.toString().padLeft(2, '0');
+                      final problem = await saveAndOpenBytes(
+                        bytes,
+                        filename: 'payslip_${payslip.year}_$month.pdf',
                       );
-                      await f.writeAsBytes(bytes, flush: true);
-                      final res = await OpenFilex.open(f.path);
-                      if (res.type != ResultType.done) {
+                      messenger.hideCurrentSnackBar();
+                      if (problem != null) {
                         messenger.showSnackBar(
-                          SnackBar(content: Text(res.message)),
+                          SnackBar(content: Text(problem)),
                         );
                       }
                     } catch (_) {
+                      messenger.hideCurrentSnackBar();
                       messenger.showSnackBar(
                         const SnackBar(
                           content: Text('Could not open payslip'),
@@ -202,7 +200,7 @@ class _PayslipCard extends StatelessWidget {
       children: [
         Text(label.toUpperCase(),
             style: theme.textTheme.labelSmall?.copyWith(
-              color: AppColors.brandBrownLight,
+              color: AppColors.textMuted,
             )),
         Text(value, style: theme.textTheme.bodyMedium),
       ],
