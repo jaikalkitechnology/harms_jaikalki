@@ -607,7 +607,7 @@ class _RecentUpdates extends StatelessWidget {
                           style: const TextStyle(
                             color: AppColors.textMuted,
                             fontSize: 11,
-                            fontFamily: 'monospace',
+                            fontFamily: 'JetBrainsMono',
                             letterSpacing: 1.0,
                           ),
                         ),

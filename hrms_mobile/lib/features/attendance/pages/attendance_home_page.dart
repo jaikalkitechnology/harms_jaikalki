@@ -261,7 +261,7 @@ class _StatusChip extends StatelessWidget {
         status.toUpperCase(),
         style: TextStyle(
           fontSize: 10,
-          fontFamily: 'monospace',
+          fontFamily: 'JetBrainsMono',
           letterSpacing: 1.5,
           fontWeight: FontWeight.w700,
           color: c,

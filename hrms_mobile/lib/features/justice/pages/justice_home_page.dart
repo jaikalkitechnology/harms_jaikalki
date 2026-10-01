@@ -126,7 +126,7 @@ class _ComplaintRow extends StatelessWidget {
           children: [
             Text(complaint.ticketNumber,
                 style: theme.textTheme.bodySmall?.copyWith(
-                  fontFamily: 'monospace',
+                  fontFamily: 'JetBrainsMono',
                   color: AppColors.textMuted,
                 )),
             Text(
@@ -147,7 +147,7 @@ class _ComplaintRow extends StatelessWidget {
             complaint.status.replaceAll('_', ' ').toUpperCase(),
             style: const TextStyle(
               fontSize: 9,
-              fontFamily: 'monospace',
+              fontFamily: 'JetBrainsMono',
               letterSpacing: 1.2,
               fontWeight: FontWeight.w700,
               color: AppColors.brandGoldDark,

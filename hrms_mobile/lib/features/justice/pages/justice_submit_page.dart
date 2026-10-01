@@ -497,7 +497,7 @@ class _JusticeSubmitPageState extends State<JusticeSubmitPage> {
               label.toUpperCase(),
               style: const TextStyle(
                 fontSize: 10,
-                fontFamily: 'monospace',
+                fontFamily: 'JetBrainsMono',
                 letterSpacing: 1.5,
                 color: AppColors.textMuted,
               ),

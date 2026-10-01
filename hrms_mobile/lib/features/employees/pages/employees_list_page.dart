@@ -210,7 +210,7 @@ class _CategoryChip extends StatelessWidget {
         code,
         style: TextStyle(
           fontSize: 10,
-          fontFamily: 'monospace',
+          fontFamily: 'JetBrainsMono',
           letterSpacing: 1.5,
           fontWeight: FontWeight.w600,
           color: color,
@@ -237,7 +237,7 @@ class _StatusChip extends StatelessWidget {
         label,
         style: TextStyle(
           fontSize: 10,
-          fontFamily: 'monospace',
+          fontFamily: 'JetBrainsMono',
           letterSpacing: 1.5,
           fontWeight: FontWeight.w600,
           color: color,

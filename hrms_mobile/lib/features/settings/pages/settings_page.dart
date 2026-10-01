@@ -79,7 +79,7 @@ class _SectionHeader extends StatelessWidget {
         label,
         style: const TextStyle(
           fontSize: 11,
-          fontFamily: 'monospace',
+          fontFamily: 'JetBrainsMono',
           letterSpacing: 2,
           color: AppColors.brandGoldDark,
           fontWeight: FontWeight.w700,

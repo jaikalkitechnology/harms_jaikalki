@@ -149,7 +149,7 @@ class _ExamListPageState extends State<ExamListPage> {
                             const SizedBox(height: 4),
                             Text(e.code,
                                 style: theme.textTheme.bodySmall?.copyWith(
-                                  fontFamily: 'monospace',
+                                  fontFamily: 'JetBrainsMono',
                                   color: AppColors.textMuted,
                                 )),
                             if (e.description != null) ...[

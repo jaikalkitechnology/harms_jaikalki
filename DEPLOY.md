@@ -230,10 +230,15 @@ iOS: archive in Xcode → App Store Connect → TestFlight, then production.
 ### Flutter web (mobile web app)
 
 ```bash
-flutter build web --release \
+flutter build web --wasm --release \
     --dart-define=API_BASE_URL=https://api-hrms.jaikalki.com
 sudo rsync -a --delete build/web/ /var/www/<flutter-web-domain>/
 ```
+
+`--wasm` builds a WebAssembly version (faster start-up and rendering)
+next to the usual JavaScript one; the loader picks WebAssembly on Chrome,
+Edge and recent Firefox and falls back to JavaScript elsewhere, e.g.
+older iPhones. Nothing else changes for users.
 
 The web bundle is large (`main.dart.js` ≈ 4.5 MB, `canvaskit.wasm` ≈ 7 MB),
 so serve it compressed (≈ 1.3 MB + 3 MB over the wire). Flutter's file

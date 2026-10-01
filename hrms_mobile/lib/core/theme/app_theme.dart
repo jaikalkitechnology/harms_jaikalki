@@ -1,10 +1,14 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 
 import 'app_colors.dart';
 
 class AppTheme {
   AppTheme._();
+
+  /// Families bundled in pubspec.yaml (assets/fonts).
+  static const sans = 'Poppins';
+  static const serif = 'PlayfairDisplay';
+  static const mono = 'JetBrainsMono';
 
   static ThemeData light() {
     final base = ThemeData.light(useMaterial3: true);
@@ -29,7 +33,8 @@ class AppTheme {
         foregroundColor: AppColors.brandBrownDarker,
         elevation: 0,
         scrolledUnderElevation: 1,
-        titleTextStyle: GoogleFonts.playfairDisplay(
+        titleTextStyle: TextStyle(
+          fontFamily: serif,
           fontSize: 22,
           fontWeight: FontWeight.w700,
           color: AppColors.brandBrownDarker,
@@ -49,7 +54,10 @@ class AppTheme {
           foregroundColor: AppColors.warmWhite,
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          textStyle: GoogleFonts.poppins(fontWeight: FontWeight.w600),
+          textStyle: const TextStyle(
+            fontFamily: sans,
+            fontWeight: FontWeight.w600,
+          ),
         ),
       ),
       inputDecorationTheme: InputDecorationTheme(
@@ -95,7 +103,8 @@ class AppTheme {
         backgroundColor: AppColors.brandBrownDark,
         foregroundColor: AppColors.warmWhite,
         elevation: 0,
-        titleTextStyle: GoogleFonts.playfairDisplay(
+        titleTextStyle: TextStyle(
+          fontFamily: serif,
           fontSize: 22,
           fontWeight: FontWeight.w700,
           color: AppColors.warmWhite,
@@ -113,33 +122,40 @@ class AppTheme {
   }
 
   static TextTheme _textTheme(TextTheme base, Color color) {
-    final body = GoogleFonts.poppinsTextTheme(base).apply(
+    final body = base.apply(
+      fontFamily: sans,
       bodyColor: color,
       displayColor: color,
     );
     return body.copyWith(
-      displayLarge: GoogleFonts.playfairDisplay(
+      displayLarge: TextStyle(
+        fontFamily: serif,
         fontWeight: FontWeight.w700,
         color: color,
         letterSpacing: -0.5,
       ),
-      displayMedium: GoogleFonts.playfairDisplay(
+      displayMedium: TextStyle(
+        fontFamily: serif,
         fontWeight: FontWeight.w700,
         color: color,
       ),
-      headlineLarge: GoogleFonts.playfairDisplay(
+      headlineLarge: TextStyle(
+        fontFamily: serif,
         fontWeight: FontWeight.w700,
         color: color,
       ),
-      headlineMedium: GoogleFonts.playfairDisplay(
+      headlineMedium: TextStyle(
+        fontFamily: serif,
         fontWeight: FontWeight.w600,
         color: color,
       ),
-      titleLarge: GoogleFonts.playfairDisplay(
+      titleLarge: TextStyle(
+        fontFamily: serif,
         fontWeight: FontWeight.w600,
         color: color,
       ),
-      labelSmall: GoogleFonts.jetBrainsMono(
+      labelSmall: TextStyle(
+        fontFamily: mono,
         fontSize: 10,
         letterSpacing: 2.4,
         fontWeight: FontWeight.w600,

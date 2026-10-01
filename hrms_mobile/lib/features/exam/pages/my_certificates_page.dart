@@ -289,7 +289,7 @@ class _CertificateCard extends StatelessWidget {
                     cert.certificateNumber,
                     style: theme.textTheme.bodySmall?.copyWith(
                       color: AppColors.brandGoldLight,
-                      fontFamily: 'monospace',
+                      fontFamily: 'JetBrainsMono',
                     ),
                   ),
                   const SizedBox(height: 14),

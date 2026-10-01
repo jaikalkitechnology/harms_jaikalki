@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -11,6 +12,7 @@ import 'core/push/push_notifications_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  _registerFontLicenses();
   SystemChrome.setSystemUIOverlayStyle(SystemUiOverlayStyle.dark);
   await setupDependencies();
   // Per-department module whitelist from cache (a local read); a refresh
@@ -23,4 +25,22 @@ Future<void> main() async {
   // location sharing on a GPS permission check.
   unawaited(PushNotificationsService.instance.initialize());
   unawaited(LocationSharingService.instance.hydrate());
+}
+
+/// The bundled fonts are under the SIL Open Font License, which travels
+/// with them; this lists it on the app's licences page.
+void _registerFontLicenses() {
+  const fonts = {
+    'Poppins': 'assets/fonts/OFL-poppins.txt',
+    'Playfair Display': 'assets/fonts/OFL-playfairdisplay.txt',
+    'JetBrains Mono': 'assets/fonts/OFL-jetbrainsmono.txt',
+  };
+  LicenseRegistry.addLicense(() async* {
+    for (final entry in fonts.entries) {
+      yield LicenseEntryWithLineBreaks(
+        [entry.key],
+        await rootBundle.loadString(entry.value),
+      );
+    }
+  });
 }

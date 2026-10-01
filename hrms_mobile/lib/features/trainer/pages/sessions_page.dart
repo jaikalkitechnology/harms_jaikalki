@@ -160,7 +160,7 @@ class _TrainerSessionsPageState extends State<TrainerSessionsPage> {
             const SizedBox(height: 4),
             Text(s.code,
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      fontFamily: 'monospace',
+                      fontFamily: 'JetBrainsMono',
                       color: AppColors.textMuted,
                     )),
             const SizedBox(height: 6),
