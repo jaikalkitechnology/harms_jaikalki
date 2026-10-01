@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/di/injection.dart';
+import '../../core/pwa/install_app_widgets.dart';
 import '../../core/routing/app_router.dart';
 import '../../core/theme/app_colors.dart';
 import '../../l10n/app_l10n.dart';
@@ -57,6 +58,9 @@ class _DashboardView extends StatelessWidget {
               padding: EdgeInsets.zero,
               children: [
                 _BrandHeader(summary: s),
+                const InstallAppBanner(
+                  margin: EdgeInsets.fromLTRB(16, 16, 16, 0),
+                ),
                 if (state.fromCache && !state.refreshing && state.error != null)
                   const _SavedDataNotice(),
                 Padding(

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../../../core/pwa/install_app_widgets.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../l10n/app_l10n.dart';
 import '../../auth/presentation/bloc/auth_bloc.dart';
@@ -49,6 +50,7 @@ class SettingsPage extends StatelessWidget {
               ),
               const Divider(),
               _SectionHeader(label: 'ABOUT'),
+              const InstallAppTile(),
               ListTile(
                 leading: const Icon(Icons.info_outline),
                 title: Text(l.aboutApp),

@@ -240,6 +240,12 @@ next to the usual JavaScript one; the loader picks WebAssembly on Chrome,
 Edge and recent Firefox and falls back to JavaScript elsewhere, e.g.
 older iPhones. Nothing else changes for users.
 
+The web app is installable ("Install app" banner on the login and home
+screens, and in Settings): Chrome / Edge / Samsung Internet show their
+own install dialog, iPhone / iPad users get "Share → Add to Home Screen"
+steps. Installing needs HTTPS, and `sw.js` must be served from the site
+root next to `index.html` (the nginx block below does both).
+
 The web bundle is large (`main.dart.js` ≈ 4.5 MB, `canvaskit.wasm` ≈ 7 MB),
 so serve it compressed (≈ 1.3 MB + 3 MB over the wire). Flutter's file
 names carry no content hash, so let browsers keep copies but revalidate

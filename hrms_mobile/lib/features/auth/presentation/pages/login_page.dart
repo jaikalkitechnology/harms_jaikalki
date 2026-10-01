@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../core/constants/app_constants.dart';
+import '../../../../core/pwa/install_app_widgets.dart';
 import '../../../../core/routing/app_router.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../widgets/login_form.dart';
@@ -59,6 +60,7 @@ class LoginPage extends StatelessWidget {
                       child: const Text('Forgot password?'),
                     ),
                   ),
+                  const InstallAppBanner(margin: EdgeInsets.only(top: 20)),
                 ],
               ),
             ),
