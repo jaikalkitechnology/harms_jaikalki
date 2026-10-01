@@ -65,7 +65,7 @@ class _TrainerMarketplacePageState extends State<TrainerMarketplacePage> {
                     child: Text(
                       'No trainers found.',
                       style: theme.textTheme.bodyMedium?.copyWith(
-                        color: AppColors.brandBrownLight,
+                        color: AppColors.textMuted,
                       ),
                     ),
                   );
@@ -111,7 +111,7 @@ class _TrainerMarketplacePageState extends State<TrainerMarketplacePage> {
                                           t.headline!,
                                           style: theme.textTheme.bodySmall
                                               ?.copyWith(
-                                            color: AppColors.brandBrownLight,
+                                            color: AppColors.textMuted,
                                           ),
                                         ),
                                     ],
@@ -151,7 +151,7 @@ class _TrainerMarketplacePageState extends State<TrainerMarketplacePage> {
                                 const SizedBox(width: 12),
                                 Icon(Icons.work_outline,
                                     size: 14,
-                                    color: AppColors.brandBrownLight),
+                                    color: AppColors.textMuted),
                                 const SizedBox(width: 4),
                                 Text('${t.sessionsCompleted} sessions',
                                     style: theme.textTheme.bodySmall),

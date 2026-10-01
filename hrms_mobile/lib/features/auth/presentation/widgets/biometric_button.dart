@@ -14,8 +14,8 @@ class BiometricButton extends StatelessWidget {
       icon: const Icon(Icons.fingerprint, size: 20),
       label: const Text('Use biometrics'),
       style: OutlinedButton.styleFrom(
-        foregroundColor: AppColors.brandBrown,
-        side: const BorderSide(color: AppColors.brandBrown100),
+        foregroundColor: AppColors.brandGoldLight,
+        side: const BorderSide(color: AppColors.brandGoldDark),
         padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       ),

@@ -13,7 +13,7 @@ class SplashPage extends StatelessWidget {
       body: Center(
         child: Image.asset(
           isDark
-              ? 'assets/branding/jaikalki-splash-dark.png'
+              ? 'assets/branding/jaikalki-splash-dark.webp'
               : 'assets/branding/jaikalki-splash-light.png',
           fit: BoxFit.contain,
         ),

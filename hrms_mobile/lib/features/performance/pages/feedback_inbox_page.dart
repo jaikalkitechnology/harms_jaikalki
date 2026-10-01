@@ -90,7 +90,7 @@ class _FeedbackInboxPageState extends State<FeedbackInboxPage> {
                     child: Text(
                       'No pending feedback requests.',
                       style: theme.textTheme.bodyMedium?.copyWith(
-                        color: AppColors.brandBrownLight,
+                        color: AppColors.textMuted,
                       ),
                     ),
                   ),
@@ -172,7 +172,7 @@ class _FeedbackFormState extends State<_FeedbackForm> {
                   child: Text(
                     'Your feedback will be shown anonymously in the aggregate.',
                     style: theme.textTheme.bodySmall?.copyWith(
-                      color: AppColors.brandBrownLight,
+                      color: AppColors.textMuted,
                     ),
                   ),
                 ),

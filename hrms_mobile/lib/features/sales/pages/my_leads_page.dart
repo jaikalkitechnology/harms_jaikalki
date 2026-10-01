@@ -100,7 +100,7 @@ class _MyLeadsPageState extends State<MyLeadsPage> {
                           'No leads ${_stage != null ? "in $_stage" : "yet"}.',
                           textAlign: TextAlign.center,
                           style: theme.textTheme.bodyMedium?.copyWith(
-                            color: AppColors.brandBrownLight,
+                            color: AppColors.textMuted,
                           ),
                         ),
                       ],
@@ -158,7 +158,7 @@ class _MyLeadsPageState extends State<MyLeadsPage> {
                                         .whereType<String>()
                                         .join(' · '),
                                     style: theme.textTheme.bodySmall?.copyWith(
-                                      color: AppColors.brandBrownLight,
+                                      color: AppColors.textMuted,
                                     ),
                                   ),
                                 const SizedBox(height: 6),
@@ -171,13 +171,13 @@ class _MyLeadsPageState extends State<MyLeadsPage> {
                                     const SizedBox(width: 12),
                                     Icon(Icons.source,
                                         size: 14,
-                                        color: AppColors.brandBrownLight),
+                                        color: AppColors.textMuted),
                                     const SizedBox(width: 4),
                                     Text(l.source.replaceAll('_', ' ')),
                                     const Spacer(),
                                     Icon(Icons.bolt,
                                         size: 14,
-                                        color: AppColors.brandBrownLight),
+                                        color: AppColors.textMuted),
                                     const SizedBox(width: 2),
                                     Text('${l.score}'),
                                   ],

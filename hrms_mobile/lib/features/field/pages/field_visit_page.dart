@@ -208,7 +208,7 @@ class _FieldVisitPageState extends State<FieldVisitPage> {
                           Text(
                             '${job.jobType.replaceAll('_', ' ')} · ${job.priority}',
                             style: theme.textTheme.bodyMedium?.copyWith(
-                              color: AppColors.brandBrownLight,
+                              color: AppColors.textMuted,
                             ),
                           ),
                           if (cust?.address != null) ...[

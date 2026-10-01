@@ -189,11 +189,11 @@ class _TodayCard extends StatelessWidget {
             else
               Row(
                 children: [
-                  const Icon(Icons.check_circle, color: AppColors.success, size: 18),
+                  const Icon(Icons.check_circle, color: AppColors.successText, size: 18),
                   const SizedBox(width: 8),
                   Text('All marked for today',
                       style: theme.textTheme.bodyMedium?.copyWith(
-                        color: AppColors.success,
+                        color: AppColors.successText,
                       )),
                 ],
               ),
@@ -217,7 +217,7 @@ class _Stat extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Text(label,
-              style: const TextStyle(color: AppColors.brandBrownLight)),
+              style: const TextStyle(color: AppColors.textMuted)),
           Text(value,
               style: TextStyle(
                 color: context.textPrimary,
@@ -236,15 +236,15 @@ class _StatusChip extends StatelessWidget {
   Color _color() {
     switch (status) {
       case 'present':
-        return AppColors.success;
+        return AppColors.successText;
       case 'wfh':
-        return AppColors.info;
+        return AppColors.infoText;
       case 'half_day':
         return AppColors.warning;
       case 'absent':
-        return AppColors.error;
+        return AppColors.errorText;
       default:
-        return AppColors.brandBrownLight;
+        return AppColors.textMuted;
     }
   }
 
@@ -261,7 +261,7 @@ class _StatusChip extends StatelessWidget {
         status.toUpperCase(),
         style: TextStyle(
           fontSize: 10,
-          fontFamily: 'monospace',
+          fontFamily: 'JetBrainsMono',
           letterSpacing: 1.5,
           fontWeight: FontWeight.w700,
           color: c,

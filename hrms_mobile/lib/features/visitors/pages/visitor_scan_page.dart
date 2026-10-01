@@ -186,7 +186,7 @@ class _VisitorScanPageState extends State<VisitorScanPage> {
                   if (v.company != null)
                     Text(v.company!,
                         style: theme.textTheme.bodySmall?.copyWith(
-                          color: AppColors.brandBrownLight,
+                          color: AppColors.textMuted,
                         )),
                   const SizedBox(height: 8),
                   Text('Purpose: ${v.purpose}'),

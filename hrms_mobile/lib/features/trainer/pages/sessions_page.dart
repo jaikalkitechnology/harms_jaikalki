@@ -160,8 +160,8 @@ class _TrainerSessionsPageState extends State<TrainerSessionsPage> {
             const SizedBox(height: 4),
             Text(s.code,
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      fontFamily: 'monospace',
-                      color: AppColors.brandBrownLight,
+                      fontFamily: 'JetBrainsMono',
+                      color: AppColors.textMuted,
                     )),
             const SizedBox(height: 6),
             Text('${s.scheduledStart} → ${s.scheduledEnd}',
@@ -170,7 +170,7 @@ class _TrainerSessionsPageState extends State<TrainerSessionsPage> {
             Text(
               '${s.participantsCount}/${s.capacity} registered · ${s.sessionType}',
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: AppColors.brandBrownLight,
+                    color: AppColors.textMuted,
                   ),
             ),
             const SizedBox(height: 8),

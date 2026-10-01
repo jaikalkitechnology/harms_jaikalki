@@ -27,6 +27,21 @@ class AppColors {
   static const Color cream50 = Color(0xFFFBF6E9);
   static const Color warmOffWhite = Color(0xFFFAF0E6);
 
+  // ── Text on the dark theme ──────────────────────────
+  // The app always runs dark; the brand browns above are surfaces, not
+  // text colours (brandBrownLight is ~1.7:1 on a card — unreadable).
+  /// Secondary text / icons — ~10:1 on cards.
+  static const Color textMuted = Color(0xFFD4C3AC);
+
+  /// Tertiary hints, captions, disabled — ~6:1 on cards.
+  static const Color textFaint = Color(0xFFA8957E);
+
+  /// Status text on dark surfaces (the semantic colours below are tuned
+  /// for fills and light backgrounds).
+  static const Color successText = Color(0xFF8DC26A);
+  static const Color errorText = Color(0xFFF28B82);
+  static const Color infoText = Color(0xFF6FC9C9);
+
   // ── Semantic ────────────────────────────────────────
   static const Color success = Color(0xFF5E8B3A);
   static const Color successLight = Color(0xFFDCEEC9);
@@ -69,7 +84,7 @@ extension AppColorsContext on BuildContext {
   Color get textMuted {
     final brightness = Theme.of(this).brightness;
     return brightness == Brightness.dark
-        ? AppColors.brandBrown100
+        ? AppColors.textMuted
         : AppColors.brandBrownLight;
   }
 

@@ -109,7 +109,7 @@ class _JusticeGatePageState extends State<JusticeGatePage> {
               'The Justice Portal handles sensitive information. Every access is logged and content is encrypted at rest.',
               textAlign: TextAlign.center,
               style: theme.textTheme.bodyMedium?.copyWith(
-                color: AppColors.brandBrownLight,
+                color: AppColors.textMuted,
               ),
             ),
             const SizedBox(height: 36),

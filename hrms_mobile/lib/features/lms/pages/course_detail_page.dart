@@ -190,7 +190,7 @@ class _CourseDetailPageState extends State<CourseDetailPage> {
                           Text(
                             '${course.code} · ${course.estimatedHours}h · ${course.difficulty}',
                             style: theme.textTheme.bodySmall?.copyWith(
-                              color: AppColors.brandBrownLight,
+                              color: AppColors.textMuted,
                             ),
                           ),
                           if (course.description != null) ...[
@@ -225,7 +225,7 @@ class _CourseDetailPageState extends State<CourseDetailPage> {
                                 Text(
                                   '${enr.progressPercentage}% complete · ${enr.status.replaceAll("_", " ")}',
                                   style: theme.textTheme.bodySmall?.copyWith(
-                                    color: AppColors.brandBrownLight,
+                                    color: AppColors.textMuted,
                                   ),
                                 ),
                               ],

@@ -149,8 +149,8 @@ class _ExamListPageState extends State<ExamListPage> {
                             const SizedBox(height: 4),
                             Text(e.code,
                                 style: theme.textTheme.bodySmall?.copyWith(
-                                  fontFamily: 'monospace',
-                                  color: AppColors.brandBrownLight,
+                                  fontFamily: 'JetBrainsMono',
+                                  color: AppColors.textMuted,
                                 )),
                             if (e.description != null) ...[
                               const SizedBox(height: 6),
@@ -204,7 +204,7 @@ class _Pill extends StatelessWidget {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(icon, size: 14, color: AppColors.brandBrownLight),
+        Icon(icon, size: 14, color: AppColors.textMuted),
         const SizedBox(width: 4),
         Text(label, style: Theme.of(context).textTheme.bodySmall),
       ],

@@ -46,6 +46,13 @@ class SecureStorage {
 
   Future<String?> readCachedUser() => _read(_userKey);
 
+  /// Small per-user caches (e.g. the last dashboard). Living here means
+  /// a full sign-out — which wipes this storage — removes them too.
+  Future<void> writeCache(String name, String json) =>
+      _storage.write(key: 'cache.$name', value: json);
+
+  Future<String?> readCache(String name) => _read('cache.$name');
+
   /// Soft sign-out: drop only the access token, keeping the
   /// biometric-protected refresh token + flag so the user can come
   /// back in via fingerprint/Face ID without retyping the password.

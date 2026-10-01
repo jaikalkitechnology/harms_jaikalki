@@ -295,7 +295,7 @@ class _ExpenseRow extends StatelessWidget {
                   Text(
                     '${expense.expenseDate} · ${expense.expenseType.replaceAll('_', ' ')}',
                     style: theme.textTheme.bodySmall?.copyWith(
-                      color: AppColors.brandBrownLight,
+                      color: AppColors.textMuted,
                     ),
                   ),
                   if (expense.description != null) ...[
@@ -317,7 +317,7 @@ class _ExpenseRow extends StatelessWidget {
                 expense.status.toUpperCase(),
                 style: TextStyle(
                   fontSize: 10,
-                  fontFamily: 'monospace',
+                  fontFamily: 'JetBrainsMono',
                   letterSpacing: 1.5,
                   fontWeight: FontWeight.w700,
                   color: _statusColor(),

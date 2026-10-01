@@ -146,7 +146,7 @@ class _FieldLiveMapPageState extends State<FieldLiveMapPage> {
                           'No location updates yet today.',
                           textAlign: TextAlign.center,
                           style: theme.textTheme.bodyMedium?.copyWith(
-                            color: AppColors.brandBrownLight,
+                            color: AppColors.textMuted,
                           ),
                         ),
                       ],
@@ -175,7 +175,7 @@ class _FieldLiveMapPageState extends State<FieldLiveMapPage> {
                               Text(
                                 _agoFromIso(e.timestamp),
                                 style: theme.textTheme.bodySmall?.copyWith(
-                                  color: AppColors.brandBrownLight,
+                                  color: AppColors.textMuted,
                                 ),
                               ),
                             ],
@@ -253,7 +253,7 @@ class _SharingCard extends StatelessWidget {
           children: [
             Icon(
               enabled ? Icons.gps_fixed : Icons.gps_off,
-              color: enabled ? AppColors.success : AppColors.brandBrownLight,
+              color: enabled ? AppColors.success : AppColors.textMuted,
             ),
             const SizedBox(width: 12),
             Expanded(
@@ -271,7 +271,7 @@ class _SharingCard extends StatelessWidget {
                           ? 'Sending update…'
                           : 'Last update ${_ago(lastSentAt!)}',
                       style: theme.textTheme.bodySmall?.copyWith(
-                        color: AppColors.brandBrownLight,
+                        color: AppColors.textMuted,
                       ),
                     )
                   else if (lastError != null)
@@ -287,7 +287,7 @@ class _SharingCard extends StatelessWidget {
                     Text(
                       'Turn on to let HR / your manager see your live location.',
                       style: theme.textTheme.bodySmall?.copyWith(
-                        color: AppColors.brandBrownLight,
+                        color: AppColors.textMuted,
                       ),
                     ),
                 ],

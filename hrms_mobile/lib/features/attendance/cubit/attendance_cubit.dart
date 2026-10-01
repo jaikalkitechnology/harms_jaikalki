@@ -1,5 +1,3 @@
-import 'dart:io';
-
 import 'package:equatable/equatable.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:geolocator/geolocator.dart';
@@ -86,7 +84,7 @@ class AttendanceCubit extends Cubit<AttendanceState> {
     return (lat: pos.latitude, lng: pos.longitude);
   }
 
-  Future<File?> _pickSelfie() async {
+  Future<XFile?> _pickSelfie() async {
     final picker = ImagePicker();
     final picked = await picker.pickImage(
       source: ImageSource.camera,
@@ -94,8 +92,7 @@ class AttendanceCubit extends Cubit<AttendanceState> {
       imageQuality: 80,
       maxWidth: 1080,
     );
-    if (picked == null) return null;
-    return File(picked.path);
+    return picked;
   }
 
   Future<bool> checkIn({required String workMode}) async {
@@ -106,7 +103,7 @@ class AttendanceCubit extends Cubit<AttendanceState> {
         emit(state.copyWith(busy: false, error: 'Location permission denied'));
         return false;
       }
-      File? selfie;
+      XFile? selfie;
       if (workMode == 'wfh') {
         selfie = await _pickSelfie();
         if (selfie == null) {

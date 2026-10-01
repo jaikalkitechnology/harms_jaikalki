@@ -1,23 +1,29 @@
 {
+    "id": "./",
     "name": "Jaikalki HRMS",
     "short_name": "Jaikalki",
-    "start_url": ".",
-    "display": "standalone",
-    "background_color": "#FDF8EE",
-    "theme_color": "#3D2817",
     "description": "Jaikalki HRMS — Human Resource Management for Jaikalki Technology Pvt Ltd.",
+    "start_url": "./",
+    "scope": "./",
+    "display": "standalone",
     "orientation": "portrait-primary",
+    "background_color": "#1A0F08",
+    "theme_color": "#1A0F08",
+    "categories": ["business", "productivity"],
+    "lang": "en-IN",
     "prefer_related_applications": false,
     "icons": [
         {
             "src": "icons/Icon-192.png",
             "sizes": "192x192",
-            "type": "image/png"
+            "type": "image/png",
+            "purpose": "any"
         },
         {
             "src": "icons/Icon-512.png",
             "sizes": "512x512",
-            "type": "image/png"
+            "type": "image/png",
+            "purpose": "any"
         },
         {
             "src": "icons/Icon-maskable-192.png",
@@ -30,6 +36,26 @@
             "sizes": "512x512",
             "type": "image/png",
             "purpose": "maskable"
+        }
+    ],
+    "shortcuts": [
+        {
+            "name": "Attendance",
+            "short_name": "Attendance",
+            "url": "./#/attendance",
+            "icons": [{ "src": "icons/Icon-192.png", "sizes": "192x192", "type": "image/png" }]
+        },
+        {
+            "name": "Leaves",
+            "short_name": "Leaves",
+            "url": "./#/leaves",
+            "icons": [{ "src": "icons/Icon-192.png", "sizes": "192x192", "type": "image/png" }]
+        },
+        {
+            "name": "Payslips",
+            "short_name": "Payslips",
+            "url": "./#/payroll",
+            "icons": [{ "src": "icons/Icon-192.png", "sizes": "192x192", "type": "image/png" }]
         }
     ]
 }

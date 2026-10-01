@@ -15,7 +15,7 @@ class VisitorPassPage extends StatelessWidget {
       case 'checked_in':
         return AppColors.success;
       case 'checked_out':
-        return AppColors.brandBrownLight;
+        return AppColors.textMuted;
       case 'cancelled':
       case 'no_show':
         return AppColors.error;
@@ -155,7 +155,7 @@ class VisitorPassPage extends StatelessWidget {
               label,
               style: const TextStyle(
                 fontSize: 12,
-                color: AppColors.brandBrownLight,
+                color: AppColors.textMuted,
                 fontWeight: FontWeight.w600,
               ),
             ),

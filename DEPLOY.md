@@ -227,6 +227,61 @@ flutter build ios --release \
 Android: signed AAB → Google Play console.
 iOS: archive in Xcode → App Store Connect → TestFlight, then production.
 
+### Flutter web (mobile web app)
+
+```bash
+flutter build web --wasm --release \
+    --dart-define=API_BASE_URL=https://api-hrms.jaikalki.com
+sudo rsync -a --delete build/web/ /var/www/<flutter-web-domain>/
+```
+
+`--wasm` builds a WebAssembly version (faster start-up and rendering)
+next to the usual JavaScript one; the loader picks WebAssembly on Chrome,
+Edge and recent Firefox and falls back to JavaScript elsewhere, e.g.
+older iPhones. Nothing else changes for users.
+
+The web app is installable ("Install app" banner on the login and home
+screens, and in Settings): Chrome / Edge / Samsung Internet show their
+own install dialog, iPhone / iPad users get "Share → Add to Home Screen"
+steps. Installing needs HTTPS, and `sw.js` must be served from the site
+root next to `index.html` (the nginx block below does both).
+
+The web bundle is large (`main.dart.js` ≈ 4.5 MB, `canvaskit.wasm` ≈ 7 MB),
+so serve it compressed (≈ 1.3 MB + 3 MB over the wire). Flutter's file
+names carry no content hash, so let browsers keep copies but revalidate
+them (`no-cache` + ETag): an unchanged file costs a tiny 304, and a new
+deploy is picked up immediately. Add the domain to the API's
+`CORS_ORIGINS`.
+
+```nginx
+server {
+    listen 443 ssl http2;
+    server_name <flutter-web-domain>;
+    ssl_certificate     /etc/letsencrypt/live/<flutter-web-domain>/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/<flutter-web-domain>/privkey.pem;
+
+    root /var/www/<flutter-web-domain>;
+    index index.html;
+
+    # ~70% smaller transfers for JS / wasm / JSON / fonts.
+    gzip on;
+    gzip_comp_level 6;
+    gzip_min_length 1024;
+    gzip_types application/javascript application/wasm application/json
+               text/css text/plain image/svg+xml font/otf font/ttf;
+
+    # .wasm must be served as application/wasm — present in the stock
+    # /etc/nginx/mime.types on nginx ≥ 1.21 (check with `grep wasm`).
+    etag on;
+
+    location / {
+        # Cached, but checked on each visit (304 when unchanged).
+        add_header Cache-Control "no-cache";
+        try_files $uri $uri/ /index.html;
+    }
+}
+```
+
 ## 9. Hardening checklist
 
 The API ships with these defaults — verify they're enabled:

@@ -86,7 +86,7 @@ class _JusticeResourcesPageState extends State<JusticeResourcesPage> {
                         const SizedBox(height: 6),
                         Text(p.summary,
                             style: theme.textTheme.bodyMedium?.copyWith(
-                              color: AppColors.brandBrownLight,
+                              color: AppColors.textMuted,
                             )),
                       ],
                     ),

@@ -109,7 +109,7 @@ class _MfaSetupPageState extends State<MfaSetupPage> {
                           child: SelectableText(
                             c,
                             style: const TextStyle(
-                              fontFamily: 'monospace',
+                              fontFamily: 'JetBrainsMono',
                               letterSpacing: 1.5,
                             ),
                           ),
@@ -146,7 +146,7 @@ class _MfaSetupPageState extends State<MfaSetupPage> {
               SelectableText(
                 _enroll!.secret,
                 style: const TextStyle(
-                  fontFamily: 'monospace',
+                  fontFamily: 'JetBrainsMono',
                   fontSize: 18,
                   letterSpacing: 2,
                 ),

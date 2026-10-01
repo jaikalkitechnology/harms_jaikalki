@@ -28,9 +28,8 @@ android {
 
     defaultConfig {
         applicationId = "com.hrms.jaikalki"
-        // firebase_messaging requires minSdk ≥ 19; flutter_local_notifications
-        // requires multidex on minSdk < 21, so we anchor at 21.
-        minSdk = maxOf(flutter.minSdkVersion, 21)
+        // flutter_secure_storage 10 requires minSdk ≥ 23 (Android 6.0).
+        minSdk = maxOf(flutter.minSdkVersion, 23)
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName

@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
 
 import '../../core/di/injection.dart';
 import '../../core/routing/app_router.dart';
@@ -90,24 +91,24 @@ class _ProfilePageState extends State<ProfilePage> {
                                 _row(Icons.badge_outlined, 'DESIGNATION',
                                     emp.designation?.name),
                                 _row(Icons.category_outlined, 'CATEGORY',
-                                    emp.category?.code ?? emp.category?.name),
+                                    emp.category?.name ?? emp.category?.code),
                                 _row(Icons.location_on_outlined,
                                     'WORK LOCATION', emp.workLocation),
                                 _row(Icons.work_outline, 'WORK MODE',
-                                    emp.workMode?.toUpperCase()),
+                                    _label(emp.workMode)),
                                 _row(Icons.assignment_ind_outlined,
                                     'EMPLOYMENT TYPE',
-                                    emp.employmentType?.toUpperCase()),
+                                    _label(emp.employmentType)),
                                 _row(Icons.event_outlined, 'JOINED ON',
-                                    emp.dateOfJoining),
+                                    _date(emp.dateOfJoining)),
                                 if (emp.confirmationDate != null)
                                   _row(Icons.verified_outlined,
-                                      'CONFIRMED ON', emp.confirmationDate),
+                                      'CONFIRMED ON', _date(emp.confirmationDate)),
                                 if (emp.isOnProbation &&
                                     emp.probationEndDate != null)
                                   _row(Icons.hourglass_top_outlined,
                                       'PROBATION ENDS',
-                                      emp.probationEndDate),
+                                      _date(emp.probationEndDate)),
                               ],
                             ),
                             const SizedBox(height: 16),
@@ -127,12 +128,12 @@ class _ProfilePageState extends State<ProfilePage> {
                               title: '★ PERSONAL',
                               rows: [
                                 _row(Icons.cake_outlined, 'DATE OF BIRTH',
-                                    emp.dateOfBirth),
+                                    _date(emp.dateOfBirth)),
                                 _row(Icons.person_outline, 'GENDER',
-                                    emp.gender?.toUpperCase()),
+                                    _label(emp.gender)),
                                 _row(Icons.favorite_outline,
                                     'MARITAL STATUS',
-                                    emp.maritalStatus?.toUpperCase()),
+                                    _label(emp.maritalStatus)),
                                 _row(Icons.bloodtype_outlined,
                                     'BLOOD GROUP', emp.bloodGroup),
                               ],
@@ -205,11 +206,11 @@ class _ProfilePageState extends State<ProfilePage> {
                           const SizedBox(height: 10),
                           OutlinedButton.icon(
                             icon: const Icon(Icons.logout,
-                                color: AppColors.error),
+                                color: AppColors.errorText),
                             label: Text(
                               l.logout,
                               style:
-                                  const TextStyle(color: AppColors.error),
+                                  const TextStyle(color: AppColors.errorText),
                             ),
                             style: OutlinedButton.styleFrom(
                               side: const BorderSide(color: AppColors.error),
@@ -312,7 +313,7 @@ class _ProfilePageState extends State<ProfilePage> {
                     const SizedBox(height: 10),
                     Text(error!,
                         style:
-                            const TextStyle(color: AppColors.error)),
+                            const TextStyle(color: AppColors.errorText)),
                   ],
                 ],
               ),
@@ -555,6 +556,19 @@ class _ProfileHero extends StatelessWidget {
   }
 }
 
+/// "full_time" → "Full time".
+String? _label(String? raw) {
+  if (raw == null || raw.isEmpty) return raw;
+  final s = raw.replaceAll('_', ' ').toLowerCase();
+  return s[0].toUpperCase() + s.substring(1);
+}
+
+/// "2025-04-01" → "1 Apr 2025".
+String? _date(String? iso) {
+  final d = iso == null ? null : DateTime.tryParse(iso);
+  return d == null ? iso : DateFormat('d MMM yyyy').format(d);
+}
+
 // ── Info section card ────────────────────────────────────────────────
 class _Section extends StatelessWidget {
   const _Section({required this.title, required this.rows});
@@ -645,7 +659,7 @@ class _InfoRow extends StatelessWidget {
                     fontSize: 9,
                     letterSpacing: 1.4,
                     fontWeight: FontWeight.w600,
-                    color: AppColors.brandBrownLight,
+                    color: AppColors.textMuted,
                   ),
                 ),
                 const SizedBox(height: 2),
@@ -753,7 +767,7 @@ class _StatutoryNomineeSectionState
                   if (error != null)
                     Text(error!,
                         style:
-                            const TextStyle(color: AppColors.error)),
+                            const TextStyle(color: AppColors.errorText)),
                 ],
               ),
             ),
@@ -912,7 +926,7 @@ class _StatutoryNomineeSectionState
                     const SizedBox(height: 8),
                     Text(error!,
                         style:
-                            const TextStyle(color: AppColors.error)),
+                            const TextStyle(color: AppColors.errorText)),
                   ],
                 ],
               ),
@@ -1054,7 +1068,7 @@ class _StatutoryNomineeSectionState
                                       letterSpacing: 1.4,
                                       fontWeight: FontWeight.w600,
                                       color:
-                                          AppColors.brandBrownLight,
+                                          AppColors.textMuted,
                                     ),
                                   ),
                                   const SizedBox(height: 2),
@@ -1099,7 +1113,7 @@ class _StatutoryNomineeSectionState
                         fontSize: 9,
                         letterSpacing: 1.4,
                         fontWeight: FontWeight.w600,
-                        color: AppColors.brandBrownLight,
+                        color: AppColors.textMuted,
                       ),
                     ),
                     const SizedBox(height: 6),
@@ -1142,7 +1156,7 @@ class _StatutoryNomineeSectionState
                         children: [
                           const Icon(Icons.lock_outline,
                               size: 14,
-                              color: AppColors.brandBrownLight),
+                              color: AppColors.textMuted),
                           const SizedBox(width: 6),
                           Expanded(
                             child: Text(

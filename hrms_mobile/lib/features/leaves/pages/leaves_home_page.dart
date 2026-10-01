@@ -301,7 +301,7 @@ class _BalanceCard extends StatelessWidget {
                   Text(
                     'Allocated ${balance.allocated} · Used ${balance.used}',
                     style: theme.textTheme.bodySmall?.copyWith(
-                      color: AppColors.brandBrownLight,
+                      color: AppColors.textMuted,
                     ),
                   ),
                 ],
@@ -320,7 +320,7 @@ class _BalanceCard extends StatelessWidget {
                   'remaining',
                   style: TextStyle(
                     fontSize: 10,
-                    color: AppColors.brandBrownLight,
+                    color: AppColors.textMuted,
                     letterSpacing: 1.5,
                   ),
                 ),
@@ -344,7 +344,7 @@ class _RequestCard extends StatelessWidget {
       case 'rejected':
         return AppColors.error;
       case 'cancelled':
-        return AppColors.brandBrownLight;
+        return AppColors.textMuted;
       default:
         return AppColors.warning;
     }
@@ -376,7 +376,7 @@ class _RequestCard extends StatelessWidget {
             request.status.toUpperCase(),
             style: TextStyle(
               fontSize: 10,
-              fontFamily: 'monospace',
+              fontFamily: 'JetBrainsMono',
               letterSpacing: 1.5,
               fontWeight: FontWeight.w700,
               color: c,

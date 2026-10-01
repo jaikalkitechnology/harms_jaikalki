@@ -137,12 +137,12 @@ class _Pill extends StatelessWidget {
           label,
           style: TextStyle(
             fontSize: 11,
-            fontFamily: 'monospace',
+            fontFamily: 'JetBrainsMono',
             letterSpacing: 1.5,
             fontWeight: FontWeight.w600,
             color: active
                 ? context.textPrimary
-                : AppColors.brandBrownLight,
+                : AppColors.textMuted,
           ),
         ),
       ),
@@ -186,7 +186,7 @@ class _ApprovalCard extends StatelessWidget {
                     type.toUpperCase(),
                     style: const TextStyle(
                       fontSize: 10,
-                      fontFamily: 'monospace',
+                      fontFamily: 'JetBrainsMono',
                       letterSpacing: 1.5,
                       fontWeight: FontWeight.w700,
                       color: AppColors.brandGoldDark,
@@ -276,9 +276,9 @@ class _DataRows extends StatelessWidget {
                       r.$1.toUpperCase(),
                       style: const TextStyle(
                         fontSize: 10,
-                        fontFamily: 'monospace',
+                        fontFamily: 'JetBrainsMono',
                         letterSpacing: 1.5,
-                        color: AppColors.brandBrownLight,
+                        color: AppColors.textMuted,
                       ),
                     ),
                   ),

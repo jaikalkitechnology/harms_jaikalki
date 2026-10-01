@@ -162,7 +162,7 @@ class _Pill extends StatelessWidget {
         text,
         style: TextStyle(
           fontSize: 10,
-          fontFamily: 'monospace',
+          fontFamily: 'JetBrainsMono',
           letterSpacing: 1.5,
           fontWeight: FontWeight.w600,
           color: color,
@@ -202,7 +202,7 @@ class _InfoCard extends StatelessWidget {
                       child: Text(
                         r.$1,
                         style: theme.textTheme.bodySmall?.copyWith(
-                          color: AppColors.brandBrownLight,
+                          color: AppColors.textMuted,
                         ),
                       ),
                     ),
@@ -289,7 +289,7 @@ class _SalaryCard extends StatelessWidget {
         children: [
           Text(label,
               style: TextStyle(
-                color: color ?? AppColors.brandBrownLight,
+                color: color ?? AppColors.textMuted,
                 fontWeight: bold ? FontWeight.w600 : FontWeight.w400,
               )),
           Text(value,

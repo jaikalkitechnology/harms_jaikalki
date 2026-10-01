@@ -6,20 +6,125 @@
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
   <meta name="description" content="Jaikalki HRMS — Human Resource Management for Jaikalki Technology Pvt Ltd.">
-  <meta name="theme-color" content="#3D2817">
+  <meta name="theme-color" content="#1A0F08">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 
   <!-- iOS meta tags & icons -->
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black">
   <meta name="apple-mobile-web-app-title" content="Jaikalki HRMS">
-  <link rel="apple-touch-icon" href="icons/Icon-192.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="icons/apple-touch-icon.png">
 
   <link rel="icon" type="image/png" href="favicon.png"/>
 
   <title>Jaikalki HRMS</title>
   <link rel="manifest" href="manifest.json">
+
+  <!-- Open the connection early: the CanvasKit renderer is fetched from
+       this host during start-up (fonts are bundled with the app). -->
+  <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
+
+  <style>
+    html, body { margin: 0; height: 100%; background: #1A0F08; }
+    /* Shown while the app downloads; removed on Flutter's first frame. */
+    #splash {
+      position: fixed; inset: 0; z-index: 9999;
+      display: flex; flex-direction: column; align-items: center;
+      justify-content: center; gap: 22px;
+      background: #1A0F08; transition: opacity .25s ease;
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    }
+    #splash img { width: 88px; height: 88px; border-radius: 20px; }
+    #splash .spinner {
+      width: 26px; height: 26px; border-radius: 50%;
+      border: 3px solid rgba(244, 183, 31, .25); border-top-color: #F4B71F;
+      animation: spin .8s linear infinite;
+    }
+    #splash p { margin: 0; color: #D4C3AC; font-size: 13px; letter-spacing: .02em; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    @media (prefers-reduced-motion: reduce) { #splash .spinner { animation-duration: 2.4s; } }
+  </style>
 </head>
 <body>
+  <div id="splash" role="status" aria-live="polite">
+    <img src="icons/Icon-192.png" alt="">
+    <div class="spinner"></div>
+    <p>Loading Jaikalki HRMS…</p>
+  </div>
+  <script>
+    // ── Install-to-home-screen bridge (read by lib/core/pwa) ──────────
+    // Chrome / Edge / Samsung fire beforeinstallprompt; we hold on to it
+    // so the app's own "Install" button can show the native dialog.
+    // Safari (iPhone, iPad, Mac) has no prompt — the app shows
+    // "Share → Add to Home Screen" steps instead.
+    (function () {
+      var deferred = null;
+      var standalone = window.matchMedia('(display-mode: standalone)').matches ||
+        window.navigator.standalone === true;
+      var installed = standalone;
+      var ua = navigator.userAgent || '';
+      var ios = /iPad|iPhone|iPod/.test(ua) ||
+        (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+      var android = /Android/i.test(ua);
+      var macSafari = !ios && /Macintosh/.test(ua) && /Safari/.test(ua) &&
+        !/Chrome|Chromium|Edg|Firefox|OPR/.test(ua);
+
+      function notify() {
+        var cb = window.jkPwa && window.jkPwa.onChange;
+        if (typeof cb === 'function') { try { cb(); } catch (e) {} }
+      }
+
+      window.addEventListener('beforeinstallprompt', function (e) {
+        e.preventDefault();
+        deferred = e;
+        notify();
+      });
+      window.addEventListener('appinstalled', function () {
+        installed = true;
+        deferred = null;
+        notify();
+      });
+
+      window.jkPwa = {
+        // installed | prompt | ios | android | mac-safari | unsupported
+        state: function () {
+          if (installed) return 'installed';
+          if (deferred) return 'prompt';
+          if (ios) return 'ios';
+          if (android) return 'android';
+          if (macSafari) return 'mac-safari';
+          return 'unsupported';
+        },
+        // Shows the browser's install dialog. Resolves to
+        // 'accepted' | 'dismissed' | 'unavailable'.
+        install: function () {
+          if (!deferred) return Promise.resolve('unavailable');
+          var d = deferred;
+          deferred = null;
+          d.prompt();
+          return d.userChoice.then(function (choice) {
+            if (choice.outcome === 'accepted') installed = true;
+            notify();
+            return choice.outcome;
+          });
+        },
+        onChange: null
+      };
+
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', function () {
+          navigator.serviceWorker.register('sw.js').catch(function () {});
+        });
+      }
+    })();
+
+    window.addEventListener('flutter-first-frame', function () {
+      var el = document.getElementById('splash');
+      if (!el) return;
+      el.style.opacity = '0';
+      setTimeout(function () { el.remove(); }, 300);
+    });
+  </script>
   <script src="flutter_bootstrap.js" async></script>
 </body>
 </html>

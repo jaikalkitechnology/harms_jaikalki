@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../core/constants/app_constants.dart';
+import '../../../../core/pwa/install_app_widgets.dart';
 import '../../../../core/routing/app_router.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../widgets/login_form.dart';
@@ -25,7 +26,7 @@ class LoginPage extends StatelessWidget {
                   const SizedBox(height: 16),
                   Center(
                     child: Image.asset(
-                      'assets/branding/jaikalki-icon-only-512.png',
+                      'assets/branding/jaikalki-icon-only-256.png',
                       height: 96,
                     ),
                   ),
@@ -45,7 +46,7 @@ class LoginPage extends StatelessWidget {
                   Text(
                     AppConstants.companyName,
                     style: theme.textTheme.bodyMedium?.copyWith(
-                      color: AppColors.brandBrownLight,
+                      color: AppColors.textMuted,
                     ),
                   ),
                   const SizedBox(height: 32),
@@ -59,6 +60,7 @@ class LoginPage extends StatelessWidget {
                       child: const Text('Forgot password?'),
                     ),
                   ),
+                  const InstallAppBanner(margin: EdgeInsets.only(top: 20)),
                 ],
               ),
             ),

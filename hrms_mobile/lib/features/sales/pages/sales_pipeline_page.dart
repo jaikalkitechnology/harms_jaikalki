@@ -151,7 +151,7 @@ class _SalesPipelinePageState extends State<SalesPipelinePage> {
                     child: Text(
                       'No active leads in your pipeline.',
                       style: theme.textTheme.bodyMedium?.copyWith(
-                        color: AppColors.brandBrownLight,
+                        color: AppColors.textMuted,
                       ),
                     ),
                   ),
@@ -190,7 +190,7 @@ class _SalesPipelinePageState extends State<SalesPipelinePage> {
                           Text(
                             '${col.count} · ₹${col.totalValue.toStringAsFixed(0)}',
                             style: theme.textTheme.bodySmall?.copyWith(
-                              color: AppColors.brandBrownLight,
+                              color: AppColors.textMuted,
                             ),
                           ),
                         ],
@@ -257,7 +257,7 @@ class _LeadCard extends StatelessWidget {
               Text(
                 lead.contactPhone!,
                 style: theme.textTheme.bodySmall?.copyWith(
-                  color: AppColors.brandBrownLight,
+                  color: AppColors.textMuted,
                 ),
               ),
             const SizedBox(height: 4),
@@ -271,7 +271,7 @@ class _LeadCard extends StatelessWidget {
                 '→ ${lead.nextAction}',
                 style: theme.textTheme.bodySmall?.copyWith(
                   fontStyle: FontStyle.italic,
-                  color: AppColors.brandBrownLight,
+                  color: AppColors.textMuted,
                 ),
               ),
             ],

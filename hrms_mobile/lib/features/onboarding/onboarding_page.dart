@@ -157,7 +157,7 @@ class _OnboardingStep extends StatelessWidget {
           Text(
             body,
             style: theme.textTheme.bodyLarge?.copyWith(
-              color: AppColors.brandBrownLight,
+              color: AppColors.textMuted,
             ),
             textAlign: TextAlign.center,
           ),

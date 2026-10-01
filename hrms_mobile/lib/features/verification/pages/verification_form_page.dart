@@ -1,5 +1,3 @@
-import 'dart:io';
-
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
@@ -144,7 +142,7 @@ class _VerificationFormPageState extends State<VerificationFormPage> {
     setState(() => _uploading.add(fieldKey));
     try {
       final url = await sl<VerificationApi>().uploadFile(
-        file: File(picked.path),
+        file: picked,
         kind: kind,
         fieldKey: fieldKey,
       );
@@ -331,7 +329,7 @@ class _VerificationFormPageState extends State<VerificationFormPage> {
                           Text(
                             '${job.ticketNumber} · ${template.name}',
                             style: theme.textTheme.bodySmall?.copyWith(
-                              color: AppColors.brandBrownLight,
+                              color: AppColors.textMuted,
                             ),
                           ),
                           if (job.address != null) ...[
@@ -520,7 +518,7 @@ class _PhotoTile extends StatelessWidget {
                   color: AppColors.brandBrown50,
                   borderRadius: BorderRadius.circular(6),
                 ),
-                child: Icon(icon, size: 24, color: AppColors.brandBrownLight),
+                child: Icon(icon, size: 24, color: AppColors.textMuted),
               ),
             const SizedBox(width: 12),
             Expanded(
@@ -540,7 +538,7 @@ class _PhotoTile extends StatelessWidget {
                       fontSize: 12,
                       color: hasPhoto
                           ? AppColors.success
-                          : AppColors.brandBrownLight,
+                          : AppColors.textMuted,
                     ),
                   ),
                 ],

@@ -250,7 +250,7 @@ class _ExamTakingPageState extends State<ExamTakingPage>
                         style: Theme.of(context)
                             .textTheme
                             .bodySmall
-                            ?.copyWith(color: AppColors.brandBrownLight),
+                            ?.copyWith(color: AppColors.textMuted),
                       ),
                       const SizedBox(height: 16),
                       ...q.options.map(
@@ -344,7 +344,7 @@ class _OptionTile extends StatelessWidget {
                   : Icons.radio_button_unchecked),
           color: selected
               ? AppColors.brandGoldDark
-              : AppColors.brandBrownLight,
+              : AppColors.textMuted,
         ),
         title: Text(option.optionText),
         onTap: onTap,

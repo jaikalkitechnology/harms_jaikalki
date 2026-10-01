@@ -202,7 +202,7 @@ class _NewLeadPageState extends State<NewLeadPage> {
               leading: Icon(
                 _myPos == null ? Icons.location_off : Icons.location_on,
                 color: _myPos == null
-                    ? AppColors.brandBrownLight
+                    ? AppColors.textMuted
                     : AppColors.success,
               ),
               title: Text(

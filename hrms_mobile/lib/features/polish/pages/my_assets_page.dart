@@ -63,7 +63,7 @@ class _MyAssetsPageState extends State<MyAssetsPage> {
                     Text(
                       'No assets assigned to you.',
                       style: theme.textTheme.bodyMedium?.copyWith(
-                        color: AppColors.brandBrownLight,
+                        color: AppColors.textMuted,
                       ),
                     ),
                   ],

@@ -33,7 +33,7 @@ class _VisitorsHomePageState extends State<VisitorsHomePage> {
       case 'checked_in':
         return AppColors.success;
       case 'checked_out':
-        return AppColors.brandBrownLight;
+        return AppColors.textMuted;
       case 'cancelled':
       case 'no_show':
         return AppColors.error;
@@ -85,7 +85,7 @@ class _VisitorsHomePageState extends State<VisitorsHomePage> {
                       'No visitors registered yet.\nTap "Register" to create a QR pass.',
                       textAlign: TextAlign.center,
                       style: theme.textTheme.bodyMedium?.copyWith(
-                        color: AppColors.brandBrownLight,
+                        color: AppColors.textMuted,
                       ),
                     ),
                   ),

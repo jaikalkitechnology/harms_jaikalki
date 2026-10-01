@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#1A0F08">
+  <title>Offline · Jaikalki HRMS</title>
+  <style>
+    html, body { margin: 0; height: 100%; background: #1A0F08; color: #FAFAF7;
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+    main { min-height: 100%; display: flex; flex-direction: column;
+      align-items: center; justify-content: center; gap: 14px;
+      padding: 24px; box-sizing: border-box; text-align: center; }
+    img { width: 72px; height: 72px; border-radius: 16px; }
+    h1 { margin: 8px 0 0; font-size: 20px; }
+    p { margin: 0; color: #D4C3AC; font-size: 14px; max-width: 320px; line-height: 1.5; }
+    button { margin-top: 10px; padding: 12px 22px; border: 0; border-radius: 12px;
+      background: #F4B71F; color: #1A0F08; font-weight: 700; font-size: 15px; }
+  </style>
+</head>
+<body>
+  <main>
+    <img src="icons/Icon-192.png" alt="">
+    <h1>You're offline</h1>
+    <p>Jaikalki HRMS needs an internet connection. Check your mobile data or Wi-Fi and try again.</p>
+    <button type="button" onclick="location.reload()">Try again</button>
+  </main>
+</body>
+</html>
