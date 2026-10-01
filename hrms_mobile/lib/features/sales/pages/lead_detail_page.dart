@@ -208,7 +208,7 @@ class _LeadDetailPageState extends State<LeadDetailPage> {
                         child: Text(
                           'No comments or stage changes yet.',
                           style: TextStyle(
-                            color: AppColors.brandBrownLight,
+                            color: AppColors.textMuted,
                           ),
                         ),
                       ),
@@ -246,7 +246,7 @@ class _LeadDetailPageState extends State<LeadDetailPage> {
         break;
       case 'system':
         icon = Icons.info_outline;
-        color = AppColors.brandBrownLight;
+        color = AppColors.textMuted;
         title = a.body ?? 'System note';
         subtitle = null;
         break;
@@ -274,7 +274,7 @@ class _LeadDetailPageState extends State<LeadDetailPage> {
         trailing: Text(
           a.createdAt.split('T').first,
           style: theme.textTheme.bodySmall?.copyWith(
-            color: AppColors.brandBrownLight,
+            color: AppColors.textMuted,
           ),
         ),
       ),
@@ -315,7 +315,7 @@ class _Header extends StatelessWidget {
                 ),
                 const SizedBox(width: 16),
                 Icon(Icons.source,
-                    size: 16, color: AppColors.brandBrownLight),
+                    size: 16, color: AppColors.textMuted),
                 const SizedBox(width: 4),
                 Text(lead.source.replaceAll('_', ' ')),
               ],
@@ -410,7 +410,7 @@ class _WonStatusBanner extends StatelessWidget {
                   Text(
                     subtitle,
                     style: TextStyle(
-                      color: AppColors.brandBrownLight,
+                      color: AppColors.textMuted,
                       fontSize: 12,
                     ),
                   ),
@@ -464,7 +464,7 @@ class _StageStepper extends StatelessWidget {
                         ? AppColors.brandGoldDark
                         : (reached
                             ? context.textPrimary
-                            : AppColors.brandBrownLight),
+                            : AppColors.textMuted),
                     fontWeight: isCurrent ? FontWeight.w600 : FontWeight.w400,
                   ),
                 );

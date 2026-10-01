@@ -148,7 +148,7 @@ class _EmployeeRow extends StatelessWidget {
                           employee.department!.name,
                       ].join(' · '),
                       style: theme.textTheme.bodySmall?.copyWith(
-                        color: AppColors.brandBrownLight,
+                        color: AppColors.textMuted,
                       ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
@@ -177,7 +177,7 @@ class _EmployeeRow extends StatelessWidget {
               const Icon(
                 Icons.arrow_forward_ios,
                 size: 14,
-                color: AppColors.brandBrownLight,
+                color: AppColors.textMuted,
               ),
             ],
           ),
@@ -198,7 +198,7 @@ class _CategoryChip extends StatelessWidget {
       'TRAINEE' => AppColors.info,
       'PERMANENT' => AppColors.success,
       'CONTRACT' => AppColors.warning,
-      _ => AppColors.brandBrownLight,
+      _ => AppColors.textMuted,
     };
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),

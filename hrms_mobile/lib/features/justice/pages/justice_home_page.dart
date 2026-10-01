@@ -127,12 +127,12 @@ class _ComplaintRow extends StatelessWidget {
             Text(complaint.ticketNumber,
                 style: theme.textTheme.bodySmall?.copyWith(
                   fontFamily: 'monospace',
-                  color: AppColors.brandBrownLight,
+                  color: AppColors.textMuted,
                 )),
             Text(
               complaint.complaintType.replaceAll('_', ' '),
               style: theme.textTheme.bodySmall?.copyWith(
-                color: AppColors.brandBrownLight,
+                color: AppColors.textMuted,
               ),
             ),
           ],

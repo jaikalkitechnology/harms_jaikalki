@@ -204,7 +204,7 @@ class _KpiCard extends StatelessWidget {
             Text(
               label.toUpperCase(),
               style: theme.textTheme.labelSmall?.copyWith(
-                color: AppColors.brandBrownLight,
+                color: AppColors.textMuted,
               ),
             ),
             const SizedBox(height: 4),
@@ -484,7 +484,7 @@ class _SummaryRow extends StatelessWidget {
           Expanded(
             child: Text(label,
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: AppColors.brandBrownLight,
+                      color: AppColors.textMuted,
                     )),
           ),
           Text(

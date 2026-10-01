@@ -157,7 +157,7 @@ class _ResignationPageState extends State<ResignationPage> {
           'resignation here.',
           textAlign: TextAlign.center,
           style: theme.textTheme.bodyMedium?.copyWith(
-            color: AppColors.brandBrownLight,
+            color: AppColors.textMuted,
             height: 1.5,
           ),
         ),

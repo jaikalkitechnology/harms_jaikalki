@@ -244,7 +244,7 @@ class _BookRoomDialogState extends State<_BookRoomDialog> {
             ),
             const SizedBox(height: 8),
             Text('Ends ${end.toString().substring(0, 16)}',
-                style: const TextStyle(color: AppColors.brandBrownLight)),
+                style: const TextStyle(color: AppColors.textMuted)),
           ],
         ),
       ),

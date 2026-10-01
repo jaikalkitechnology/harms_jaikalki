@@ -80,7 +80,7 @@ class _VerificationQueuePageState extends State<VerificationQueuePage> {
                     child: Text(
                       'No verifications assigned to you.',
                       style: theme.textTheme.bodyMedium?.copyWith(
-                        color: AppColors.brandBrownLight,
+                        color: AppColors.textMuted,
                       ),
                     ),
                   ),
@@ -152,7 +152,7 @@ class _VerificationQueuePageState extends State<VerificationQueuePage> {
                           Text(
                             '${j.ticketNumber} · ${j.type}',
                             style: theme.textTheme.bodySmall?.copyWith(
-                              color: AppColors.brandBrownLight,
+                              color: AppColors.textMuted,
                             ),
                           ),
                           if (j.address != null) ...[
@@ -162,7 +162,7 @@ class _VerificationQueuePageState extends State<VerificationQueuePage> {
                               children: [
                                 Icon(Icons.location_on,
                                     size: 14,
-                                    color: AppColors.brandBrownLight),
+                                    color: AppColors.textMuted),
                                 const SizedBox(width: 4),
                                 Expanded(
                                   child: Text(
@@ -181,7 +181,7 @@ class _VerificationQueuePageState extends State<VerificationQueuePage> {
                                     size: 14,
                                     color: overdue
                                         ? AppColors.error
-                                        : AppColors.brandBrownLight),
+                                        : AppColors.textMuted),
                                 const SizedBox(width: 4),
                                 Text(
                                   overdue
@@ -190,7 +190,7 @@ class _VerificationQueuePageState extends State<VerificationQueuePage> {
                                   style: theme.textTheme.bodySmall?.copyWith(
                                     color: overdue
                                         ? AppColors.error
-                                        : AppColors.brandBrownLight,
+                                        : AppColors.textMuted,
                                     fontWeight: overdue
                                         ? FontWeight.bold
                                         : FontWeight.normal,

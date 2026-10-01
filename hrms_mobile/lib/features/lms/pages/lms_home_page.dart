@@ -151,7 +151,7 @@ class _LmsHomePageState extends State<LmsHomePage> {
                               Text(
                                 c.description!,
                                 style: theme.textTheme.bodySmall?.copyWith(
-                                  color: AppColors.brandBrownLight,
+                                  color: AppColors.textMuted,
                                 ),
                                 maxLines: 2,
                                 overflow: TextOverflow.ellipsis,
@@ -196,7 +196,7 @@ class _StatsCard extends StatelessWidget {
       case 'gold':
         return AppColors.brandGoldDark;
       case 'silver':
-        return AppColors.brandBrownLight;
+        return AppColors.textMuted;
       default:
         return AppColors.warning;
     }
@@ -282,7 +282,7 @@ class _Stat extends StatelessWidget {
         Text(
           label,
           style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: AppColors.brandBrownLight,
+                color: AppColors.textMuted,
               ),
         ),
       ],

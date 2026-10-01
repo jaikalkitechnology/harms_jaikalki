@@ -78,7 +78,7 @@ class _ApprovalCard extends StatelessWidget {
             Text(
               'Employee #${request.employeeId} · ${request.fromDate} → ${request.toDate}',
               style: theme.textTheme.bodySmall?.copyWith(
-                color: AppColors.brandBrownLight,
+                color: AppColors.textMuted,
               ),
             ),
             if (request.reason != null) ...[

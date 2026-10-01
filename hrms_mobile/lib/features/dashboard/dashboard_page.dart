@@ -370,7 +370,7 @@ class _AttendanceHeroCard extends StatelessWidget {
                       shape: BoxShape.circle,
                       color: isCheckedIn
                           ? AppColors.success
-                          : AppColors.brandBrownLight,
+                          : AppColors.textMuted,
                       boxShadow: isCheckedIn
                           ? [
                               BoxShadow(
@@ -563,7 +563,7 @@ class _RecentUpdates extends StatelessWidget {
       ),
       _NotifPreview(
         Icons.beach_access_outlined,
-        AppColors.brandBrownLight,
+        AppColors.textMuted,
         'Leave balance',
         summary.leaveBalances
             .map((b) => '${b.code} ${b.balance.toStringAsFixed(0)}')
@@ -605,7 +605,7 @@ class _RecentUpdates extends StatelessWidget {
                         Text(
                           n.subtitle,
                           style: const TextStyle(
-                            color: AppColors.brandBrownLight,
+                            color: AppColors.textMuted,
                             fontSize: 11,
                             fontFamily: 'monospace',
                             letterSpacing: 1.0,
@@ -756,7 +756,7 @@ class _StatTile extends StatelessWidget {
               Text(
                 label,
                 style: theme.textTheme.labelSmall?.copyWith(
-                  color: AppColors.brandBrownLight,
+                  color: AppColors.textMuted,
                 ),
               ),
               const SizedBox(height: 6),
@@ -766,7 +766,7 @@ class _StatTile extends StatelessWidget {
                 Text(
                   hint!,
                   style: theme.textTheme.bodySmall?.copyWith(
-                    color: AppColors.brandBrownLight,
+                    color: AppColors.textMuted,
                   ),
                 ),
               ],

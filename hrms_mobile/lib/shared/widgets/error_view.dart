@@ -29,7 +29,7 @@ class ErrorView extends StatelessWidget {
               message ?? l.somethingWentWrong,
               textAlign: TextAlign.center,
               style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                    color: AppColors.brandBrownLight,
+                    color: AppColors.textMuted,
                   ),
             ),
             if (onRetry != null) ...[

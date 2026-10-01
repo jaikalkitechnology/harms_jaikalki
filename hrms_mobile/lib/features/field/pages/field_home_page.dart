@@ -50,7 +50,7 @@ class _FieldHomePageState extends State<FieldHomePage> {
       case 'high':
         return AppColors.warning;
       case 'low':
-        return AppColors.brandBrownLight;
+        return AppColors.textMuted;
       default:
         return AppColors.info;
     }
@@ -90,7 +90,7 @@ class _FieldHomePageState extends State<FieldHomePage> {
                   Center(
                     child: Text(
                       'No jobs scheduled for today.',
-                      style: TextStyle(color: AppColors.brandBrownLight),
+                      style: TextStyle(color: AppColors.textMuted),
                     ),
                   ),
                 ],
@@ -147,7 +147,7 @@ class _FieldHomePageState extends State<FieldHomePage> {
                             children: [
                               Icon(Icons.work_outline,
                                   size: 14,
-                                  color: AppColors.brandBrownLight),
+                                  color: AppColors.textMuted),
                               const SizedBox(width: 4),
                               Text(
                                 j.jobType.replaceAll('_', ' '),
@@ -157,7 +157,7 @@ class _FieldHomePageState extends State<FieldHomePage> {
                                 const SizedBox(width: 12),
                                 Icon(Icons.access_time,
                                     size: 14,
-                                    color: AppColors.brandBrownLight),
+                                    color: AppColors.textMuted),
                                 const SizedBox(width: 4),
                                 Text(j.scheduledTime!,
                                     style: theme.textTheme.bodySmall),
@@ -171,13 +171,13 @@ class _FieldHomePageState extends State<FieldHomePage> {
                               children: [
                                 Icon(Icons.location_on,
                                     size: 14,
-                                    color: AppColors.brandBrownLight),
+                                    color: AppColors.textMuted),
                                 const SizedBox(width: 4),
                                 Expanded(
                                   child: Text(
                                     cust!.address!,
                                     style: theme.textTheme.bodySmall?.copyWith(
-                                      color: AppColors.brandBrownLight,
+                                      color: AppColors.textMuted,
                                     ),
                                   ),
                                 ),

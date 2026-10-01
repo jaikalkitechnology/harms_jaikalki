@@ -499,14 +499,14 @@ class _JusticeSubmitPageState extends State<JusticeSubmitPage> {
                 fontSize: 10,
                 fontFamily: 'monospace',
                 letterSpacing: 1.5,
-                color: AppColors.brandBrownLight,
+                color: AppColors.textMuted,
               ),
             ),
           ),
           Expanded(
             child: Text(
               value.isEmpty ? '—' : value,
-              style: const TextStyle(color: AppColors.brandBrownDarker),
+              style: const TextStyle(color: AppColors.warmWhite),
             ),
           ),
         ],

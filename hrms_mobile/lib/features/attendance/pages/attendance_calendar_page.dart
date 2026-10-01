@@ -67,7 +67,7 @@ class _AttendanceCalendarPageState extends State<AttendanceCalendarPage> {
                 child: Text(
                   'Could not load calendar.\n${snapshot.error}',
                   textAlign: TextAlign.center,
-                  style: const TextStyle(color: AppColors.brandBrownLight),
+                  style: const TextStyle(color: AppColors.textMuted),
                 ),
               ),
             );
@@ -148,11 +148,11 @@ class _LegendRow extends StatelessWidget {
       spacing: 8,
       runSpacing: 6,
       children: const [
-        _LegendDot(color: AppColors.success, label: 'Present'),
-        _LegendDot(color: AppColors.info, label: 'WFH'),
+        _LegendDot(color: AppColors.successText, label: 'Present'),
+        _LegendDot(color: AppColors.infoText, label: 'WFH'),
         _LegendDot(color: AppColors.warning, label: 'Half day'),
-        _LegendDot(color: AppColors.brandGoldDark, label: 'Leave'),
-        _LegendDot(color: AppColors.error, label: 'Absent / Holiday / Sun'),
+        _LegendDot(color: AppColors.brandGold, label: 'Leave'),
+        _LegendDot(color: AppColors.errorText, label: 'Absent / Holiday / Sun'),
       ],
     );
   }
@@ -168,7 +168,7 @@ class _LegendDot extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.12),
+        color: color.withOpacity(0.14),
         borderRadius: BorderRadius.circular(999),
       ),
       child: Row(
@@ -201,19 +201,19 @@ class _SummaryStrip extends StatelessWidget {
   Widget build(BuildContext context) {
     final items = [
       ('Working', cal.workingDays.toString(), null),
-      ('Present', cal.daysPresent.toString(), AppColors.success),
-      ('WFH', cal.daysWfh.toString(), AppColors.info),
+      ('Present', cal.daysPresent.toString(), AppColors.successText),
+      ('WFH', cal.daysWfh.toString(), AppColors.infoText),
       ('Half-day', cal.daysHalfDay.toString(), AppColors.warning),
       (
         'Leave',
         cal.daysLeavePending > 0
             ? '${cal.daysLeave} (${cal.daysLeavePending}?)'
             : cal.daysLeave.toString(),
-        AppColors.brandGoldDark,
+        AppColors.brandGold,
       ),
-      ('Absent', cal.daysAbsent.toString(), AppColors.error),
-      ('Holiday', cal.daysHoliday.toString(), AppColors.error),
-      ('Sundays', cal.daysWeekoff.toString(), AppColors.error),
+      ('Absent', cal.daysAbsent.toString(), AppColors.errorText),
+      ('Holiday', cal.daysHoliday.toString(), AppColors.errorText),
+      ('Sundays', cal.daysWeekoff.toString(), AppColors.errorText),
     ];
     return SizedBox(
       height: 64,
@@ -227,8 +227,8 @@ class _SummaryStrip extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: AppColors.brandBrownLight.withOpacity(0.2)),
-              color: Colors.white,
+              border: Border.all(color: AppColors.brandBrownLight),
+              color: AppColors.brandBrownDark,
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -238,7 +238,7 @@ class _SummaryStrip extends StatelessWidget {
                   label.toUpperCase(),
                   style: const TextStyle(
                     fontSize: 9,
-                    color: AppColors.brandBrownLight,
+                    color: AppColors.textMuted,
                     letterSpacing: 1.2,
                     fontFamily: 'monospace',
                   ),
@@ -249,7 +249,7 @@ class _SummaryStrip extends StatelessWidget {
                   style: TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.w700,
-                    color: color ?? AppColors.brandBrownDarker,
+                    color: color ?? AppColors.warmWhite,
                   ),
                 ),
               ],
@@ -325,9 +325,10 @@ class _Wd extends StatelessWidget {
       child: Center(
         child: Text(
           label.toUpperCase(),
-          style: const TextStyle(
+          style: TextStyle(
             fontSize: 10,
-            color: AppColors.brandBrownLight,
+            fontWeight: FontWeight.w600,
+            color: label == 'Sun' ? AppColors.errorText : AppColors.textMuted,
             letterSpacing: 1.5,
             fontFamily: 'monospace',
           ),
@@ -356,42 +357,57 @@ class _DayTile extends StatelessWidget {
   bool get _isUpcoming => day.status == 'upcoming';
   bool get _isNotInService => day.status == 'not_in_service';
 
-  Color _bg() {
-    if (_isNotInService) {
-      return AppColors.brandBrownLight.withOpacity(0.06);
-    }
-    if (day.isHoliday || day.isSunday) {
-      return AppColors.error.withOpacity(0.10);
-    }
-    if (_isUpcoming) return AppColors.brandBrownLight.withOpacity(0.04);
+  bool get _isToday {
+    final now = DateTime.now();
+    final iso = '${now.year.toString().padLeft(4, '0')}-'
+        '${now.month.toString().padLeft(2, '0')}-'
+        '${now.day.toString().padLeft(2, '0')}';
+    return day.date.startsWith(iso);
+  }
+
+  /// Status colour on the dark theme, or null for "no status".
+  Color? _tone() {
+    if (_isNotInService) return null;
+    // Holidays and Sundays stay red even before they arrive.
+    if (day.isHoliday || day.isSunday) return AppColors.errorText;
+    if (_isUpcoming) return null;
     switch (day.status) {
       case 'present':
-        return AppColors.success.withOpacity(0.12);
+        return AppColors.successText;
       case 'wfh':
-        return AppColors.info.withOpacity(0.12);
+        return AppColors.infoText;
       case 'half_day':
-        return AppColors.warning.withOpacity(0.16);
+        return AppColors.warning;
       case 'leave':
-        return AppColors.brandGoldDark.withOpacity(0.14);
+        return AppColors.brandGold;
       case 'absent':
-        return AppColors.error.withOpacity(0.12);
+        return AppColors.errorText;
       default:
-        return Colors.white;
+        return null;
     }
+  }
+
+  Color _bg() {
+    if (_isNotInService) return Colors.white.withOpacity(0.02);
+    if (_isUpcoming && _tone() == null) return Colors.white.withOpacity(0.04);
+    return (_tone() ?? Colors.white).withOpacity(_tone() == null ? 0.06 : 0.16);
   }
 
   Color _border() {
-    if (_isNotInService) return AppColors.brandBrownLight.withOpacity(0.12);
-    if (day.isHoliday || day.isSunday) return AppColors.error.withOpacity(0.4);
-    return AppColors.brandBrownLight.withOpacity(0.18);
+    if (_isToday) return AppColors.brandGold;
+    if (_isNotInService) return Colors.white.withOpacity(0.05);
+    if (_isUpcoming && _tone() == null) return Colors.white.withOpacity(0.10);
+    return (_tone() ?? Colors.white).withOpacity(0.35);
   }
 
   Color _numColor() {
-    if (_isNotInService) return AppColors.brandBrownLight;
-    if (day.isHoliday || day.isSunday) return AppColors.error;
-    if (_isUpcoming) return AppColors.brandBrownLight;
-    return AppColors.brandBrownDarker;
+    if (_isNotInService) return AppColors.textFaint.withOpacity(0.5);
+    if (day.isHoliday || day.isSunday) return AppColors.errorText;
+    if (_isUpcoming) return AppColors.textFaint;
+    return AppColors.warmWhite;
   }
+
+  Color _badgeColor() => _tone() ?? AppColors.textMuted;
 
   String _badge() {
     if (_isNotInService) return '—';
@@ -425,7 +441,7 @@ class _DayTile extends StatelessWidget {
         decoration: BoxDecoration(
           color: _bg(),
           borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: _border()),
+          border: Border.all(color: _border(), width: _isToday ? 1.5 : 1),
         ),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -470,7 +486,7 @@ class _DayTile extends StatelessWidget {
                   style: TextStyle(
                     fontSize: 9.5,
                     fontWeight: FontWeight.w700,
-                    color: _numColor(),
+                    color: _badgeColor(),
                   ),
                 ),
               ),
@@ -525,17 +541,17 @@ class _DayTile extends StatelessWidget {
                 if (day.isHoliday)
                   Text(
                     'Holiday — ${day.holidayName ?? ''}',
-                    style: const TextStyle(color: AppColors.error),
+                    style: const TextStyle(color: AppColors.errorText),
                   )
                 else if (day.isSunday)
                   const Text(
                     'Sunday — week off',
-                    style: TextStyle(color: AppColors.error),
+                    style: TextStyle(color: AppColors.errorText),
                   )
                 else if (_isUpcoming)
                   const Text(
                     'Upcoming day — nothing to show yet.',
-                    style: TextStyle(color: AppColors.brandBrownLight),
+                    style: TextStyle(color: AppColors.textMuted),
                   )
                 else ...[
                   _kv('Status', day.status.toUpperCase()),
@@ -601,7 +617,7 @@ class _DayTile extends StatelessWidget {
                     'admin opened a back-date window.',
                     style: TextStyle(
                       fontSize: 11,
-                      color: AppColors.brandBrownLight,
+                      color: AppColors.textMuted,
                     ),
                   ),
                 ],
@@ -619,7 +635,7 @@ class _DayTile extends StatelessWidget {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(label, style: const TextStyle(color: AppColors.brandBrownLight)),
+          Text(label, style: const TextStyle(color: AppColors.textMuted)),
           Flexible(
             child: Text(
               value,

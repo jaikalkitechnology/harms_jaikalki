@@ -86,7 +86,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
                       Text(
                         "You're all caught up.",
                         style: theme.textTheme.bodyMedium?.copyWith(
-                          color: AppColors.brandBrownLight,
+                          color: AppColors.textMuted,
                         ),
                       ),
                     ],

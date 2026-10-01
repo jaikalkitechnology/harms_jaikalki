@@ -95,7 +95,7 @@ class _MyGoalsPageState extends State<MyGoalsPage> {
                   Center(
                     child: Text('No goals yet for this cycle.',
                         style: theme.textTheme.bodyMedium?.copyWith(
-                          color: AppColors.brandBrownLight,
+                          color: AppColors.textMuted,
                         )),
                   ),
                 ],

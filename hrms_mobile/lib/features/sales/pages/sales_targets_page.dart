@@ -101,7 +101,7 @@ class _SalesTargetsPageState extends State<SalesTargetsPage> {
                       'Could not load progress.\nPull to retry.',
                       textAlign: TextAlign.center,
                       style: theme.textTheme.bodyMedium?.copyWith(
-                        color: AppColors.brandBrownLight,
+                        color: AppColors.textMuted,
                       ),
                     ),
                   ),
@@ -128,7 +128,7 @@ class _SalesTargetsPageState extends State<SalesTargetsPage> {
                   'Tip: tap the refresh icon at the top to pull the latest '
                   'achievement directly from your pipeline (orders + won leads).',
                   style: theme.textTheme.bodySmall?.copyWith(
-                    color: AppColors.brandBrownLight,
+                    color: AppColors.textMuted,
                   ),
                 ),
               ],
@@ -176,7 +176,7 @@ class _TargetCard extends StatelessWidget {
             Text(
               '${summary.target.periodStart} → ${summary.target.periodEnd}',
               style: theme.textTheme.bodySmall?.copyWith(
-                color: AppColors.brandBrownLight,
+                color: AppColors.textMuted,
               ),
             ),
             const SizedBox(height: 16),
@@ -224,7 +224,7 @@ class _TargetCard extends StatelessWidget {
                 Text(
                   '${pct.toStringAsFixed(1)}% achieved',
                   style: theme.textTheme.bodySmall?.copyWith(
-                    color: AppColors.brandBrownLight,
+                    color: AppColors.textMuted,
                   ),
                 ),
                 Text(
@@ -232,7 +232,7 @@ class _TargetCard extends StatelessWidget {
                       ? 'Target met '
                       : '₹${(summary.target.targetAmount - summary.target.achievedAmount).toStringAsFixed(0)} to go',
                   style: theme.textTheme.bodySmall?.copyWith(
-                    color: pct >= 100 ? AppColors.success : AppColors.brandBrownLight,
+                    color: pct >= 100 ? AppColors.success : AppColors.textMuted,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
@@ -267,7 +267,7 @@ class _CommissionCard extends StatelessWidget {
                 children: [
                   Text('Commission accrued',
                       style: theme.textTheme.bodySmall?.copyWith(
-                        color: AppColors.brandBrownLight,
+                        color: AppColors.textMuted,
                       )),
                   Text(
                     '₹${summary.commissionAmount.toStringAsFixed(2)}',
@@ -311,7 +311,7 @@ class _NoTargetCard extends StatelessWidget {
               'Ask your manager to set one. Your pipeline progress is shown below.',
               textAlign: TextAlign.center,
               style: theme.textTheme.bodySmall?.copyWith(
-                color: AppColors.brandBrownLight,
+                color: AppColors.textMuted,
               ),
             ),
             const SizedBox(height: 16),
@@ -358,7 +358,7 @@ class _PipelineBreakdown extends StatelessWidget {
       case 'qualified':
         return AppColors.info;
       default:
-        return AppColors.brandBrownLight;
+        return AppColors.textMuted;
     }
   }
 
@@ -398,7 +398,7 @@ class _PipelineBreakdown extends StatelessWidget {
               '$totalLeads lead${totalLeads == 1 ? "" : "s"} · '
               '₹${totalValue.toStringAsFixed(0)} total expected value',
               style: theme.textTheme.bodySmall?.copyWith(
-                color: AppColors.brandBrownLight,
+                color: AppColors.textMuted,
               ),
             ),
             const SizedBox(height: 12),
@@ -433,7 +433,7 @@ class _PipelineBreakdown extends StatelessWidget {
                 child: Text(
                   'No leads in your pipeline yet.',
                   style: theme.textTheme.bodySmall?.copyWith(
-                    color: AppColors.brandBrownLight,
+                    color: AppColors.textMuted,
                   ),
                 ),
               )
@@ -496,7 +496,7 @@ class _PipelineRow extends StatelessWidget {
                   Text(
                     '· $count',
                     style: theme.textTheme.bodySmall?.copyWith(
-                      color: AppColors.brandBrownLight,
+                      color: AppColors.textMuted,
                     ),
                   ),
                 ],

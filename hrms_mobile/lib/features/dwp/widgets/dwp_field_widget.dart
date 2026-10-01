@@ -77,7 +77,7 @@ class DwpFieldWidget extends StatelessWidget {
         children: [
           Text(field.label,
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: AppColors.brandBrownLight,
+                    color: AppColors.textMuted,
                   )),
           Slider(
             value: current.clamp(0, 100).toDouble(),
@@ -100,7 +100,7 @@ class DwpFieldWidget extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(field.label,
-              style: const TextStyle(color: AppColors.brandBrownLight)),
+              style: const TextStyle(color: AppColors.textMuted)),
           const SizedBox(height: 4),
           Row(
             children: List.generate(5, (i) {
