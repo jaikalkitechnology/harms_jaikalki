@@ -73,7 +73,7 @@ Future<void> setupDependencies() async {
   sl.registerLazySingleton<AttendanceApi>(() => AttendanceApi(sl()));
   sl.registerLazySingleton<LeaveApi>(() => LeaveApi(sl()));
   sl.registerLazySingleton<ApprovalApi>(() => ApprovalApi(sl()));
-  sl.registerLazySingleton<DashboardApi>(() => DashboardApi(sl()));
+  sl.registerLazySingleton<DashboardApi>(() => DashboardApi(sl(), sl()));
   sl.registerLazySingleton<DwpApi>(() => DwpApi(sl()));
   sl.registerLazySingleton<PayrollApi>(() => PayrollApi(sl()));
   sl.registerLazySingleton<JusticeApi>(() => JusticeApi(sl()));

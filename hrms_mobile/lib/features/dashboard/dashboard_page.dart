@@ -6,6 +6,7 @@ import '../../core/di/injection.dart';
 import '../../core/routing/app_router.dart';
 import '../../core/theme/app_colors.dart';
 import '../../l10n/app_l10n.dart';
+import '../auth/presentation/bloc/auth_bloc.dart';
 import '../employees/cubit/employees_cubit.dart' show LoadStatus;
 import 'cubit/dashboard_cubit.dart';
 import 'data/dashboard_api.dart';
@@ -19,7 +20,10 @@ class DashboardPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return BlocProvider(
-      create: (_) => DashboardCubit(sl<DashboardApi>())..load(),
+      create: (context) => DashboardCubit(
+        sl<DashboardApi>(),
+        userId: context.read<AuthBloc>().state.user?.id,
+      )..load(),
       child: const _DashboardView(),
     );
   }
@@ -47,12 +51,14 @@ class _DashboardView extends StatelessWidget {
             );
           }
           final s = state.summary!;
-          return RefreshIndicator(
+          final list = RefreshIndicator(
             onRefresh: () => context.read<DashboardCubit>().load(),
             child: ListView(
               padding: EdgeInsets.zero,
               children: [
                 _BrandHeader(summary: s),
+                if (state.fromCache && !state.refreshing && state.error != null)
+                  const _SavedDataNotice(),
                 Padding(
                   padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
                   child: Column(
@@ -76,6 +82,24 @@ class _DashboardView extends StatelessWidget {
                 ),
               ],
             ),
+          );
+          // Saved data on screen while the live copy loads: a thin bar
+          // at the top says it's updating.
+          return Stack(
+            children: [
+              list,
+              if (state.refreshing && state.fromCache)
+                const Positioned(
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  child: LinearProgressIndicator(
+                    minHeight: 2,
+                    color: AppColors.brandGold,
+                    backgroundColor: Colors.transparent,
+                  ),
+                ),
+            ],
           );
         },
       ),
@@ -773,6 +797,36 @@ class _StatTile extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// Shown when the live dashboard couldn't be fetched and the saved copy
+/// from the last visit is on screen.
+class _SavedDataNotice extends StatelessWidget {
+  const _SavedDataNotice();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: AppColors.warning.withOpacity(0.12),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: const Row(
+        children: [
+          Icon(Icons.cloud_off_outlined, size: 18, color: AppColors.warning),
+          SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              'Showing saved data — pull down to refresh.',
+              style: TextStyle(color: AppColors.textMuted, fontSize: 13),
+            ),
+          ),
+        ],
       ),
     );
   }
