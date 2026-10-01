@@ -25,7 +25,7 @@ class LoginPage extends StatelessWidget {
                   const SizedBox(height: 16),
                   Center(
                     child: Image.asset(
-                      'assets/branding/jaikalki-icon-only-512.png',
+                      'assets/branding/jaikalki-icon-only-256.png',
                       height: 96,
                     ),
                   ),
@@ -45,7 +45,7 @@ class LoginPage extends StatelessWidget {
                   Text(
                     AppConstants.companyName,
                     style: theme.textTheme.bodyMedium?.copyWith(
-                      color: AppColors.brandBrownLight,
+                      color: AppColors.textMuted,
                     ),
                   ),
                   const SizedBox(height: 32),

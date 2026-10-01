@@ -61,11 +61,18 @@ class PushNotificationsService {
 
   bool _initialised = false;
 
+  /// A registration asked for before [initialize] finished (start-up
+  /// work now runs after the first frame); replayed once it's ready.
+  LaunchApi? _pendingRegistration;
+
   /// Boot Firebase + local-notifications. Safe to call once at app start;
   /// no-op on repeat. Catches any Firebase error so the app keeps running
   /// even if the device hasn't been added to the Firebase console yet.
   Future<void> initialize({GlobalKey<NavigatorState>? navigatorKey}) async {
     if (_initialised) return;
+    // No Firebase web config ships with this app, so push is mobile-only;
+    // skipping it keeps the Firebase JS SDK off the web start-up path.
+    if (kIsWeb) return;
     try {
       await Firebase.initializeApp();
 
@@ -126,6 +133,10 @@ class PushNotificationsService {
 
       _initialised = true;
       debugPrint('[FCM] initialised');
+
+      final pending = _pendingRegistration;
+      _pendingRegistration = null;
+      if (pending != null) unawaited(registerToken(pending));
     } catch (e, st) {
       debugPrint('[FCM] init failed: $e\n$st');
     }
@@ -136,7 +147,10 @@ class PushNotificationsService {
   /// the last token in SharedPreferences and skip the network call if
   /// nothing changed.
   Future<void> registerToken(LaunchApi api) async {
-    if (!_initialised) return;
+    if (!_initialised) {
+      if (!kIsWeb) _pendingRegistration = api;
+      return;
+    }
     try {
       final token = await _fcm.getToken();
       if (token == null) return;

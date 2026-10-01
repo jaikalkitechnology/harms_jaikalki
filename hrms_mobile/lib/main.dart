@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -11,15 +13,14 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   SystemChrome.setSystemUIOverlayStyle(SystemUiOverlayStyle.dark);
   await setupDependencies();
-  // Boot Firebase + push notifications. Failures don't block the UI;
-  // the service falls back to in-app + email until Firebase is reachable.
-  await PushNotificationsService.instance.initialize();
-  // Resume background location sharing if the user had it on.
-  // Failure is silent — the toggle stays off until they re-enable.
-  await LocationSharingService.instance.hydrate();
-  // Hydrate per-department module whitelist from cache; an async
-  // refresh is fired in the background and the More menu rebuilds when
-  // it lands.
+  // Per-department module whitelist from cache (a local read); a refresh
+  // runs in the background and the More menu rebuilds when it lands.
   await sl<EnabledModulesService>().hydrate();
   runApp(const JaikalkiApp());
+
+  // Not needed for the first frame, so it no longer delays it. Push setup
+  // waits on the notification-permission prompt the first time, and
+  // location sharing on a GPS permission check.
+  unawaited(PushNotificationsService.instance.initialize());
+  unawaited(LocationSharingService.instance.hydrate());
 }
