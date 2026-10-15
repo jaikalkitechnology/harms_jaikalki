@@ -40,11 +40,41 @@ export interface Resignation {
   manager_comment: string | null;
   notice_period_days: number;
   ndc_checklist: Record<string, boolean> | null;
+  /** Company assets still with the employee (list endpoints). */
+  assets_pending_count?: number | null;
   hr_cleared_at: string | null;
   final_settlement_amount: number | null;
   final_settled_at: string | null;
   exit_interview_notes: string | null;
   documents: ResignationDocument[] | null;
+}
+
+export interface AssetClearanceItem {
+  id: number;
+  asset_tag: string;
+  name: string;
+  category: string;
+  category_name: string;
+  brand: string | null;
+  model: string | null;
+  serial_number: string | null;
+  condition: string;
+  parent_asset_id: number | null;
+  assigned_at: string | null;
+  returned_at: string | null;
+  return_condition: string | null;
+}
+
+/** Asset NOC for an exit: what's still out and what came back. */
+export interface AssetClearance {
+  resignation_id: number;
+  employee_id: number;
+  last_working_day: string | null;
+  cleared: boolean;
+  pending_count: number;
+  returned_count: number;
+  pending: AssetClearanceItem[];
+  returned: AssetClearanceItem[];
 }
 
 export interface AuditLogItem {
@@ -173,6 +203,12 @@ export const launchApi = {
     const { data } = await apiClient.post<Resignation>(
       `${v1}/resignations/${id}/decision`,
       { accept, comment },
+    );
+    return data;
+  },
+  resignationAssets: async (id: number) => {
+    const { data } = await apiClient.get<AssetClearance>(
+      `${v1}/resignations/${id}/assets`,
     );
     return data;
   },
