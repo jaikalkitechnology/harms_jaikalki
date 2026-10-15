@@ -47,7 +47,14 @@ MODULE_KEYS: list[str] = [
 ]
 
 # Always-on modules — visible regardless of department mapping.
-ALWAYS_ON: set[str] = {"notifications", "settings", "mfa_setup"}
+ALWAYS_ON: set[str] = {
+    "notifications",
+    "settings",
+    "mfa_setup",
+    # Reporting managers' view of leaving team members (asset NOC); the
+    # app shows it only to people who manage a team.
+    "team_exits",
+}
 
 
 def normalize(keys: Iterable[str] | None) -> list[str]:
