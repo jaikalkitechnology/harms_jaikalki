@@ -11,10 +11,16 @@ from app.models import User
 from app.schemas.polish import (
     AssetAssignRequest,
     AssetAssignmentOut,
+    AssetCategoryCreate,
+    AssetCategoryOut,
+    AssetCategoryUpdate,
     AssetCreate,
     AssetOut,
     AssetReturnRequest,
+    AssetSummaryOut,
     AssetUpdate,
+    EmployeeAssetHistoryRow,
+    EmployeeAssetsOut,
     JobApplicationCreate,
     JobApplicationOut,
     JobApplicationStatusUpdate,
@@ -43,29 +49,97 @@ async def _self_employee(db: AsyncSession, user: User):
     return emp
 
 
+# ─── Asset categories ────────────────────────────────────────────────
+@router.get("/asset-categories", response_model=list[AssetCategoryOut])
+async def list_asset_categories(
+    include_inactive: bool = False,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(get_current_user),
+):
+    return await polish.list_categories(db, include_inactive=include_inactive)
+
+
+@router.post(
+    "/asset-categories",
+    response_model=AssetCategoryOut,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_asset_category(
+    payload: AssetCategoryCreate,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_permission("admin.users.manage")),
+):
+    return await polish.create_category(db, payload=payload.model_dump())
+
+
+@router.put("/asset-categories/{category_id}", response_model=AssetCategoryOut)
+async def update_asset_category(
+    category_id: int,
+    payload: AssetCategoryUpdate,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_permission("admin.users.manage")),
+):
+    return await polish.update_category(
+        db, category_id, payload=payload.model_dump(exclude_unset=True)
+    )
+
+
 # ─── Assets ──────────────────────────────────────────────────────────
 @router.get("/assets", response_model=list[AssetOut])
 async def list_assets(
     asset_status: Optional[str] = Query(default=None, alias="status"),
     category: Optional[str] = None,
+    condition: Optional[str] = None,
+    usable: Optional[bool] = None,
+    assigned_to: Optional[int] = None,
     search: Optional[str] = None,
     db: AsyncSession = Depends(get_db),
     _: User = Depends(require_permission("admin.users.view")),
 ):
     return await polish.list_assets(
-        db, status=asset_status, category=category, search=search
+        db,
+        status=asset_status,
+        category=category,
+        condition=condition,
+        usable=usable,
+        assigned_to=assigned_to,
+        search=search,
     )
 
 
-@router.put("/assets/{asset_id}", response_model=AssetOut)
-async def update_asset(
-    asset_id: int,
-    payload: AssetUpdate,
+@router.get("/assets/summary", response_model=AssetSummaryOut)
+async def asset_summary(
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(require_permission("admin.users.manage")),
+    _: User = Depends(require_permission("admin.users.view")),
 ):
-    return await polish.update_asset(
-        db, asset_id, payload=payload.model_dump(exclude_unset=True)
+    return await polish.asset_summary(db)
+
+
+@router.get("/assets/me", response_model=list[AssetOut])
+async def my_assets(
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    emp = await _self_employee(db, user)
+    return await polish.list_assets(db, assigned_to=emp.id, status="assigned")
+
+
+@router.get("/assets/employee/{employee_id}", response_model=EmployeeAssetsOut)
+async def employee_assets(
+    employee_id: int,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_permission("admin.users.view")),
+):
+    current = await polish.list_assets(db, assigned_to=employee_id, status="assigned")
+    history = [
+        EmployeeAssetHistoryRow(
+            **AssetAssignmentOut.model_validate(assignment).model_dump(),
+            asset=AssetOut.model_validate(asset),
+        )
+        for assignment, asset in await polish.employee_asset_history(db, employee_id)
+    ]
+    return EmployeeAssetsOut(
+        current=[AssetOut.model_validate(a) for a in current], history=history
     )
 
 
@@ -82,19 +156,28 @@ async def create_asset(
     return await polish.create_asset(db, payload=payload.model_dump())
 
 
-@router.get("/assets/me", response_model=list[AssetOut])
-async def my_assets(
+@router.get("/assets/{asset_id}", response_model=AssetOut)
+async def get_asset(
+    asset_id: int,
     db: AsyncSession = Depends(get_db),
-    user: User = Depends(get_current_user),
+    _: User = Depends(require_permission("admin.users.view")),
 ):
-    emp = await _self_employee(db, user)
-    return await polish.list_assets(db, assigned_to=emp.id)
+    return await polish.get_asset(db, asset_id)
 
 
-@router.post(
-    "/assets/{asset_id}/assign",
-    response_model=AssetOut,
-)
+@router.put("/assets/{asset_id}", response_model=AssetOut)
+async def update_asset(
+    asset_id: int,
+    payload: AssetUpdate,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_permission("admin.users.manage")),
+):
+    return await polish.update_asset(
+        db, asset_id, payload=payload.model_dump(exclude_unset=True)
+    )
+
+
+@router.post("/assets/{asset_id}/assign", response_model=AssetOut)
 async def assign_asset(
     asset_id: int,
     payload: AssetAssignRequest,
@@ -107,6 +190,7 @@ async def assign_asset(
         employee_id=payload.employee_id,
         notes=payload.notes,
         assigned_by_user_id=user.id,
+        include_accessories=payload.include_accessories,
     )
 
 
@@ -115,13 +199,15 @@ async def return_asset(
     asset_id: int,
     payload: AssetReturnRequest,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(require_permission("admin.users.manage")),
+    user: User = Depends(require_permission("admin.users.manage")),
 ):
     return await polish.return_asset(
         db,
         asset_id,
         return_condition=payload.return_condition,
         notes=payload.notes,
+        received_by=user.id,
+        include_accessories=payload.include_accessories,
     )
 
 

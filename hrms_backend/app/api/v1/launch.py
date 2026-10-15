@@ -22,6 +22,8 @@ from app.dependencies import get_current_user, get_db
 from sqlalchemy import select
 from app.models import Resignation, User
 from app.schemas.launch import (
+    AssetClearanceOut,
+    TeamExitOut,
     AdminSeparationCreate,
     AdminSeparationUpdate,
     AuditLogOut,
@@ -48,6 +50,29 @@ from app.services import (
 )
 
 router = APIRouter(tags=["launch"])
+
+
+async def _with_asset_counts(db: AsyncSession, rows):
+    """Attach how many company assets each exiting employee still holds."""
+    from app.services.asset_clearance import held_counts
+
+    rows = list(rows)
+    counts = await held_counts(db, [r.employee_id for r in rows])
+    for r in rows:
+        r.assets_pending_count = counts.get(r.employee_id, 0)
+    return rows
+
+
+async def _asset_clearance_out(db: AsyncSession, res: Resignation) -> dict:
+    from app.services.asset_clearance import clearance
+
+    data = await clearance(db, res.employee_id, since=res.requested_at)
+    return {
+        "resignation_id": res.id,
+        "last_working_day": res.actual_last_working_day
+        or res.proposed_last_working_day,
+        **data,
+    }
 
 
 async def _self_employee(db: AsyncSession, user: User):
@@ -308,7 +333,85 @@ async def my_resignations(
     user: User = Depends(get_current_user),
 ):
     emp = await _self_employee(db, user)
-    return await resignation_service.list_for_employee(db, emp.id)
+    return await _with_asset_counts(
+        db, await resignation_service.list_for_employee(db, emp.id)
+    )
+
+
+@router.get(
+    "/resignations/team",
+    response_model=list[TeamExitOut],
+    tags=["resignations"],
+)
+async def team_exits(
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """For a reporting manager: direct reports who are leaving, with
+    their asset return (NOC) status."""
+    from app.models import Employee
+    from app.services.asset_clearance import OPEN_EXIT_STATES
+
+    me = await emp_svc.get_self_employee(db, user)
+    if me is None:
+        return []
+    rows = (
+        await db.execute(
+            select(Resignation, Employee)
+            .join(Employee, Employee.id == Resignation.employee_id)
+            .where(Employee.reporting_to == me.id)
+            .where(Resignation.status.in_(OPEN_EXIT_STATES))
+            .order_by(Resignation.proposed_last_working_day)
+        )
+    ).all()
+    out = []
+    for res, emp in rows:
+        assets = await _asset_clearance_out(db, res)
+        res.assets_pending_count = assets["pending_count"]
+        out.append(
+            {
+                "resignation": res,
+                "employee": {
+                    "id": emp.id,
+                    "employee_code": emp.employee_code,
+                    "name": f"{emp.first_name} {emp.last_name}".strip(),
+                    "designation": emp.designation.name if emp.designation else None,
+                    "photo_url": emp.photo_url,
+                },
+                "assets": assets,
+            }
+        )
+    return out
+
+
+@router.get(
+    "/resignations/{resignation_id}/assets",
+    response_model=AssetClearanceOut,
+    tags=["resignations"],
+)
+async def resignation_assets(
+    resignation_id: int,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Asset NOC for one exit. Visible to HR (approval.act), the
+    employee, and their direct reporting manager."""
+    from app.core.exceptions import ForbiddenError
+    from app.models import Employee
+
+    res = await resignation_service.get(db, resignation_id)
+    codes = user.permission_codes
+    if "approval.act" not in codes and "system.config" not in codes:
+        me = await emp_svc.get_self_employee(db, user)
+        target = (
+            await db.execute(select(Employee).where(Employee.id == res.employee_id))
+        ).scalar_one_or_none()
+        allowed = me is not None and target is not None and (
+            target.id == me.id or target.reporting_to == me.id
+        )
+        if not allowed:
+            raise ForbiddenError("Not allowed to view this exit")
+    return await _asset_clearance_out(db, res)
 
 
 @router.get(
@@ -374,7 +477,7 @@ async def pending_resignations(
     db: AsyncSession = Depends(get_db),
     _: User = Depends(require_permission("approval.act")),
 ):
-    return await resignation_service.list_pending(db)
+    return await _with_asset_counts(db, await resignation_service.list_pending(db))
 
 
 @router.get(
@@ -389,11 +492,14 @@ async def list_resignations(
     db: AsyncSession = Depends(get_db),
     _: User = Depends(require_permission("approval.act")),
 ):
-    return await resignation_service.list_resignations(
+    return await _with_asset_counts(
         db,
-        status=resignation_status,
-        employee_id=employee_id,
-        search=search,
+        await resignation_service.list_resignations(
+            db,
+            status=resignation_status,
+            employee_id=employee_id,
+            search=search,
+        ),
     )
 
 

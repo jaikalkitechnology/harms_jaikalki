@@ -189,8 +189,34 @@ _PENDING_COLUMNS: list[tuple[str, str, str, str | None]] = [
         "DECIMAL(6,2) NOT NULL DEFAULT 0",
         None,
     ),
+    ("assets", "brand", "VARCHAR(80) NULL", None),
+    ("assets", "model", "VARCHAR(120) NULL", None),
+    ("assets", "specs", "JSON NULL", None),
+    ("assets", "parent_asset_id", "INT NULL", "assets(id) ON DELETE SET NULL"),
+    ("asset_assignments", "received_by", "INT NULL", "users(id) ON DELETE SET NULL"),
     ("departments", "enabled_modules", "JSON NULL", None),
     ("departments", "leave_approver_user_ids", "JSON NULL", None),
+]
+
+
+# Columns whose type changes on existing tables, applied when the live
+# column still has the old DATA_TYPE:
+#   (table, column, new_definition, old_data_type)
+_PENDING_TYPE_CHANGES: list[tuple[str, str, str, str]] = [
+    # Fixed lists became editable / extended.
+    ("assets", "category", "VARCHAR(48) NOT NULL DEFAULT 'other'", "enum"),
+    ("assets", "condition", "VARCHAR(16) NOT NULL DEFAULT 'working'", "enum"),
+    ("asset_assignments", "return_condition", "VARCHAR(16) NULL", "enum"),
+]
+
+# Idempotent data fixes run after the schema changes.
+_DATA_FIXES: list[str] = [
+    # Old asset conditions -> working / damaged / not_working / expired.
+    "UPDATE assets SET `condition` = 'working' "
+    "WHERE `condition` IN ('new', 'good', 'fair')",
+    "UPDATE assets SET `condition` = 'expired' WHERE `condition` = 'retired'",
+    "UPDATE asset_assignments SET return_condition = 'working' "
+    "WHERE return_condition IN ('good', 'fair')",
 ]
 
 
@@ -270,3 +296,32 @@ async def sync_columns() -> None:
                         "sync_columns: FK %s.%s -> %s skipped — %s",
                         qual(table), column, fk, e,
                     )
+
+        for table, column, col_def, old_type in _PENDING_TYPE_CHANGES:
+            current = (
+                await conn.execute(
+                    text(
+                        "SELECT DATA_TYPE FROM information_schema.COLUMNS "
+                        "WHERE TABLE_SCHEMA = DATABASE() "
+                        "AND TABLE_NAME = :t AND COLUMN_NAME = :c"
+                    ),
+                    {"t": table, "c": column},
+                )
+            ).scalar()
+            if current is None or current.lower() != old_type:
+                continue
+            try:
+                await conn.execute(
+                    text(f"ALTER TABLE `{table}` MODIFY COLUMN `{column}` {col_def}")
+                )
+                log.info("sync_columns: changed %s.%s to %s", qual(table), column, col_def)
+            except Exception as e:
+                log.error(
+                    "sync_columns: FAILED to change %s.%s — %s. Run once:\n"
+                    "  ALTER TABLE %s MODIFY COLUMN %s %s;",
+                    qual(table), column, e, qual(table), column, col_def,
+                )
+                raise
+
+        for stmt in _DATA_FIXES:
+            await conn.execute(text(stmt))

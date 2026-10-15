@@ -110,6 +110,7 @@ from .performance import (
 from .polish import (
     Asset,
     AssetAssignment,
+    AssetCategory,
     JobApplication,
     JobPosting,
     MeetingRoom,
@@ -258,6 +259,7 @@ __all__ = [
     "SavedReport",
     "Asset",
     "AssetAssignment",
+    "AssetCategory",
     "Visitor",
     "MeetingRoom",
     "RoomBooking",

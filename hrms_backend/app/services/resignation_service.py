@@ -190,6 +190,9 @@ async def admin_initiate(
 
     await db.commit()
     await db.refresh(res)
+    from app.services import asset_clearance
+
+    await asset_clearance.on_exit_started(db, res)
     return res
 
 
@@ -309,6 +312,10 @@ async def manager_decision(
         res.status = "rejected"
     await db.commit()
     await db.refresh(res)
+    if accept:
+        from app.services import asset_clearance
+
+        await asset_clearance.on_exit_started(db, res)
     return res
 
 
@@ -323,6 +330,15 @@ async def update_ndc(
     if res.status not in ("in_notice", "ndc_pending"):
         raise ValidationError("NDC can only be updated during notice period")
     checklist = dict(res.ndc_checklist or DEFAULT_NDC)
+    if updates.get("assets_returned"):
+        from app.services.asset_clearance import held_assets
+
+        held = await held_assets(db, res.employee_id)
+        if held:
+            raise ValidationError(
+                f"{len(held)} company asset(s) are still with the employee — "
+                "mark them returned in Assets first"
+            )
     for k, v in updates.items():
         if k in checklist:
             checklist[k] = bool(v)
@@ -349,6 +365,14 @@ async def settle(
     if res.status != "cleared":
         raise ValidationError(
             "All NDC items must be cleared before final settlement"
+        )
+    from app.services.asset_clearance import held_assets
+
+    held = await held_assets(db, res.employee_id)
+    if held:
+        raise ValidationError(
+            f"{len(held)} company asset(s) not returned yet — collect them "
+            "before the final settlement (asset NOC)"
         )
     res.final_settlement_amount = final_settlement_amount
     res.exit_interview_notes = exit_interview_notes

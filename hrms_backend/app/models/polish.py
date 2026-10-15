@@ -21,6 +21,34 @@ from .base import Base, TimestampMixin, mysql_table_args
 
 
 # ─── Asset Management ────────────────────────────────────────────────
+# Asset condition. Only "working" assets can be handed out; the others
+# are kept on the register but marked not usable.
+ASSET_CONDITIONS = ("working", "damaged", "not_working", "expired")
+USABLE_CONDITION = "working"
+
+
+class AssetCategory(Base, TimestampMixin):
+    """Kinds of asset (laptop, laptop charger, mobile, mouse …), managed
+    by HR. ``spec_fields`` lists the configuration captured for assets of
+    this kind, e.g. processor / RAM / storage for a laptop."""
+
+    __tablename__ = "asset_categories"
+    __table_args__ = (
+        UniqueConstraint("code", name="uq_asset_category_code"),
+        mysql_table_args,
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    code: Mapped[str] = mapped_column(String(48), nullable=False)
+    name: Mapped[str] = mapped_column(String(96), nullable=False)
+    # Accessory kinds (chargers, cables) usually belong to a main asset.
+    is_accessory: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    # [{"key": "ram", "label": "RAM"}, …]
+    spec_fields: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
+    sort_order: Mapped[int] = mapped_column(Integer, default=100, nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+
+
 class Asset(Base, TimestampMixin):
     __tablename__ = "assets"
     __table_args__ = (
@@ -31,20 +59,18 @@ class Asset(Base, TimestampMixin):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     asset_tag: Mapped[str] = mapped_column(String(64), nullable=False)
     name: Mapped[str] = mapped_column(String(160), nullable=False)
+    # AssetCategory.code
     category: Mapped[str] = mapped_column(
-        Enum(
-            "laptop",
-            "mobile",
-            "headset",
-            "monitor",
-            "keyboard",
-            "mouse",
-            "vehicle",
-            "other",
-            name="asset_category",
-        ),
-        default="other",
-        nullable=False,
+        String(48), default="other", nullable=False, index=True
+    )
+    brand: Mapped[Optional[str]] = mapped_column(String(80), nullable=True)
+    model: Mapped[Optional[str]] = mapped_column(String(120), nullable=True)
+    # Configuration, keyed by the category's spec_fields.
+    specs: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    # Accessory of another asset (e.g. a charger of a laptop). Assigning
+    # or returning the main asset moves its accessories with it.
+    parent_asset_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("assets.id", ondelete="SET NULL"), nullable=True, index=True
     )
     serial_number: Mapped[Optional[str]] = mapped_column(String(96), nullable=True)
     purchase_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
@@ -52,10 +78,9 @@ class Asset(Base, TimestampMixin):
         Numeric(12, 2), nullable=True
     )
     warranty_until: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    # One of ASSET_CONDITIONS.
     condition: Mapped[str] = mapped_column(
-        Enum("new", "good", "fair", "damaged", "retired", name="asset_condition"),
-        default="new",
-        nullable=False,
+        String(16), default=USABLE_CONDITION, nullable=False
     )
     status: Mapped[str] = mapped_column(
         Enum(
@@ -78,6 +103,10 @@ class Asset(Base, TimestampMixin):
     assigned_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
+    @property
+    def is_usable(self) -> bool:
+        return self.condition == USABLE_CONDITION
+
 
 class AssetAssignment(Base, TimestampMixin):
     __tablename__ = "asset_assignments"
@@ -94,12 +123,14 @@ class AssetAssignment(Base, TimestampMixin):
         DateTime, nullable=False, default=datetime.utcnow
     )
     returned_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
-    return_condition: Mapped[Optional[str]] = mapped_column(
-        Enum("good", "fair", "damaged", "lost", name="asset_return_condition"),
-        nullable=True,
-    )
+    # ASSET_CONDITIONS or "lost".
+    return_condition: Mapped[Optional[str]] = mapped_column(String(16), nullable=True)
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     assigned_by: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    # Who took the asset back.
+    received_by: Mapped[Optional[int]] = mapped_column(
         ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
 

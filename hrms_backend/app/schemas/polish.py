@@ -6,36 +6,71 @@ from pydantic import BaseModel, ConfigDict, Field
 
 
 # ─── Assets ──────────────────────────────────────────────────────────
-class AssetCreate(BaseModel):
-    asset_tag: str
+_CONDITION = "^(working|damaged|not_working|expired)$"
+
+
+class AssetSpecField(BaseModel):
+    key: Optional[str] = None
+    label: str = Field(min_length=1, max_length=60)
+
+
+class AssetCategoryOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    code: str
     name: str
-    category: str = Field(
-        default="other",
-        pattern="^(laptop|mobile|headset|monitor|keyboard|mouse|vehicle|other)$",
-    )
+    is_accessory: bool
+    spec_fields: Optional[list] = None
+    sort_order: int
+    is_active: bool
+
+
+class AssetCategoryCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=96)
+    code: Optional[str] = Field(default=None, max_length=48)
+    is_accessory: bool = False
+    spec_fields: list[AssetSpecField] = []
+    sort_order: Optional[int] = None
+
+
+class AssetCategoryUpdate(BaseModel):
+    name: Optional[str] = Field(default=None, max_length=96)
+    is_accessory: Optional[bool] = None
+    spec_fields: Optional[list[AssetSpecField]] = None
+    sort_order: Optional[int] = None
+    is_active: Optional[bool] = None
+
+
+class AssetCreate(BaseModel):
+    asset_tag: str = Field(min_length=1, max_length=64)
+    name: str = Field(min_length=1, max_length=160)
+    category: str = Field(default="other", max_length=48)
+    brand: Optional[str] = Field(default=None, max_length=80)
+    model: Optional[str] = Field(default=None, max_length=120)
+    specs: Optional[dict[str, str]] = None
+    parent_asset_id: Optional[int] = None
     serial_number: Optional[str] = None
     purchase_date: Optional[date] = None
     purchase_cost: Optional[Decimal] = None
     warranty_until: Optional[date] = None
-    condition: str = Field(
-        default="new", pattern="^(new|good|fair|damaged|retired)$"
-    )
+    condition: str = Field(default="working", pattern=_CONDITION)
     notes: Optional[str] = None
 
 
 class AssetUpdate(BaseModel):
-    name: Optional[str] = None
-    category: Optional[str] = Field(
-        default=None,
-        pattern="^(laptop|mobile|headset|monitor|keyboard|mouse|vehicle|other)$",
-    )
+    name: Optional[str] = Field(default=None, max_length=160)
+    category: Optional[str] = Field(default=None, max_length=48)
+    brand: Optional[str] = Field(default=None, max_length=80)
+    model: Optional[str] = Field(default=None, max_length=120)
+    specs: Optional[dict[str, str]] = None
+    parent_asset_id: Optional[int] = None
     serial_number: Optional[str] = None
     purchase_date: Optional[date] = None
     purchase_cost: Optional[Decimal] = None
     warranty_until: Optional[date] = None
-    condition: Optional[str] = Field(
-        default=None, pattern="^(new|good|fair|damaged|retired)$"
-    )
+    condition: Optional[str] = Field(default=None, pattern=_CONDITION)
+    # in_stock | in_repair | retired | lost — assignment has its own calls.
+    status: Optional[str] = Field(default=None, pattern="^(in_stock|in_repair|retired|lost)$")
     notes: Optional[str] = None
 
 
@@ -45,25 +80,45 @@ class AssetOut(BaseModel):
     asset_tag: str
     name: str
     category: str
+    brand: Optional[str] = None
+    model: Optional[str] = None
+    specs: Optional[dict] = None
+    parent_asset_id: Optional[int] = None
     serial_number: Optional[str]
     purchase_date: Optional[date]
     purchase_cost: Optional[Decimal]
     warranty_until: Optional[date]
     condition: str
+    is_usable: bool = True
     status: str
     assigned_to: Optional[int]
     assigned_at: Optional[datetime]
     notes: Optional[str]
 
 
+class AssetSummaryOut(BaseModel):
+    total: int
+    in_stock_usable: int
+    assigned: int
+    not_usable: int
+    in_repair: int
+    lost: int
+    retired: int
+
+
 class AssetAssignRequest(BaseModel):
     employee_id: int
     notes: Optional[str] = None
+    # Hand over the asset's accessories (e.g. its charger) with it.
+    include_accessories: bool = True
 
 
 class AssetReturnRequest(BaseModel):
-    return_condition: str = Field(pattern="^(good|fair|damaged|lost)$")
+    return_condition: str = Field(
+        pattern="^(working|damaged|not_working|expired|lost)$"
+    )
     notes: Optional[str] = None
+    include_accessories: bool = True
 
 
 class AssetAssignmentOut(BaseModel):
@@ -75,6 +130,17 @@ class AssetAssignmentOut(BaseModel):
     returned_at: Optional[datetime]
     return_condition: Optional[str]
     notes: Optional[str]
+    assigned_by: Optional[int] = None
+    received_by: Optional[int] = None
+
+
+class EmployeeAssetHistoryRow(AssetAssignmentOut):
+    asset: AssetOut
+
+
+class EmployeeAssetsOut(BaseModel):
+    current: list[AssetOut]
+    history: list[EmployeeAssetHistoryRow]
 
 
 # ─── Visitors ────────────────────────────────────────────────────────
