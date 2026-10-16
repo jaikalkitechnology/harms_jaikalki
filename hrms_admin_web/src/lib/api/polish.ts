@@ -227,6 +227,22 @@ export const polishApi = {
     );
     return data;
   },
+  /** No longer available (sold, scrapped, end of life…); history kept. */
+  retireAsset: async (id: number, reason: string, notes?: string) => {
+    const { data } = await apiClient.post<Asset>(
+      `${v1}/polish/assets/${id}/retire`,
+      { reason, notes: notes || null },
+    );
+    return data;
+  },
+  restoreAsset: async (id: number) => {
+    const { data } = await apiClient.post<Asset>(`${v1}/polish/assets/${id}/restore`);
+    return data;
+  },
+  /** Only for assets never handed to anyone (e.g. added by mistake). */
+  deleteAsset: async (id: number) => {
+    await apiClient.delete(`${v1}/polish/assets/${id}`);
+  },
   returnAsset: async (
     id: number,
     returnCondition: string,

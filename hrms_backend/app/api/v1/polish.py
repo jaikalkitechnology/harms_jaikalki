@@ -16,6 +16,7 @@ from app.schemas.polish import (
     AssetCategoryUpdate,
     AssetCreate,
     AssetOut,
+    AssetRetireRequest,
     AssetReturnRequest,
     AssetSummaryOut,
     AssetUpdate,
@@ -209,6 +210,38 @@ async def return_asset(
         received_by=user.id,
         include_accessories=payload.include_accessories,
     )
+
+
+@router.post("/assets/{asset_id}/retire", response_model=AssetOut)
+async def retire_asset(
+    asset_id: int,
+    payload: AssetRetireRequest,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_permission("admin.users.manage")),
+):
+    """No longer available (sold, scrapped, end of life…); history kept."""
+    return await polish.retire_asset(
+        db, asset_id, reason=payload.reason, notes=payload.notes
+    )
+
+
+@router.post("/assets/{asset_id}/restore", response_model=AssetOut)
+async def restore_asset(
+    asset_id: int,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_permission("admin.users.manage")),
+):
+    return await polish.restore_asset(db, asset_id)
+
+
+@router.delete("/assets/{asset_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_asset(
+    asset_id: int,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_permission("admin.users.manage")),
+):
+    """Only for assets never handed to anyone (e.g. added by mistake)."""
+    await polish.delete_asset(db, asset_id)
 
 
 @router.get(

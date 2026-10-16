@@ -18,7 +18,11 @@ import { PermissionGate } from "@/components/shared/PermissionGate";
 import { polishApi, type Asset } from "@/lib/api/polish";
 import { cn } from "@/lib/utils";
 import { AssetDetailPanel } from "./assets/AssetDetail";
-import { AssignAssetModal, ReturnAssetModal } from "./assets/AssetDialogs";
+import {
+  AssignAssetModal,
+  RetireAssetModal,
+  ReturnAssetModal,
+} from "./assets/AssetDialogs";
 import { AssetFormModal } from "./assets/AssetForm";
 import { CategoriesModal } from "./assets/CategoriesModal";
 import {
@@ -49,6 +53,9 @@ export default function AssetsPage() {
   const [detailId, setDetailId] = useState<number | null>(null);
   const [assigning, setAssigning] = useState<Asset | null>(null);
   const [returning, setReturning] = useState<Asset | null>(null);
+  const [retiring, setRetiring] = useState<Asset | null>(null);
+  // Retired assets are no longer available; keep them out of the way.
+  const [showRetired, setShowRetired] = useState(false);
   const [categoriesOpen, setCategoriesOpen] = useState(false);
 
   const { categories, name: categoryName } = useAssetCategories();
@@ -72,6 +79,7 @@ export default function AssetsPage() {
   const rows = useMemo(() => {
     const q = search.trim().toLowerCase();
     return all.filter((a) => {
+      if (a.status === "retired" && !showRetired && status !== "retired") return false;
       if (quick === "available" && !(a.status === "in_stock" && a.is_usable)) return false;
       if (quick === "assigned" && a.status !== "assigned") return false;
       if (quick === "not_usable" && a.is_usable) return false;
@@ -83,7 +91,8 @@ export default function AssetsPage() {
         .filter(Boolean)
         .some((v) => String(v).toLowerCase().includes(q));
     });
-  }, [all, quick, category, status, condition, search, employeeName]);
+  }, [all, quick, category, status, condition, search, employeeName, showRetired]);
+  const retiredCount = all.filter((a) => a.status === "retired").length;
 
   const pageCount = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
   const current = Math.min(page, pageCount);
@@ -153,7 +162,7 @@ export default function AssetsPage() {
       )}
 
       <Card>
-        <CardContent className="grid gap-3 p-4 md:grid-cols-5">
+        <CardContent className="grid items-center gap-3 p-4 md:grid-cols-6">
           <div className="relative md:col-span-2">
             <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-brand-brown-light" />
             <Input
@@ -211,6 +220,17 @@ export default function AssetsPage() {
               </option>
             ))}
           </select>
+          <label className="flex items-center gap-2 text-sm text-brand-brown-darker">
+            <input
+              type="checkbox"
+              checked={showRetired}
+              onChange={(e) => {
+                setShowRetired(e.target.checked);
+                resetPage();
+              }}
+            />
+            Show retired ({retiredCount})
+          </label>
         </CardContent>
       </Card>
 
@@ -296,6 +316,17 @@ export default function AssetsPage() {
                               Take back
                             </Button>
                           )}
+                          {(a.status === "in_stock" || a.status === "in_repair") && (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="ml-1 text-brand-brown-light"
+                              title="Mark as no longer available"
+                              onClick={() => setRetiring(a)}
+                            >
+                              Retire
+                            </Button>
+                          )}
                         </PermissionGate>
                       </td>
                     </tr>
@@ -331,12 +362,14 @@ export default function AssetsPage() {
           onEdit={() => setForm(detail)}
           onAssign={() => setAssigning(detail)}
           onReturn={() => setReturning(detail)}
+          onRetire={() => setRetiring(detail)}
           onOpen={(a) => setDetailId(a.id)}
         />
       )}
       {form && <AssetFormModal asset={form === "new" ? null : form} onClose={() => setForm(null)} />}
       {assigning && <AssignAssetModal asset={assigning} onClose={() => setAssigning(null)} />}
       {returning && <ReturnAssetModal asset={returning} onClose={() => setReturning(null)} />}
+      {retiring && <RetireAssetModal asset={retiring} onClose={() => setRetiring(null)} />}
       {categoriesOpen && <CategoriesModal onClose={() => setCategoriesOpen(false)} />}
     </div>
   );
