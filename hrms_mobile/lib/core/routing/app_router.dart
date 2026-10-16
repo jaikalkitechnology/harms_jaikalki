@@ -357,8 +357,12 @@ GoRouter buildRouter(AuthBloc authBloc) {
       ),
       GoRoute(
         path: AppRoutes.documents,
-        builder: (_, __) => DeferredPage(
-            documents.loadLibrary, (_) => documents.DocumentsPage()),
+        builder: (_, state) => DeferredPage(
+            documents.loadLibrary,
+            (_) => documents.DocumentsPage(
+                  initialTab:
+                      state.uri.queryParameters['tab'] == 'policies' ? 1 : 0,
+                )),
       ),
       GoRoute(
         path: AppRoutes.myCertificates,

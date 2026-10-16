@@ -76,6 +76,13 @@ _PENDING_COLUMNS: list[tuple[str, str, str, str | None]] = [
     ("exam_certificates", "file_name", "VARCHAR(255) NULL", None),
     ("exam_certificates", "mime_type", "VARCHAR(100) NULL", None),
     (
+        "company_policies",
+        "requires_acknowledgement",
+        "BOOLEAN NOT NULL DEFAULT TRUE",
+        None,
+    ),
+    ("company_policies", "revision", "INT NOT NULL DEFAULT 1", None),
+    (
         "job_postings",
         "published_to_app",
         "BOOLEAN NOT NULL DEFAULT FALSE",

@@ -80,7 +80,7 @@ from .leave import (
     LeaveType,
 )
 from .letter_template import LetterTemplate
-from .hr_documents import CompanyPolicy, EmployeeLetter
+from .hr_documents import CompanyPolicy, EmployeeLetter, PolicyAcknowledgement
 from .lms import (
     Badge,
     Course,
@@ -281,4 +281,5 @@ __all__ = [
     "EmailTemplate",
     "EmployeeLetter",
     "CompanyPolicy",
+    "PolicyAcknowledgement",
 ]

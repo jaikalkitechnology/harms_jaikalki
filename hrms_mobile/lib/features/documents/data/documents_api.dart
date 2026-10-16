@@ -58,6 +58,8 @@ class CompanyPolicy {
     required this.fileName,
     required this.mimeType,
     required this.updatedAt,
+    required this.requiresAcknowledgement,
+    required this.myAcknowledgedAt,
   });
 
   final int id;
@@ -70,6 +72,14 @@ class CompanyPolicy {
   final String mimeType;
   final String? updatedAt;
 
+  /// The employee must confirm "I have read and accept".
+  final bool requiresAcknowledgement;
+
+  /// When this employee accepted the current version (null = not yet).
+  final String? myAcknowledgedAt;
+
+  bool get needsMyAcceptance => requiresAcknowledgement && myAcknowledgedAt == null;
+
   factory CompanyPolicy.fromJson(Map<String, dynamic> j) => CompanyPolicy(
         id: j['id'] as int,
         title: j['title'] as String? ?? 'Policy',
@@ -80,6 +90,8 @@ class CompanyPolicy {
         fileName: j['file_name'] as String? ?? 'policy.pdf',
         mimeType: j['mime_type'] as String? ?? 'application/pdf',
         updatedAt: j['updated_at'] as String?,
+        requiresAcknowledgement: j['requires_acknowledgement'] as bool? ?? false,
+        myAcknowledgedAt: j['my_acknowledged_at'] as String?,
       );
 
   String get categoryLabel => policyCategoryLabels[category] ?? 'Other';
@@ -114,6 +126,12 @@ class DocumentsApi {
     return (res.data ?? const [])
         .map((e) => CompanyPolicy.fromJson(e as Map<String, dynamic>))
         .toList();
+  }
+
+  /// "I have read and accept" for the current version of a policy.
+  Future<CompanyPolicy> acknowledgePolicy(int id) async {
+    final res = await _dio.post<Map<String, dynamic>>('$_v1/policies/$id/acknowledge');
+    return CompanyPolicy.fromJson(res.data!);
   }
 
   Future<List<int>> letterFile(int id) => _bytes('$_v1/issued-letters/$id/file');

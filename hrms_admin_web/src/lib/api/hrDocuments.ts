@@ -99,9 +99,29 @@ export interface CompanyPolicy {
   mime_type: string;
   file_size: number | null;
   is_published: boolean;
+  requires_acknowledgement: boolean;
+  revision: number;
   uploaded_by: number | null;
   created_at: string | null;
   updated_at: string | null;
+  /** HR view: current staff who have / haven't accepted this version. */
+  acknowledged_count: number | null;
+  pending_count: number | null;
+}
+
+export interface PolicyAckRow {
+  employee_id: number;
+  employee_code: string;
+  name: string;
+  department: string | null;
+  acknowledged_at: string | null;
+}
+
+export interface PolicyAckReport {
+  policy_id: number;
+  revision: number;
+  acknowledged: PolicyAckRow[];
+  pending: PolicyAckRow[];
 }
 
 export interface Letterhead {
@@ -168,6 +188,12 @@ export const hrDocumentsApi = {
   deleteLetter: async (id: number) => {
     await apiClient.delete(`${V1}/issued-letters/${id}`);
   },
+  nextLetterNumber: async (letterType: LetterType, onDate?: string) =>
+    (
+      await apiClient.get<{ letter_number: string }>(`${V1}/issued-letters/next-number`, {
+        params: { letter_type: letterType, on_date: onDate || undefined },
+      })
+    ).data.letter_number,
   letterFileUrl: (id: number) => `${API_BASE_URL}${V1}/issued-letters/${id}/file`,
 
   // ── Company policies ──────────────────────────────────────────────
@@ -182,23 +208,37 @@ export const hrDocumentsApi = {
       version?: string;
       effective_date?: string;
       is_published: boolean;
+      requires_acknowledgement: boolean;
     },
     file: File,
   ) => (await apiClient.post<CompanyPolicy>(`${V1}/policies`, form(fields, file), MULTIPART)).data,
   updatePolicy: async (
     id: number,
     body: Partial<
-      Pick<CompanyPolicy, "title" | "category" | "description" | "version" | "effective_date" | "is_published">
+      Pick<
+        CompanyPolicy,
+        | "title"
+        | "category"
+        | "description"
+        | "version"
+        | "effective_date"
+        | "is_published"
+        | "requires_acknowledgement"
+      >
     >,
   ) => (await apiClient.patch<CompanyPolicy>(`${V1}/policies/${id}`, body)).data,
-  replacePolicyFile: async (id: number, file: File, version?: string) =>
+  replacePolicyFile: async (id: number, file: File, version?: string, notify = true) =>
     (
       await apiClient.put<CompanyPolicy>(
         `${V1}/policies/${id}/file`,
-        form({ version }, file),
+        form({ version, notify }, file),
         MULTIPART,
       )
     ).data,
+  policyAcknowledgements: async (id: number) =>
+    (await apiClient.get<PolicyAckReport>(`${V1}/policies/${id}/acknowledgements`)).data,
+  remindPolicy: async (id: number) =>
+    (await apiClient.post<{ reminded: number }>(`${V1}/policies/${id}/remind`)).data,
   deletePolicy: async (id: number) => {
     await apiClient.delete(`${V1}/policies/${id}`);
   },

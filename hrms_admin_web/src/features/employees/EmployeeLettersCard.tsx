@@ -213,6 +213,12 @@ function CreateLetterModal({
   const [notes, setNotes] = useState("");
   const [previewing, setPreviewing] = useState(false);
 
+  const { data: nextNo } = useQuery({
+    queryKey: ["next-letter-number", letterType, onDate.slice(0, 4)],
+    queryFn: () => hrDocumentsApi.nextLetterNumber(letterType, onDate),
+    enabled: !!templateId,
+  });
+
   const tmpl = useMemo<LetterTemplate | undefined>(
     () => templates.find((t) => t.id === templateId),
     [templates, templateId],
@@ -247,6 +253,8 @@ function CreateLetterModal({
       openBlob(
         await letterTemplatesApi.generate(employee.id, tmpl.id, {
           ...options(),
+          // Show the number it will get; the real one is taken on save.
+          letter_no: letterNo.trim() || nextNo,
           on_date: fmtDate(onDate),
         }),
       );
@@ -327,11 +335,14 @@ function CreateLetterModal({
             <Field label="Title (as the employee sees it)">
               <Input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={200} />
             </Field>
-            <Field label="Letter no. (optional)">
+            <Field
+              label="Letter no."
+              help={letterNo.trim() ? "Using your number." : "Blank: numbered automatically."}
+            >
               <Input
                 value={letterNo}
                 onChange={(e) => setLetterNo(e.target.value)}
-                placeholder="JKT/HR/AP/042/2026"
+                placeholder={nextNo ?? "Automatic"}
                 maxLength={64}
               />
             </Field>

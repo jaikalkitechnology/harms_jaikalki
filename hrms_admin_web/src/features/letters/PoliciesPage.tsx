@@ -3,7 +3,8 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { FileCheck2, FileUp, Pencil, Plus, Trash2 } from "lucide-react";
+import { Link } from "react-router-dom";
+import { BellRing, FileCheck2, FileUp, Pencil, Plus, Trash2 } from "lucide-react";
 
 import {
   Card,
@@ -43,6 +44,7 @@ export default function PoliciesPage() {
   });
   const [editing, setEditing] = useState<CompanyPolicy | "new" | null>(null);
   const [replacing, setReplacing] = useState<CompanyPolicy | null>(null);
+  const [acks, setAcks] = useState<CompanyPolicy | null>(null);
 
   if (isLoading) return <LoadingScreen />;
   const published = policies.filter((p) => p.is_published).length;
@@ -59,7 +61,8 @@ export default function PoliciesPage() {
               Upload policy documents — leave policy, code of conduct, IT policy and so
               on. Published policies are visible to everyone in the app under{" "}
               <strong>More → Documents</strong>, and employees get a notification
-              when one is published.
+              when one is published. Where acceptance is required, each employee taps
+              “I have read and accept” and you can see who hasn't yet.
             </CardDescription>
           </div>
           <PermissionGate permission="employee.update">
@@ -84,6 +87,7 @@ export default function PoliciesPage() {
                   policy={p}
                   onEdit={() => setEditing(p)}
                   onReplace={() => setReplacing(p)}
+                  onAcks={() => setAcks(p)}
                 />
               ))}
             </ul>
@@ -98,6 +102,7 @@ export default function PoliciesPage() {
         />
       )}
       {replacing && <ReplaceFileModal policy={replacing} onClose={() => setReplacing(null)} />}
+      {acks && <AcknowledgementsModal policy={acks} onClose={() => setAcks(null)} />}
     </div>
   );
 }
@@ -106,10 +111,12 @@ function PolicyRow({
   policy: p,
   onEdit,
   onReplace,
+  onAcks,
 }: {
   policy: CompanyPolicy;
   onEdit: () => void;
   onReplace: () => void;
+  onAcks: () => void;
 }) {
   const qc = useQueryClient();
   const refresh = () => qc.invalidateQueries({ queryKey: ["company-policies"] });
@@ -139,6 +146,27 @@ function PolicyRow({
           {p.version && <Chip>{p.version}</Chip>}
           {p.is_published ? <Chip tone="success">Published</Chip> : <Chip tone="warning">Draft</Chip>}
         </div>
+        {p.is_published && p.requires_acknowledgement && p.acknowledged_count != null && (
+          <button
+            type="button"
+            onClick={onAcks}
+            className="mt-1.5 flex items-center gap-2 text-xs text-brand-brown-darker hover:underline"
+          >
+            <span className="h-1.5 w-24 overflow-hidden rounded-full bg-brand-brown-50">
+              <span
+                className="block h-full bg-success"
+                style={{
+                  width: `${
+                    (100 * p.acknowledged_count) /
+                    Math.max(1, p.acknowledged_count + (p.pending_count ?? 0))
+                  }%`,
+                }}
+              />
+            </span>
+            {p.acknowledged_count} of {p.acknowledged_count + (p.pending_count ?? 0)} accepted
+            {p.revision > 1 ? ` (version ${p.revision})` : ""}
+          </button>
+        )}
         {p.description && (
           <p className="mt-1 line-clamp-2 text-sm text-brand-brown-light">{p.description}</p>
         )}
@@ -200,6 +228,7 @@ function PolicyModal({ policy, onClose }: { policy: CompanyPolicy | null; onClos
   const [version, setVersion] = useState(policy?.version ?? "");
   const [effective, setEffective] = useState(policy?.effective_date ?? "");
   const [published, setPublished] = useState(policy?.is_published ?? true);
+  const [needsAck, setNeedsAck] = useState(policy?.requires_acknowledgement ?? true);
   const [file, setFile] = useState<File | null>(null);
 
   const save = useMutation({
@@ -211,6 +240,7 @@ function PolicyModal({ policy, onClose }: { policy: CompanyPolicy | null; onClos
         version: version.trim(),
         effective_date: effective || undefined,
         is_published: published,
+        requires_acknowledgement: needsAck,
       };
       return policy
         ? hrDocumentsApi.updatePolicy(policy.id, {
@@ -284,6 +314,10 @@ function PolicyModal({ policy, onClose }: { policy: CompanyPolicy | null; onClos
           <input type="checkbox" checked={published} onChange={(e) => setPublished(e.target.checked)} />
           Published — visible to all employees
         </label>
+        <label className="col-span-full flex items-center gap-2 text-sm">
+          <input type="checkbox" checked={needsAck} onChange={(e) => setNeedsAck(e.target.checked)} />
+          Employees must accept it (“I have read and accept”)
+        </label>
         <FormActions
           onCancel={onClose}
           onSave={() => save.mutate()}
@@ -300,8 +334,10 @@ function ReplaceFileModal({ policy, onClose }: { policy: CompanyPolicy; onClose:
   const qc = useQueryClient();
   const [file, setFile] = useState<File | null>(null);
   const [version, setVersion] = useState("");
+  const [notify, setNotify] = useState(true);
   const replace = useMutation({
-    mutationFn: () => hrDocumentsApi.replacePolicyFile(policy.id, file!, version.trim() || undefined),
+    mutationFn: () =>
+      hrDocumentsApi.replacePolicyFile(policy.id, file!, version.trim() || undefined, notify),
     onSuccess: () => {
       toast.success("New version uploaded");
       qc.invalidateQueries({ queryKey: ["company-policies"] });
@@ -312,7 +348,11 @@ function ReplaceFileModal({ policy, onClose }: { policy: CompanyPolicy; onClose:
   return (
     <Modal
       title="Upload new version"
-      description={`Replaces the document for “${policy.title}”. Employees see the new file straight away.`}
+      description={
+        policy.requires_acknowledgement
+          ? `Replaces the document for “${policy.title}”. Everyone is asked to accept the new version.`
+          : `Replaces the document for “${policy.title}”. Employees see the new file straight away.`
+      }
       onClose={onClose}
     >
       <div className="grid gap-4">
@@ -322,6 +362,12 @@ function ReplaceFileModal({ policy, onClose }: { policy: CompanyPolicy; onClose:
         <Field label="New version label (optional)" help={policy.version ? `Currently ${policy.version}` : undefined}>
           <Input value={version} maxLength={32} placeholder="v2.0" onChange={(e) => setVersion(e.target.value)} />
         </Field>
+        {policy.is_published && (
+          <label className="flex items-center gap-2 text-sm">
+            <input type="checkbox" checked={notify} onChange={(e) => setNotify(e.target.checked)} />
+            Notify everyone about the new version
+          </label>
+        )}
         <FormActions
           onCancel={onClose}
           onSave={() => replace.mutate()}
@@ -329,6 +375,99 @@ function ReplaceFileModal({ policy, onClose }: { policy: CompanyPolicy; onClose:
           disabled={!file}
           saveLabel="Upload"
         />
+      </div>
+    </Modal>
+  );
+}
+
+function AcknowledgementsModal({ policy, onClose }: { policy: CompanyPolicy; onClose: () => void }) {
+  const qc = useQueryClient();
+  const [tab, setTab] = useState<"pending" | "accepted">("pending");
+  const { data, isLoading } = useQuery({
+    queryKey: ["policy-acks", policy.id],
+    queryFn: () => hrDocumentsApi.policyAcknowledgements(policy.id),
+  });
+  const remind = useMutation({
+    mutationFn: () => hrDocumentsApi.remindPolicy(policy.id),
+    onSuccess: (r) => {
+      toast.success(
+        r.reminded ? `Reminder sent to ${r.reminded} ${r.reminded === 1 ? "person" : "people"}` : "Everyone has accepted",
+      );
+      qc.invalidateQueries({ queryKey: ["policy-acks", policy.id] });
+    },
+    onError: (e) => toast.error(errDetail(e, "Could not send reminders")),
+  });
+  const rows = (tab === "pending" ? data?.pending : data?.acknowledged) ?? [];
+
+  return (
+    <Modal
+      wide
+      title={`Who has accepted “${policy.title}”`}
+      description={
+        policy.revision > 1
+          ? `Version ${policy.revision} — acceptances of earlier versions don't count.`
+          : "Current employees with an app login."
+      }
+      onClose={onClose}
+    >
+      <div className="space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="inline-flex rounded-lg border border-brand-brown-50 p-1">
+            {(
+              [
+                ["pending", `Not yet (${data?.pending.length ?? "…"})`],
+                ["accepted", `Accepted (${data?.acknowledged.length ?? "…"})`],
+              ] as const
+            ).map(([k, label]) => (
+              <button
+                key={k}
+                type="button"
+                onClick={() => setTab(k)}
+                className={
+                  "rounded-md px-3 py-1.5 text-sm " +
+                  (tab === k ? "bg-brand-gold/15 text-brand-brown-darker" : "text-brand-brown-light")
+                }
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          <Button
+            variant="outline"
+            className="gap-2"
+            disabled={remind.isPending || !data?.pending.length}
+            onClick={() => remind.mutate()}
+          >
+            <BellRing className="size-4" /> Remind everyone pending
+          </Button>
+        </div>
+        {isLoading ? (
+          <p className="text-sm text-brand-brown-light">Loading…</p>
+        ) : rows.length === 0 ? (
+          <p className="rounded-lg border border-dashed border-brand-brown-100 px-4 py-6 text-center text-sm text-brand-brown-light">
+            {tab === "pending" ? "Everyone has accepted. 🎉" : "Nobody has accepted yet."}
+          </p>
+        ) : (
+          <ul className="max-h-[50vh] divide-y divide-brand-brown-50 overflow-y-auto">
+            {rows.map((r) => (
+              <li key={r.employee_id} className="flex items-center justify-between gap-3 py-2 text-sm">
+                <span className="min-w-0">
+                  <Link
+                    to={`/employees/${r.employee_id}`}
+                    className="font-medium text-brand-brown-darker hover:underline"
+                  >
+                    {r.name}
+                  </Link>
+                  <span className="ml-2 font-mono text-xs text-brand-brown-light">{r.employee_code}</span>
+                  {r.department && <span className="ml-2 text-xs text-brand-brown-light">· {r.department}</span>}
+                </span>
+                {r.acknowledged_at && (
+                  <span className="shrink-0 text-xs text-success">Accepted {fmtDate(r.acknowledged_at)}</span>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
     </Modal>
   );

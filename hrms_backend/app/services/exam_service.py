@@ -520,6 +520,7 @@ async def list_certificates(
     db: AsyncSession,
     *,
     employee_id: Optional[int] = None,
+    employee_ids: Optional[set[int]] = None,
     course_id: Optional[int] = None,
     is_revoked: Optional[bool] = None,
     search: Optional[str] = None,
@@ -528,9 +529,15 @@ async def list_certificates(
     limit: int = 200,
     offset: int = 0,
 ) -> Sequence[Certificate]:
+    """``employee_ids`` limits the result to those employees (the caller's
+    visibility); None means no limit."""
     from sqlalchemy import or_
 
     stmt = select(Certificate)
+    if employee_ids is not None:
+        if not employee_ids:
+            return []
+        stmt = stmt.where(Certificate.employee_id.in_(employee_ids))
     if employee_id is not None:
         stmt = stmt.where(Certificate.employee_id == employee_id)
     if course_id is not None:

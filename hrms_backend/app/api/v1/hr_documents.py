@@ -38,6 +38,7 @@ from app.models import (
     GeneratedDocument,
     LetterTemplate,
     Notification,
+    PolicyAcknowledgement,
     User,
 )
 from app.models.hr_documents import LETTER_TYPES, POLICY_CATEGORIES
@@ -49,9 +50,12 @@ from app.schemas.hr_documents import (
     EmployeeLetterUpdate,
     LetterheadOut,
     LetterheadUpdate,
+    PolicyAckReport,
+    PolicyAckRow,
 )
 from app.services import employee_service as emp_svc
 from app.services import storage
+from app.services.letter_numbers import next_letter_number
 from app.services.letter_template_service import (
     render_letter_pdf,
     render_letterhead_preview,
@@ -353,6 +357,20 @@ async def list_employee_letters(
     return await _letters_for(db, employee_id, visible_only=False)
 
 
+@router.get("/issued-letters/next-number")
+async def preview_next_letter_number(
+    letter_type: str = Query(default="other"),
+    on_date: Optional[date] = Query(default=None),
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_permission(MANAGE)),
+):
+    """The number the next letter of this type would get."""
+    if letter_type not in LETTER_TYPES:
+        raise ValidationError(f"letter_type must be one of: {', '.join(LETTER_TYPES)}")
+    year = (on_date or date.today()).year
+    return {"letter_number": await next_letter_number(db, letter_type, year)}
+
+
 @router.post(
     "/employees/{employee_id}/issued-letters/from-template/{template_id}",
     response_model=EmployeeLetterOut,
@@ -373,9 +391,12 @@ async def issue_letter_from_template(
         raise NotFoundError("Template not found")
 
     issued_on = payload.on_date or date.today()
-    overrides: dict = {"date": issued_on.strftime("%d %b %Y")}
-    if payload.letter_no:
-        overrides["letter_no"] = payload.letter_no
+    letter_type = payload.letter_type or _CATEGORY_TO_TYPE.get(tmpl.category, "other")
+    # Blank number → next in the sequence for this letter type and year.
+    letter_no = (payload.letter_no or "").strip() or await next_letter_number(
+        db, letter_type, issued_on.year
+    )
+    overrides: dict = {"date": issued_on.strftime("%d %b %Y"), "letter_no": letter_no}
     for k in ("last_working_date", "ctc_amount", "ctc_amount_words"):
         v = getattr(payload, k)
         if v:
@@ -395,9 +416,9 @@ async def issue_letter_from_template(
     )
     letter = EmployeeLetter(
         employee_id=emp.id,
-        letter_type=payload.letter_type or _CATEGORY_TO_TYPE.get(tmpl.category, "other"),
+        letter_type=letter_type,
         title=(payload.title or tmpl.name).strip(),
-        letter_number=payload.letter_no,
+        letter_number=letter_no,
         issued_on=issued_on,
         source="generated",
         template_id=tmpl.id,
@@ -554,31 +575,94 @@ async def _get_policy(db: AsyncSession, policy_id: int) -> CompanyPolicy:
     return obj
 
 
-async def _announce_policy(db: AsyncSession, policy: CompanyPolicy) -> None:
-    """In-app notification to everyone with an app login."""
-    user_ids = (
-        await db.execute(
-            select(Employee.user_id).where(
-                Employee.user_id.is_not(None),
-                Employee.status.not_in(
-                    ("resigned", "terminated", "separated", "inactive")
-                ),
-            )
+_LEFT = ("resigned", "terminated", "separated", "inactive")
+
+
+def _current_staff():
+    """Employees still with the company who can sign in to the app."""
+    return select(Employee).where(
+        Employee.user_id.is_not(None), Employee.status.not_in(_LEFT)
+    )
+
+
+async def _announce_policy(
+    db: AsyncSession,
+    policy: CompanyPolicy,
+    *,
+    title: Optional[str] = None,
+    user_ids: Optional[set[int]] = None,
+) -> int:
+    """In-app notification to everyone with an app login (or just
+    ``user_ids``). Returns how many were sent."""
+    if user_ids is None:
+        user_ids = set(
+            (await db.execute(_current_staff().with_only_columns(Employee.user_id)))
+            .scalars()
+            .all()
         )
-    ).scalars().all()
-    for uid in set(user_ids):
+    body = (
+        "Please read and accept it in More → Documents in the app."
+        if policy.requires_acknowledgement
+        else "Read it in More → Documents in the app."
+    )
+    for uid in user_ids:
         db.add(
             Notification(
                 user_id=uid,
                 channel="in_app",
                 type="policy_published",
-                title=f"New policy: {policy.title}",
-                body="Read it in More → Documents in the app.",
+                title=title or f"New policy: {policy.title}",
+                body=body,
                 data={"policy_id": policy.id},
                 sent_at=_now(),
                 status="sent",
             )
         )
+    return len(user_ids)
+
+
+async def _acks_by_policy(
+    db: AsyncSession, policies: list[CompanyPolicy], employee_ids: Optional[set[int]] = None
+) -> dict[int, dict[int, datetime]]:
+    """policy id → {employee id → accepted at}, current revision only."""
+    if not policies:
+        return {}
+    revision = {p.id: p.revision for p in policies}
+    stmt = select(PolicyAcknowledgement).where(
+        PolicyAcknowledgement.policy_id.in_(list(revision))
+    )
+    if employee_ids is not None:
+        stmt = stmt.where(PolicyAcknowledgement.employee_id.in_(employee_ids))
+    out: dict[int, dict[int, datetime]] = {pid: {} for pid in revision}
+    for a in (await db.execute(stmt)).scalars():
+        if a.revision == revision[a.policy_id]:
+            out[a.policy_id][a.employee_id] = a.acknowledged_at
+    return out
+
+
+async def _policy_out(
+    db: AsyncSession, policies: list[CompanyPolicy], user: User, *, with_counts: bool
+) -> list[CompanyPolicyOut]:
+    me = await emp_svc.get_self_employee(db, user)
+    mine = await _acks_by_policy(db, policies, {me.id}) if me else {}
+    staff: set[int] = set()
+    acks: dict[int, dict[int, datetime]] = {}
+    if with_counts:
+        staff = set(
+            (await db.execute(_current_staff().with_only_columns(Employee.id))).scalars().all()
+        )
+        acks = await _acks_by_policy(db, policies)
+    out = []
+    for p in policies:
+        extra: dict = {
+            "my_acknowledged_at": mine.get(p.id, {}).get(me.id) if me else None
+        }
+        if with_counts:
+            done = len(staff & set(acks.get(p.id, {})))
+            extra["acknowledged_count"] = done
+            extra["pending_count"] = len(staff) - done
+        out.append(CompanyPolicyOut.model_validate(p).model_copy(update=extra))
+    return out
 
 
 @router.get("/policies", response_model=list[CompanyPolicyOut])
@@ -594,7 +678,10 @@ async def list_policies(
     stmt = stmt.order_by(
         CompanyPolicy.effective_date.desc(), CompanyPolicy.id.desc()
     )
-    return (await db.execute(stmt)).scalars().all()
+    policies = list((await db.execute(stmt)).scalars().all())
+    return await _policy_out(
+        db, policies, user, with_counts=include_unpublished and _can_manage(user)
+    )
 
 
 @router.post(
@@ -609,6 +696,7 @@ async def create_policy(
     version: Optional[str] = Form(default=None),
     effective_date: Optional[str] = Form(default=None),
     is_published: bool = Form(default=True),
+    requires_acknowledgement: bool = Form(default=True),
     file: UploadFile = File(...),
     db: AsyncSession = Depends(get_db),
     user: User = Depends(require_permission(MANAGE)),
@@ -636,6 +724,8 @@ async def create_policy(
         mime_type=mime,
         file_size=len(contents),
         is_published=is_published,
+        requires_acknowledgement=requires_acknowledgement,
+        revision=1,
         uploaded_by=user.id,
     )
     db.add(policy)
@@ -657,7 +747,9 @@ async def update_policy(
     policy = await _get_policy(db, policy_id)
     was_published = policy.is_published
     for k, v in payload.model_dump(exclude_unset=True).items():
-        if v is None and k in ("title", "category", "is_published"):
+        if v is None and k in (
+            "title", "category", "is_published", "requires_acknowledgement"
+        ):
             continue
         setattr(policy, k, v)
     if policy.is_published and not was_published:
@@ -672,10 +764,12 @@ async def replace_policy_file(
     policy_id: int,
     file: UploadFile = File(...),
     version: Optional[str] = Form(default=None),
+    notify: bool = Form(default=True),
     db: AsyncSession = Depends(get_db),
     _: User = Depends(require_permission(MANAGE)),
 ):
-    """Upload a revised document for the same policy."""
+    """Upload a revised document for the same policy. Everyone is asked
+    to accept the new version."""
     policy = await _get_policy(db, policy_id)
     contents, mime, name = await _read_upload(file, allowed=DOC_MIME, max_bytes=MAX_BYTES)
     key, _url = storage.upload_fileobj(
@@ -691,6 +785,9 @@ async def replace_policy_file(
     policy.file_size = len(contents)
     if version is not None and version.strip():
         policy.version = version.strip()[:32]
+    policy.revision = (policy.revision or 1) + 1
+    if notify and policy.is_published:
+        await _announce_policy(db, policy, title=f"Policy updated: {policy.title}")
     await db.commit()
     await db.refresh(policy)
     storage.delete(old)
@@ -720,3 +817,96 @@ async def download_policy(
     if not policy.is_published and not _can_manage(user):
         raise NotFoundError("Policy not found")
     return _file_response(_load(policy.file_key), policy.mime_type, policy.file_name)
+
+
+@router.post("/policies/{policy_id}/acknowledge", response_model=CompanyPolicyOut)
+async def acknowledge_policy(
+    policy_id: int,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """The signed-in employee accepts the current version. Safe to repeat."""
+    policy = await _get_policy(db, policy_id)
+    if not policy.is_published:
+        raise NotFoundError("Policy not found")
+    me = await emp_svc.get_self_employee(db, user)
+    if not me:
+        raise ValidationError("No employee record is linked to this login")
+    exists = (
+        await db.execute(
+            select(PolicyAcknowledgement.id).where(
+                PolicyAcknowledgement.policy_id == policy.id,
+                PolicyAcknowledgement.employee_id == me.id,
+                PolicyAcknowledgement.revision == policy.revision,
+            )
+        )
+    ).scalar_one_or_none()
+    if not exists:
+        db.add(
+            PolicyAcknowledgement(
+                policy_id=policy.id,
+                employee_id=me.id,
+                revision=policy.revision,
+                acknowledged_at=_now(),
+            )
+        )
+        await db.commit()
+    return (await _policy_out(db, [policy], user, with_counts=False))[0]
+
+
+def _ack_row(e: Employee, at: Optional[datetime]) -> PolicyAckRow:
+    return PolicyAckRow(
+        employee_id=e.id,
+        employee_code=e.employee_code,
+        name=f"{e.first_name} {e.last_name}".strip(),
+        department=e.department.name if e.department else None,
+        acknowledged_at=at,
+    )
+
+
+@router.get("/policies/{policy_id}/acknowledgements", response_model=PolicyAckReport)
+async def policy_acknowledgements(
+    policy_id: int,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_permission(MANAGE)),
+):
+    """Who has accepted the current version, and who hasn't yet."""
+    policy = await _get_policy(db, policy_id)
+    acks = (await _acks_by_policy(db, [policy]))[policy.id]
+    staff = (
+        await db.execute(_current_staff().order_by(Employee.first_name, Employee.last_name))
+    ).unique().scalars().all()
+    done = sorted(
+        (_ack_row(e, acks[e.id]) for e in staff if e.id in acks),
+        key=lambda r: r.acknowledged_at,
+        reverse=True,
+    )
+    return PolicyAckReport(
+        policy_id=policy.id,
+        revision=policy.revision,
+        acknowledged=done,
+        pending=[_ack_row(e, None) for e in staff if e.id not in acks],
+    )
+
+
+@router.post("/policies/{policy_id}/remind")
+async def remind_policy(
+    policy_id: int,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_permission(MANAGE)),
+):
+    """Nudge everyone who hasn't accepted the current version yet."""
+    policy = await _get_policy(db, policy_id)
+    if not policy.is_published:
+        raise ValidationError("Publish the policy first")
+    acks = (await _acks_by_policy(db, [policy]))[policy.id]
+    pending = {
+        e.user_id
+        for e in (await db.execute(_current_staff())).unique().scalars().all()
+        if e.id not in acks and e.user_id
+    }
+    sent = await _announce_policy(
+        db, policy, title=f"Reminder: please accept {policy.title}", user_ids=pending
+    )
+    await db.commit()
+    return {"reminded": sent}

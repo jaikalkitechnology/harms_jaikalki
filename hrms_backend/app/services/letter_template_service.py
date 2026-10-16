@@ -449,12 +449,15 @@ def render_letter_pdf(
     subject = (
         render_letter_body(template.subject, ctx) if template.subject else None
     )
+    # Templates that already print {{letter_no}} / {{date}} in the body
+    # don't get them repeated in the row above it.
+    used = set(_PLACEHOLDER_RE.findall(template.body))
     return build_letter_pdf(
         title=f"{template.name} · {employee.employee_code}",
         subject=subject,
         body=body,
-        letter_no=ctx.get("letter_no") or "",
-        on_date=ctx["date"],
+        letter_no="" if "letter_no" in used else (ctx.get("letter_no") or ""),
+        on_date="" if "date" in used else ctx["date"],
         letterhead=letterhead,
     )
 
@@ -495,7 +498,8 @@ def build_letter_pdf(
                     s["body"],
                 ),
                 Paragraph(
-                    f"<font name='{FONT_REGULAR}'>Date: {on_date}</font>",
+                    f"<font name='{FONT_REGULAR}'>Date: {on_date}</font>"
+                    if on_date else "",
                     s["right"],
                 ),
             ]],
@@ -507,7 +511,7 @@ def build_letter_pdf(
         ]))
         story.append(head)
         story.append(Spacer(1, 10))
-    else:
+    elif on_date:
         story.append(_para(f"Date: {on_date}", s["right"]))
         story.append(Spacer(1, 6))
 
