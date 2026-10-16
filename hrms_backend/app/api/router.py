@@ -30,6 +30,7 @@ from app.api.v1.exam import router as v1_exam_router
 from app.api.v1.performance import router as v1_performance_router
 from app.api.v1.polish import router as v1_polish_router
 from app.api.v1.reports import router as v1_reports_router
+from app.api.v1.team import router as v1_team_router
 from app.api.v1.trainer import router as v1_trainer_router
 
 # Mounted at /api/v1
@@ -62,6 +63,7 @@ v1_router.include_router(v1_reports_router)
 v1_router.include_router(v1_polish_router)
 v1_router.include_router(v1_launch_router)
 v1_router.include_router(v1_compensation_router)
+v1_router.include_router(v1_team_router)
 
 # Mounted at /api/admin
 admin_router = APIRouter()

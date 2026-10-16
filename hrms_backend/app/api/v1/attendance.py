@@ -268,9 +268,39 @@ async def request_regularization(
 @router.get("/regularize/pending", response_model=list[RegularizationOut])
 async def pending_regularizations(
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(require_permission("approval.act")),
+    user: User = Depends(require_permission("approval.act")),
 ):
-    return await att_svc.list_pending_regularizations(db)
+    # Corrections are decided by the direct manager (or HR / Admin).
+    mine = await emp_svc.visible_employee_ids(db, user, scope="direct")
+    return [
+        r
+        for r in await att_svc.list_pending_regularizations(db)
+        if mine is None or r.employee_id in mine
+    ]
+
+
+async def _check_regularization(db: AsyncSession, user: User, reg_id: int) -> None:
+    from app.models import AttendanceRegularization
+
+    emp_id = (
+        await db.execute(
+            select(AttendanceRegularization.employee_id).where(
+                AttendanceRegularization.id == reg_id
+            )
+        )
+    ).scalar_one_or_none()
+    mine = await emp_svc.visible_employee_ids(db, user, scope="direct")
+    if emp_id is None or (mine is not None and emp_id not in mine):
+        raise NotFoundError("Request not found")
+
+
+async def _check_team_member(db: AsyncSession, user: User, employee_id: int) -> None:
+    """Attendance history: HR / Admin, or anyone above the employee."""
+    if "attendance.view.all" in user.permission_codes:
+        return
+    team = await emp_svc.visible_employee_ids(db, user)
+    if team is not None and employee_id not in team:
+        raise NotFoundError("Employee not found")
 
 
 @router.post("/regularize/{reg_id}/approve", response_model=RegularizationOut)
@@ -280,6 +310,7 @@ async def approve_regularization(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(require_permission("approval.act")),
 ):
+    await _check_regularization(db, user, reg_id)
     return await att_svc.approve_regularization(
         db, reg_id, approver=user, decision_comment=payload.decision_comment
     )
@@ -292,6 +323,7 @@ async def reject_regularization(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(require_permission("approval.act")),
 ):
+    await _check_regularization(db, user, reg_id)
     return await att_svc.reject_regularization(
         db, reg_id, approver=user, decision_comment=payload.decision_comment
     )
@@ -370,8 +402,9 @@ async def employee_calendar(
     year: Optional[int] = None,
     month: Optional[int] = None,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(require_permission("attendance.view.all")),
+    user: User = Depends(get_current_user),
 ):
+    await _check_team_member(db, user, employee_id)
     today = date.today()
     return await att_svc.calendar_for_employee(
         db,
@@ -389,8 +422,9 @@ async def employee_year_summary(
     employee_id: int,
     year: Optional[int] = None,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(require_permission("attendance.view.all")),
+    user: User = Depends(get_current_user),
 ):
+    await _check_team_member(db, user, employee_id)
     today = date.today()
     return await att_svc.year_summary_for_employee(
         db,

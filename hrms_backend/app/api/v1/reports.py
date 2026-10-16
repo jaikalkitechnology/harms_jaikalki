@@ -31,6 +31,16 @@ from app.services import reports_service as reports
 router = APIRouter(prefix="/reports", tags=["reports"])
 
 
+async def _scope(db: AsyncSession, user: User) -> Optional[set[int]]:
+    """Team reports cover the caller's whole team (everyone for
+    ``report.view.all`` holders)."""
+    from app.services import employee_service as emp_svc
+
+    if "report.view.all" in user.permission_codes or "system.config" in user.permission_codes:
+        return None
+    return await emp_svc.visible_employee_ids(db, user)
+
+
 # ─── Standard reports ────────────────────────────────────────────────
 @router.get("/headcount", response_model=HeadcountTrend)
 async def headcount(
@@ -53,18 +63,20 @@ async def attrition(
 @router.get("/department-breakdown", response_model=list[DepartmentBreakdown])
 async def department_breakdown(
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(require_permission("report.view.team")),
+    user: User = Depends(require_permission("report.view.team")),
 ):
-    return await reports.department_breakdown(db)
+    return await reports.department_breakdown(db, employee_ids=await _scope(db, user))
 
 
 @router.get("/attendance", response_model=AttendanceStats)
 async def attendance(
     on_date: Optional[date] = None,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(require_permission("report.view.team")),
+    user: User = Depends(require_permission("report.view.team")),
 ):
-    return await reports.attendance_snapshot(db, on_date=on_date)
+    return await reports.attendance_snapshot(
+        db, on_date=on_date, employee_ids=await _scope(db, user)
+    )
 
 
 @router.get("/payroll-cost", response_model=PayrollCostStats)
@@ -83,9 +95,9 @@ async def payroll_cost(
 @router.get("/compliance", response_model=ComplianceStats)
 async def compliance(
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(require_permission("report.view.team")),
+    user: User = Depends(require_permission("report.view.team")),
 ):
-    return await reports.compliance_overview(db)
+    return await reports.compliance_overview(db, employee_ids=await _scope(db, user))
 
 
 @router.get("/sales", response_model=SalesStats)
@@ -93,10 +105,13 @@ async def sales(
     period_start: Optional[date] = None,
     period_end: Optional[date] = None,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(require_permission("report.view.team")),
+    user: User = Depends(require_permission("report.view.team")),
 ):
     return await reports.sales_overview(
-        db, period_start=period_start, period_end=period_end
+        db,
+        period_start=period_start,
+        period_end=period_end,
+        employee_ids=await _scope(db, user),
     )
 
 
@@ -112,9 +127,9 @@ async def performance(
 @router.get("/verification", response_model=VerificationStats)
 async def verification(
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(require_permission("report.view.team")),
+    user: User = Depends(require_permission("report.view.team")),
 ):
-    return await reports.verification_stats(db)
+    return await reports.verification_stats(db, employee_ids=await _scope(db, user))
 
 
 @router.get("/training", response_model=TrainingStats)

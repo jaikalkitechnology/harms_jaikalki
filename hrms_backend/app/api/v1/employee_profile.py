@@ -95,7 +95,7 @@ async def get_passport(
     user: User = Depends(get_current_user),
 ):
     emp = await svc.get_employee(db, employee_id)
-    allowed = await svc.visible_employee_ids(db, user)
+    allowed = await svc.visible_employee_ids(db, user, scope="direct")
     svc.assert_can_view(user, emp, allowed)
     return (
         await db.execute(
@@ -258,7 +258,7 @@ async def list_nominees(
     user: User = Depends(get_current_user),
 ):
     emp = await svc.get_employee(db, employee_id)
-    allowed = await svc.visible_employee_ids(db, user)
+    allowed = await svc.visible_employee_ids(db, user, scope="direct")
     svc.assert_can_view(user, emp, allowed)
     return (
         await db.execute(
@@ -331,7 +331,7 @@ async def list_family(
     user: User = Depends(get_current_user),
 ):
     emp = await svc.get_employee(db, employee_id)
-    allowed = await svc.visible_employee_ids(db, user)
+    allowed = await svc.visible_employee_ids(db, user, scope="direct")
     svc.assert_can_view(user, emp, allowed)
     return (
         await db.execute(
@@ -404,7 +404,7 @@ async def get_bank(
     user: User = Depends(get_current_user),
 ):
     emp = await svc.get_employee(db, employee_id)
-    allowed = await svc.visible_employee_ids(db, user)
+    allowed = await svc.visible_employee_ids(db, user, scope="direct")
     svc.assert_can_view(user, emp, allowed)
     return (
         await db.execute(

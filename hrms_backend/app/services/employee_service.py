@@ -55,29 +55,102 @@ async def get_self_employee(db: AsyncSession, user: User) -> Optional[Employee]:
     ).scalar_one_or_none()
 
 
-async def visible_employee_ids(db: AsyncSession, user: User) -> Optional[set[int]]:
-    """Return the set of employee IDs the user is allowed to see.
+# ── Reporting hierarchy ────────────────────────────────────────────────
+async def _reporting_tree(db: AsyncSession) -> dict[int, list[int]]:
+    """manager employee id → ids of their direct reports (everyone)."""
+    tree: dict[int, list[int]] = {}
+    for emp_id, manager_id in (
+        await db.execute(select(Employee.id, Employee.reporting_to))
+    ).all():
+        if manager_id:
+            tree.setdefault(manager_id, []).append(emp_id)
+    return tree
 
-    Returns None when the user can see everyone (no filter needed).
+
+def _below(tree: dict[int, list[int]], roots: Iterable[int], depth: Optional[int]) -> set[int]:
+    """Everyone under ``roots`` (not the roots themselves), ``depth``
+    levels down (None = all the way). Safe against reporting loops."""
+    seen: set[int] = set(roots)
+    out: set[int] = set()
+    frontier = list(roots)
+    level = 0
+    while frontier and (depth is None or level < depth):
+        nxt = []
+        for m in frontier:
+            for r in tree.get(m, ()):
+                if r not in seen:
+                    seen.add(r)
+                    out.add(r)
+                    nxt.append(r)
+        frontier = nxt
+        level += 1
+    return out
+
+
+async def subordinate_ids(
+    db: AsyncSession, employee_id: int, *, depth: Optional[int] = None
+) -> set[int]:
+    """Everyone reporting to ``employee_id`` — directly (depth=1) or at
+    any level below (depth=None)."""
+    return _below(await _reporting_tree(db), [employee_id], depth)
+
+
+async def headed_department_ids(db: AsyncSession, user: User) -> set[int]:
+    from app.models import Department
+
+    return set(
+        (
+            await db.execute(select(Department.id).where(Department.head_id == user.id))
+        ).scalars().all()
+    )
+
+
+async def visible_employee_ids(
+    db: AsyncSession, user: User, *, scope: str = "team"
+) -> Optional[set[int]]:
+    """Employee IDs the user may see. None = everyone (Director, HR,
+    Admin, Super Admin).
+
+    ``scope="team"`` — activity (attendance, leave, daily plans, targets,
+    field work …): yourself, everyone below you at any level, and, for a
+    department head, the whole department and everyone below them.
+
+    ``scope="direct"`` — sensitive data (salary, payslips, bank, KYC and
+    family details) and acting on approvals: yourself and your direct
+    reports only.
+
+    Anyone with people reporting to them counts as a manager here; the
+    manager role isn't required.
     """
     if can_see_all(user):
         return None
+    me = await get_self_employee(db, user)
+    if not me:
+        return set()
+    tree = await _reporting_tree(db)
+    if scope == "direct":
+        return {me.id, *tree.get(me.id, ())}
+    roots = {me.id}
+    depts = await headed_department_ids(db, user)
+    if depts:
+        roots.update(
+            (
+                await db.execute(select(Employee.id).where(Employee.department_id.in_(depts)))
+            ).scalars().all()
+        )
+    return roots | _below(tree, roots, None)
 
-    self_emp = await get_self_employee(db, user)
-    ids: set[int] = set()
-    if self_emp:
-        ids.add(self_emp.id)
 
-    if is_manager(user) and self_emp:
-        # Direct reportees
-        rows = (
-            await db.execute(
-                select(Employee.id).where(Employee.reporting_to == self_emp.id)
-            )
-        ).scalars().all()
-        ids.update(rows)
-
-    return ids
+async def has_reports(db: AsyncSession, user: User) -> bool:
+    """True when anyone reports to this user (or they head a department)."""
+    me = await get_self_employee(db, user)
+    if not me:
+        return False
+    if (
+        await db.execute(select(Employee.id).where(Employee.reporting_to == me.id).limit(1))
+    ).first():
+        return True
+    return bool(await headed_department_ids(db, user))
 
 
 def assert_can_view(user: User, target: Employee, allowed_ids: Optional[set[int]]) -> None:
@@ -124,7 +197,8 @@ async def leave_visible_employee_ids(
     Otherwise the union of the manager's reportees (and self) and every
     employee in a department this user is mapped to approve for.
     """
-    base = await visible_employee_ids(db, user)
+    # Deciding leave stays with the direct manager (plus mapped approvers).
+    base = await visible_employee_ids(db, user, scope="direct")
     if base is None:
         return None
     ids: set[int] = set(base)

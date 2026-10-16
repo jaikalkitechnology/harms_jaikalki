@@ -69,6 +69,9 @@ import '../../features/sales/pages/sales_pipeline_page.dart'
     deferred as sales_pipeline;
 import '../../features/sales/pages/sales_targets_page.dart'
     deferred as sales_targets;
+import '../../features/team/pages/my_team_page.dart' deferred as my_team;
+import '../../features/team/pages/team_member_page.dart'
+    deferred as team_member;
 import '../../features/trainer/pages/sessions_page.dart' deferred as sessions;
 import '../../features/trainer/pages/trainer_marketplace_page.dart'
     deferred as trainer_marketplace;
@@ -121,6 +124,8 @@ class AppRoutes {
   static const exams = '/exams';
   static const myCertificates = '/exams/me/certificates';
   static const documents = '/documents';
+  static const myTeam = '/team';
+  static const teamMember = '/team/member';
   static const visitors = '/visitors';
   static const visitorRegister = '/visitors/new';
   static const visitorScan = '/visitors/scan';
@@ -353,6 +358,26 @@ GoRouter buildRouter(AuthBloc authBloc) {
             exam_taking.loadLibrary,
             (_) => exam_taking.ExamTakingPage(
                   examId: int.parse(state.pathParameters['id']!),
+                )),
+      ),
+      GoRoute(
+        path: AppRoutes.myTeam,
+        builder: (_, state) {
+          final q = state.uri.queryParameters;
+          return DeferredPage(
+              my_team.loadLibrary,
+              (_) => my_team.MyTeamPage(
+                    rootId: int.tryParse(q['root'] ?? ''),
+                    rootName: q['name'],
+                  ));
+        },
+      ),
+      GoRoute(
+        path: '${AppRoutes.teamMember}/:id',
+        builder: (_, state) => DeferredPage(
+            team_member.loadLibrary,
+            (_) => team_member.TeamMemberPage(
+                  employeeId: int.parse(state.pathParameters['id']!),
                 )),
       ),
       GoRoute(

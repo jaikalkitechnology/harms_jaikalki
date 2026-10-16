@@ -143,7 +143,7 @@ async def list_pending_for_user(
     request_type: Optional[str] = None,
     limit: int = 200,
 ) -> Sequence[Approval]:
-    visible = await emp_svc.visible_employee_ids(db, user)
+    visible = await emp_svc.visible_employee_ids(db, user, scope="direct")
 
     stmt = (
         select(Approval)
@@ -188,7 +188,7 @@ async def list_history_for_user(
 
 
 async def counts_by_type(db: AsyncSession, user: User) -> list[dict]:
-    visible = await emp_svc.visible_employee_ids(db, user)
+    visible = await emp_svc.visible_employee_ids(db, user, scope="direct")
     stmt = (
         select(Approval.request_type, func.count(Approval.id))
         .where(Approval.status == "pending")

@@ -80,11 +80,20 @@ async def list_leads(
     customer_id: Optional[int] = None,
     search: Optional[str] = None,
     won_status: Optional[str] = None,
+    assigned_in: Optional[set[int]] = None,
+    include_unassigned: bool = False,
     limit: int = 500,
 ) -> Sequence[Lead]:
+    """``assigned_in`` limits to leads owned by those employees (the
+    caller's team); None = no limit."""
     from sqlalchemy import or_
 
     stmt = select(Lead)
+    if assigned_in is not None:
+        owned = Lead.assigned_to.in_(assigned_in or {-1})
+        stmt = stmt.where(
+            or_(owned, Lead.assigned_to.is_(None)) if include_unassigned else owned
+        )
     if assigned_to is not None:
         stmt = stmt.where(Lead.assigned_to == assigned_to)
     if stage:
@@ -334,10 +343,20 @@ async def list_pending_won_leads(db: AsyncSession) -> Sequence[Lead]:
 
 
 async def pipeline_kanban(
-    db: AsyncSession, *, assigned_to: Optional[int] = None
+    db: AsyncSession,
+    *,
+    assigned_to: Optional[int] = None,
+    assigned_in: Optional[set[int]] = None,
+    include_unassigned: bool = False,
 ) -> list[dict]:
     stages = ["new", "contacted", "qualified", "proposal", "negotiation", "won", "lost"]
-    leads = await list_leads(db, assigned_to=assigned_to, limit=500)
+    leads = await list_leads(
+        db,
+        assigned_to=assigned_to,
+        assigned_in=assigned_in,
+        include_unassigned=include_unassigned,
+        limit=500,
+    )
     by_stage: dict[str, list[Lead]] = {s: [] for s in stages}
     for ld in leads:
         by_stage.setdefault(ld.stage, []).append(ld)
@@ -604,8 +623,11 @@ async def list_orders(
     employee_id: Optional[int] = None,
     customer_id: Optional[int] = None,
     status: Optional[str] = None,
+    employee_ids: Optional[set[int]] = None,
 ) -> Sequence[SalesOrder]:
     stmt = select(SalesOrder)
+    if employee_ids is not None:
+        stmt = stmt.where(SalesOrder.employee_id.in_(employee_ids or {-1}))
     if employee_id is not None:
         stmt = stmt.where(SalesOrder.employee_id == employee_id)
     if customer_id is not None:
@@ -674,8 +696,11 @@ async def list_targets(
     period_type: Optional[str] = None,
     from_date=None,
     to_date=None,
+    employee_ids: Optional[set[int]] = None,
 ) -> Sequence[SalesTarget]:
     stmt = select(SalesTarget)
+    if employee_ids is not None:
+        stmt = stmt.where(SalesTarget.employee_id.in_(employee_ids or {-1}))
     if employee_id is not None:
         stmt = stmt.where(SalesTarget.employee_id == employee_id)
     if period_type:

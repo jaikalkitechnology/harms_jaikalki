@@ -130,7 +130,7 @@ async def my_dashboard(
         }
     )
     if is_approver:
-        visible = await emp_svc.visible_employee_ids(db, user)
+        visible = await emp_svc.visible_employee_ids(db, user, scope="direct")
         approvals_stmt = (
             select(Approval).where(Approval.status == "pending")
         )
@@ -151,7 +151,10 @@ async def my_dashboard(
         ]
 
     # ── Manager-specific ──────────────────────────────────────────────
-    if RoleEnum.MANAGER.value in user.role_codes and self_emp:
+    if self_emp and (
+        RoleEnum.MANAGER.value in user.role_codes
+        or await emp_svc.has_reports(db, user)
+    ):
         team = (
             await db.execute(
                 select(Employee).where(Employee.reporting_to == self_emp.id)

@@ -239,12 +239,9 @@ async def aggregate_feedback(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    # Subject themselves or HR/manager can view
-    emp = await _self_employee(db, user)
-    if emp.id != employee_id and not (
-        set(user.role_codes)
-        & {"super_admin", "director", "hr", "admin", "manager"}
-    ):
+    # The employee, anyone above them, or HR / Admin / Director.
+    team = await emp_svc.visible_employee_ids(db, user)
+    if team is not None and employee_id not in team:
         raise ForbiddenError("Not allowed")
     return await perf.aggregate_feedback(
         db, subject_employee_id=employee_id, cycle_id=cycle_id

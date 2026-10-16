@@ -1,3 +1,4 @@
+from decimal import Decimal
 from typing import Optional, Sequence
 
 from fastapi import APIRouter, Depends, File, Query, UploadFile, status
@@ -123,7 +124,24 @@ async def get_employee(
     emp = await svc.get_employee(db, employee_id)
     allowed = await svc.visible_employee_ids(db, user)
     svc.assert_can_view(user, emp, allowed)
-    return emp
+    direct = await svc.visible_employee_ids(db, user, scope="direct")
+    if direct is None or emp.id in direct:
+        return emp
+    # Further down the chain: the profile without pay, statutory IDs and
+    # date of birth (those stay with the direct manager and HR).
+    return EmployeeOut.model_validate(emp).model_copy(
+        update={
+            "salary_template": None,
+            "ctc_annual": Decimal(0),
+            "pf_basic_cap_override": None,
+            "pf_number": None,
+            "uan_number": None,
+            "esic_number": None,
+            "insurance_company": None,
+            "insurance_policy_no": None,
+            "date_of_birth": None,
+        }
+    )
 
 
 @router.post("", response_model=EmployeeOut, status_code=status.HTTP_201_CREATED)

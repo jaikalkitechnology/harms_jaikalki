@@ -6,7 +6,7 @@ from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 from typing import Optional, Sequence
 
-from sqlalchemy import and_, func, or_, select
+from sqlalchemy import and_, func, or_, select, true
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import ConflictError, NotFoundError
@@ -125,14 +125,20 @@ async def attrition_stats(
     }
 
 
+def _in(col, ids: Optional[set[int]]):
+    """Filter for "only these employees" (None = everyone)."""
+    return true() if ids is None else col.in_(ids or {-1})
+
+
 async def department_breakdown(
-    db: AsyncSession,
+    db: AsyncSession, *, employee_ids: Optional[set[int]] = None
 ) -> list[dict]:
     rows = (
         await db.execute(
             select(Department.name, func.count(Employee.id))
             .join(Employee, Employee.department_id == Department.id)
             .where(Employee.status == "active")
+            .where(_in(Employee.id, employee_ids))
             .group_by(Department.name)
         )
     ).all()
@@ -143,18 +149,24 @@ async def department_breakdown(
 
 # ── Attendance ───────────────────────────────────────────────────────
 async def attendance_snapshot(
-    db: AsyncSession, *, on_date: Optional[date] = None
+    db: AsyncSession,
+    *,
+    on_date: Optional[date] = None,
+    employee_ids: Optional[set[int]] = None,
 ) -> dict:
     target = on_date or _today()
     total = (
         await db.execute(
-            select(func.count(Employee.id)).where(Employee.status == "active")
+            select(func.count(Employee.id))
+            .where(Employee.status == "active")
+            .where(_in(Employee.id, employee_ids))
         )
     ).scalar() or 0
     rows = (
         await db.execute(
             select(Attendance.status, func.count(Attendance.id))
             .where(Attendance.date == target)
+            .where(_in(Attendance.employee_id, employee_ids))
             .group_by(Attendance.status)
         )
     ).all()
@@ -217,7 +229,9 @@ async def payroll_cost(
 
 
 # ── Compliance ───────────────────────────────────────────────────────
-async def compliance_overview(db: AsyncSession) -> dict:
+async def compliance_overview(
+    db: AsyncSession, *, employee_ids: Optional[set[int]] = None
+) -> dict:
     mandatory = (
         await db.execute(
             select(Course)
@@ -228,7 +242,9 @@ async def compliance_overview(db: AsyncSession) -> dict:
     mandatory_ids = [c.id for c in mandatory]
     employees_total = (
         await db.execute(
-            select(func.count(Employee.id)).where(Employee.status == "active")
+            select(func.count(Employee.id))
+            .where(Employee.status == "active")
+            .where(_in(Employee.id, employee_ids))
         )
     ).scalar() or 0
     if not mandatory_ids or employees_total == 0:
@@ -255,7 +271,9 @@ async def compliance_overview(db: AsyncSession) -> dict:
 
     employees = (
         await db.execute(
-            select(Employee.id).where(Employee.status == "active")
+            select(Employee.id)
+            .where(Employee.status == "active")
+            .where(_in(Employee.id, employee_ids))
         )
     ).scalars().all()
     fully = 0
@@ -286,6 +304,7 @@ async def sales_overview(
     *,
     period_start: Optional[date] = None,
     period_end: Optional[date] = None,
+    employee_ids: Optional[set[int]] = None,
 ) -> dict:
     today = _today()
     end = period_end or today
@@ -295,6 +314,7 @@ async def sales_overview(
             select(Lead)
             .where(Lead.created_at >= datetime.combine(start, datetime.min.time()))
             .where(Lead.created_at <= datetime.combine(end, datetime.max.time()))
+            .where(_in(Lead.assigned_to, employee_ids))
         )
     ).scalars().all()
     leads_count = len(leads)
@@ -306,6 +326,7 @@ async def sales_overview(
             select(func.coalesce(func.sum(Quote.total_amount), 0))
             .where(Quote.created_at >= datetime.combine(start, datetime.min.time()))
             .where(Quote.created_at <= datetime.combine(end, datetime.max.time()))
+            .where(_in(Quote.employee_id, employee_ids))
         )
     ).scalar() or Decimal("0")
     orders = (
@@ -313,6 +334,7 @@ async def sales_overview(
             select(func.coalesce(func.sum(SalesOrder.total_amount), 0))
             .where(SalesOrder.placed_at >= datetime.combine(start, datetime.min.time()))
             .where(SalesOrder.placed_at <= datetime.combine(end, datetime.max.time()))
+            .where(_in(SalesOrder.employee_id, employee_ids))
         )
     ).scalar() or Decimal("0")
 
@@ -384,10 +406,13 @@ async def performance_overview(
 
 
 # ── Verification & training ──────────────────────────────────────────
-async def verification_stats(db: AsyncSession) -> dict:
+async def verification_stats(
+    db: AsyncSession, *, employee_ids: Optional[set[int]] = None
+) -> dict:
     rows = (
         await db.execute(
             select(Verification.status, func.count(Verification.id))
+            .where(_in(Verification.assigned_to, employee_ids))
             .group_by(Verification.status)
         )
     ).all()
@@ -399,7 +424,9 @@ async def verification_stats(db: AsyncSession) -> dict:
 
     completed_rows = (
         await db.execute(
-            select(Verification).where(Verification.status == "completed")
+            select(Verification)
+            .where(Verification.status == "completed")
+            .where(_in(Verification.assigned_to, employee_ids))
         )
     ).scalars().all()
     durations = []
