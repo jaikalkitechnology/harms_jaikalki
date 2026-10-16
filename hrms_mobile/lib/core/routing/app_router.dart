@@ -8,6 +8,8 @@ import '../../features/approvals/pages/approvals_inbox_page.dart';
 import '../../features/attendance/pages/attendance_home_page.dart';
 import '../../features/auth/presentation/bloc/auth_bloc.dart';
 import '../../features/auth/presentation/pages/login_page.dart';
+import '../../features/documents/pages/documents_page.dart'
+    deferred as documents;
 import '../../features/dwp/pages/dwp_form_page.dart';
 import '../../features/dwp/pages/dwp_home_page.dart';
 import '../../features/employees/pages/employee_detail_page.dart';
@@ -118,6 +120,7 @@ class AppRoutes {
   static const lmsBadges = '/lms/badges';
   static const exams = '/exams';
   static const myCertificates = '/exams/me/certificates';
+  static const documents = '/documents';
   static const visitors = '/visitors';
   static const visitorRegister = '/visitors/new';
   static const visitorScan = '/visitors/scan';
@@ -351,6 +354,11 @@ GoRouter buildRouter(AuthBloc authBloc) {
             (_) => exam_taking.ExamTakingPage(
                   examId: int.parse(state.pathParameters['id']!),
                 )),
+      ),
+      GoRoute(
+        path: AppRoutes.documents,
+        builder: (_, __) => DeferredPage(
+            documents.loadLibrary, (_) => documents.DocumentsPage()),
       ),
       GoRoute(
         path: AppRoutes.myCertificates,

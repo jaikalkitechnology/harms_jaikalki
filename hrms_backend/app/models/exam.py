@@ -279,5 +279,10 @@ class Certificate(Base, TimestampMixin):
         Numeric(5, 2), nullable=True
     )
     pdf_url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    # Set when HR uploaded the certificate instead of generating it; the
+    # PDF endpoint then serves this file.
+    file_key: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    file_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    mime_type: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     is_revoked: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     revoked_reason: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)

@@ -54,6 +54,9 @@ ALWAYS_ON: set[str] = {
     # Reporting managers' view of leaving team members (asset NOC); the
     # app shows it only to people who manage a team.
     "team_exits",
+    # My letters (offer / appointment / confirmation …) and company
+    # policies — every employee has these.
+    "documents",
 }
 
 

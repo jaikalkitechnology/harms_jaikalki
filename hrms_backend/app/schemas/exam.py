@@ -228,9 +228,16 @@ class AnswerOut(BaseModel):
     time_taken_seconds: int
 
 
-_CERTIFICATE_TYPES_RE = (
-    "^(achievement|appreciation|completion|participation|excellence|training|custom)$"
+CERTIFICATE_TYPES = (
+    "achievement",
+    "appreciation",
+    "completion",
+    "participation",
+    "excellence",
+    "training",
+    "custom",
 )
+_CERTIFICATE_TYPES_RE = "^(" + "|".join(CERTIFICATE_TYPES) + ")$"
 
 
 # ── Certificates ─────────────────────────────────────────────────────
@@ -248,6 +255,9 @@ class CertificateOut(BaseModel):
     expiry_date: Optional[date]
     score_percentage: Optional[Decimal]
     pdf_url: Optional[str]
+    # Set for uploaded (not generated) certificates.
+    file_name: Optional[str] = None
+    mime_type: Optional[str] = None
     is_revoked: bool
     revoked_reason: Optional[str] = None
 

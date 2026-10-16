@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import {
   Building,
   CalendarDays,
   Clock,
   Crosshair,
+  FileText,
   KeyRound,
   MapPin,
   Save,
@@ -41,6 +43,7 @@ import { useThemeStore, type ThemeMode } from "@/store/theme";
 import { cn } from "@/lib/utils";
 import { fmtIst } from "@/lib/datetime";
 import { PayrollSettingsTab } from "./PayrollSettingsTab";
+import { LetterheadSettingsTab } from "./LetterheadSettingsTab";
 
 type Tab =
   | "account"
@@ -50,13 +53,15 @@ type Tab =
   | "office"
   | "leave"
   | "attendance"
-  | "payroll";
+  | "payroll"
+  | "letterhead";
 
 export default function SettingsPage() {
-  const [tab, setTab] = useState<Tab>("account");
+  const [params, setParams] = useSearchParams();
   const role = useAuthStore((s) => s.role);
   const isSuper = role === "super_admin";
   const canPayroll = useAuthStore((s) => s.hasPermission("payroll.run"));
+  const canLetters = useAuthStore((s) => s.hasPermission("employee.update"));
 
   const tabs: Array<{ id: Tab; label: string; icon: typeof User }> = [
     { id: "account", label: "Account", icon: User },
@@ -72,8 +77,22 @@ export default function SettingsPage() {
     ...(isSuper || canPayroll
       ? ([{ id: "payroll", label: "Payroll", icon: Wallet }] as const)
       : []),
+    ...(isSuper || canLetters
+      ? ([{ id: "letterhead", label: "Letterhead", icon: FileText }] as const)
+      : []),
     { id: "company", label: "Company", icon: Building },
   ];
+  // The tab lives in the URL so other pages can link straight to one.
+  const requested = params.get("tab") as Tab | null;
+  const tab: Tab = tabs.some((t) => t.id === requested) ? requested! : "account";
+  const setTab = (id: Tab) =>
+    setParams(
+      (p) => {
+        p.set("tab", id);
+        return p;
+      },
+      { replace: true },
+    );
 
   return (
     <div className="space-y-6">
@@ -108,6 +127,7 @@ export default function SettingsPage() {
       {tab === "leave" && <LeavePolicyTab />}
       {tab === "attendance" && <AttendanceTab />}
       {tab === "payroll" && <PayrollSettingsTab />}
+      {tab === "letterhead" && <LetterheadSettingsTab />}
       {tab === "company" && <CompanyTab />}
     </div>
   );

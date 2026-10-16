@@ -740,7 +740,11 @@ async def download_separation_pdf(
 
     res = await resignation_service.get(db, resignation_id)
     emp = await emp_svc.get_employee(db, res.employee_id)
-    pdf = resignation_service.render_separation_pdf(res, emp)
+    from app.services.letterhead import get_letterhead
+
+    pdf = resignation_service.render_separation_pdf(
+        res, emp, await get_letterhead(db)
+    )
     kind = (
         "termination" if getattr(res, "separation_type", "resignation") == "termination"
         else "resignation"
@@ -772,7 +776,11 @@ async def email_separation_letter(
 
     res = await resignation_service.get(db, resignation_id)
     emp = await emp_svc.get_employee(db, res.employee_id)
-    pdf = resignation_service.render_separation_pdf(res, emp)
+    from app.services.letterhead import get_letterhead
+
+    pdf = resignation_service.render_separation_pdf(
+        res, emp, await get_letterhead(db)
+    )
 
     to_email = (payload.to or emp.personal_email or "").strip()
     if not to_email:

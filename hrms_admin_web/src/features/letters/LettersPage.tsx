@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { Link } from "react-router-dom";
 import { FileText, Plus, Save, Trash2, X } from "lucide-react";
 
 import {
@@ -61,8 +62,12 @@ export default function LettersPage() {
               <code className="font-mono text-xs">{`{{placeholder}}`}</code>{" "}
               markers — they're substituted from the employee record
               when the letter is generated from the employee&apos;s
-              profile page. The Jaikalki letterhead is applied
-              automatically to every PDF.
+              profile page (Documents tab). The company letterhead is
+              applied automatically to every PDF —{" "}
+              <Link to="/settings?tab=letterhead" className="text-brand-gold-dark hover:underline">
+                edit its header, footer and logo
+              </Link>
+              .
             </CardDescription>
           </div>
           <Button onClick={() => setShowNew(true)} className="shrink-0">

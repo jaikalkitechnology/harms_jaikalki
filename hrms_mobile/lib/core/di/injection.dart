@@ -13,6 +13,7 @@ import '../../features/auth/presentation/bloc/auth_bloc.dart';
 import '../../features/dashboard/data/dashboard_api.dart';
 import '../../features/dwp/data/dwp_api.dart';
 import '../../features/employees/data/employee_api.dart';
+import '../../features/documents/data/documents_api.dart';
 import '../../features/exam/data/exam_api.dart';
 import '../../features/field/data/field_api.dart';
 import '../../features/intern_expenses/data/intern_expense_api.dart';
@@ -87,6 +88,7 @@ Future<void> setupDependencies() async {
   sl.registerLazySingleton<ReportsApi>(() => ReportsApi(sl()));
   sl.registerLazySingleton<PolishApi>(() => PolishApi(sl()));
   sl.registerLazySingleton<LaunchApi>(() => LaunchApi(sl()));
+  sl.registerLazySingleton<DocumentsApi>(() => DocumentsApi(sl()));
 
   // Per-department mobile module whitelist (caches the More-menu gating
   // decision in SharedPreferences and refreshes from the API on launch).

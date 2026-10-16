@@ -20,6 +20,7 @@ from app.schemas.letter_template import (
     LetterTemplateUpdate,
 )
 from app.services import employee_service as emp_svc
+from app.services.letterhead import get_letterhead
 from app.services.letter_template_service import (
     render_letter_pdf,
     seed_default_templates,
@@ -159,7 +160,9 @@ async def generate_letter(
         if options.overrides:
             overrides.update(options.overrides)
 
-    pdf = render_letter_pdf(tmpl, emp, overrides=overrides)
+    pdf = render_letter_pdf(
+        tmpl, emp, overrides=overrides, letterhead=await get_letterhead(db)
+    )
     return Response(
         content=pdf,
         media_type="application/pdf",

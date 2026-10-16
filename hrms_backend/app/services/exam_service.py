@@ -580,6 +580,9 @@ async def admin_issue_certificate(
         issued_date=payload.get("issued_date") or _today(),
         expiry_date=payload.get("expiry_date"),
         score_percentage=payload.get("score_percentage"),
+        file_key=payload.get("file_key"),
+        file_name=payload.get("file_name"),
+        mime_type=payload.get("mime_type"),
     )
     db.add(cert)
     await db.commit()

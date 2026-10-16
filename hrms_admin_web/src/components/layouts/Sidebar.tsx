@@ -26,6 +26,7 @@ import {
   CalendarDays,
   Coins,
   FileText,
+  FileCheck2,
   Gavel,
   Scale,
   LayoutDashboard,
@@ -102,6 +103,12 @@ const SECTIONS: NavSection[] = [
         to: "/letters",
         icon: FileText,
         permission: "employee.view.all",
+      },
+      {
+        label: "Policies",
+        to: "/policies",
+        icon: FileCheck2,
+        permission: "employee.update",
       },
       {
         label: "Shifts",

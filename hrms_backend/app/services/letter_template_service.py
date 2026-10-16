@@ -31,6 +31,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.models import Employee, LetterTemplate
+from app.services import storage
+from app.services.letterhead import DEFAULTS as LETTERHEAD_DEFAULTS
 from app.services.jaikalki_documents import (
     BRAND_BROWN_DARK,
     BRAND_GOLD,
@@ -47,26 +49,10 @@ _log = logging.getLogger(__name__)
 # Reproduces the official "New Letterhead Jaikalki" reference layout:
 # logo · company name · CIN · GST · contact line · regd-office line on
 # top; corporate-office block bottom-right; faint sunflower watermark
-# in the centre.
-COMPANY_LEGAL_NAME = "JAIKALKI TECHNOLOGY PRIVATE LIMITED"
-COMPANY_CIN = "U62091MH2025PTC438336"
-COMPANY_GST = "27AAGCJ7035F1ZK"
-COMPANY_PHONE = "+91 9136914963"
-COMPANY_EMAIL = "info@jaikalki.com"
-COMPANY_WEBSITE = "www.jaikalki.com"
+# in the centre. The text and logo are editable in Settings → Letterhead
+# (see app.services.letterhead); these are the defaults.
+COMPANY_LEGAL_NAME = LETTERHEAD_DEFAULTS["company_name"]
 COMPANY_REGD_OFFICE_PREFIX = "Regd. Office:"
-COMPANY_REGD_OFFICE_TEXT = (
-    "Sh N B-2, First Floor, Mahavir Nagar, Deepak Hospital Road Lane, "
-    "Mira Road East, Thane, Maharashtra, India, 401107."
-)
-COMPANY_CORPORATE_OFFICE_LINES = [
-    "Corporate Office:",
-    "Sh N B-2, First Floor, Anand India Business Hub,",
-    "Behind Shree Mahalaxmi Hospital,",
-    "Deepak Hospital Road,",
-    "Mira Road East,",
-    "Thane – 401107.",
-]
 
 
 def _letterhead_path() -> Optional[Path]:
@@ -180,17 +166,18 @@ _CORNER_BROWN = colors.HexColor("#2D1810")
 
 def _draw_spaced(canvas, text: str, x: float, y: float, *,
                   font: str, size: float, char_space: float = 0.0,
-                  color=_TINTED_BROWN, right: bool = False) -> None:
+                  color=_TINTED_BROWN, right: bool = False,
+                  center: bool = False) -> None:
     """Draw a string with explicit char-spacing (used for the
     letter-spaced look in the official letterhead). ReportLab applies
     char spacing only through a text object, so we measure width via
     ``stringWidth`` to support right-alignment."""
     from reportlab.pdfbase.pdfmetrics import stringWidth
 
-    if right:
+    if right or center:
         # Compute total width including the added char spacing.
         w = stringWidth(text, font, size) + char_space * max(0, len(text) - 1)
-        start = x - w
+        start = x - (w / 2 if center else w)
     else:
         start = x
     text_obj = canvas.beginText(start, y)
@@ -201,9 +188,65 @@ def _draw_spaced(canvas, text: str, x: float, y: float, *,
     canvas.drawText(text_obj)
 
 
-def _letterhead_decorator(letterhead: Optional[Path], icon: Optional[Path]):
-    """Returns a canvas callback that renders the Jaikalki letterhead
-    (header + watermark + footer) on every page."""
+def _wrap_spaced(
+    text: str, font: str, size: float, char_space: float, width: float
+) -> list[str]:
+    """Word-wrap for letter-spaced text (``simpleSplit`` ignores the
+    extra char spacing)."""
+    from reportlab.pdfbase.pdfmetrics import stringWidth
+
+    def w(t: str) -> float:
+        return stringWidth(t, font, size) + char_space * max(0, len(t) - 1)
+
+    lines: list[str] = []
+    cur = ""
+    for word in text.split():
+        trial = f"{cur} {word}".strip()
+        if cur and w(trial) > width:
+            lines.append(cur)
+            cur = word
+        else:
+            cur = trial
+    if cur:
+        lines.append(cur)
+    return lines
+
+
+def _image(source) -> Optional[ImageReader]:
+    if source is None:
+        return None
+    try:
+        if isinstance(source, (bytes, bytearray)):
+            return ImageReader(io.BytesIO(bytes(source)))
+        return ImageReader(str(source))
+    except Exception as exc:  # pragma: no cover — bad upload
+        _log.warning("Letterhead logo unreadable: %s", exc)
+        return None
+
+
+def letterhead_images(letterhead: Optional[dict]):
+    """(watermark, header logo) for a letterhead config. An uploaded logo
+    replaces both; otherwise the bundled Jaikalki marks are used."""
+    key = (letterhead or {}).get("logo_key")
+    if key:
+        try:
+            img = _image(storage.read_bytes(key))
+            if img is not None:
+                return img, img
+        except Exception as exc:
+            _log.warning("Letterhead logo %s missing: %s", key, exc)
+    return _image(_letterhead_path()), _image(_icon_path())
+
+
+def _letterhead_decorator(
+    watermark: Optional[ImageReader],
+    icon: Optional[ImageReader],
+    letterhead: Optional[dict] = None,
+):
+    """Returns a canvas callback that renders the letterhead (header +
+    watermark + footer) on every page, from the Settings → Letterhead
+    values in ``letterhead`` (defaults when None)."""
+    lh = {**LETTERHEAD_DEFAULTS, **(letterhead or {})}
 
     def _draw(canvas, doc):
         canvas.saveState()
@@ -212,35 +255,38 @@ def _letterhead_decorator(letterhead: Optional[Path], icon: Optional[Path]):
         # ── Decorative corner shapes ──────────────────────────────
         # Small dark-brown triangles in two opposing corners. Kept
         # compact so they never clip the company-info text.
-        canvas.setFillColor(_CORNER_BROWN)
-        canvas.setStrokeColor(_CORNER_BROWN)
-        # Top-right
-        p = canvas.beginPath()
-        p.moveTo(page_w, page_h)
-        p.lineTo(page_w - 2.4 * cm, page_h)
-        p.lineTo(page_w, page_h - 1.8 * cm)
-        p.close()
-        canvas.drawPath(p, fill=1, stroke=0)
-        # Bottom-left — tiny accent only, so the confidentiality line
-        # and page number both clear the brown wedge.
-        p = canvas.beginPath()
-        p.moveTo(0, 0)
-        p.lineTo(1.2 * cm, 0)
-        p.lineTo(0, 0.7 * cm)
-        p.close()
-        canvas.drawPath(p, fill=1, stroke=0)
+        if lh.get("show_corner_accents", True):
+            canvas.setFillColor(_CORNER_BROWN)
+            canvas.setStrokeColor(_CORNER_BROWN)
+            # Top-right
+            p = canvas.beginPath()
+            p.moveTo(page_w, page_h)
+            p.lineTo(page_w - 2.4 * cm, page_h)
+            p.lineTo(page_w, page_h - 1.8 * cm)
+            p.close()
+            canvas.drawPath(p, fill=1, stroke=0)
+            # Bottom-left — tiny accent only, so the confidentiality
+            # line and page number both clear the brown wedge.
+            p = canvas.beginPath()
+            p.moveTo(0, 0)
+            p.lineTo(1.2 * cm, 0)
+            p.lineTo(0, 0.7 * cm)
+            p.close()
+            canvas.drawPath(p, fill=1, stroke=0)
 
         # ── Centre watermark (faint full logo) ────────────────────
-        if letterhead is not None:
+        if watermark is not None and lh.get("show_watermark", True):
             try:
-                img = ImageReader(str(letterhead))
-                iw, ih = img.getSize()
+                iw, ih = watermark.getSize()
                 aspect = (iw / ih) if ih else 1.0
                 wm_w = 12 * cm
                 wm_h = wm_w / aspect
+                if wm_h > 14 * cm:  # tall logos: cap the height
+                    wm_h = 14 * cm
+                    wm_w = wm_h * aspect
                 canvas.setFillAlpha(0.08)
                 canvas.drawImage(
-                    img,
+                    watermark,
                     (page_w - wm_w) / 2,
                     (page_h - wm_h) / 2,
                     width=wm_w,
@@ -255,15 +301,13 @@ def _letterhead_decorator(letterhead: Optional[Path], icon: Optional[Path]):
         # ── Header band ───────────────────────────────────────────
         margin = 1.8 * cm
         top = page_h - 1.0 * cm
-        # Icon top-left — the full Jaikalki mark (same as the
-        # watermark) so the wordmark reads. Wider than tall, so use a
-        # 3 cm × 1.8 cm box with preserveAspectRatio.
+        # Logo top-left, in a 3 cm × 1.8 cm box (aspect preserved).
         icon_w = 3.0 * cm
         icon_h = 1.8 * cm
         if icon is not None:
             try:
                 canvas.drawImage(
-                    str(icon),
+                    icon,
                     margin,
                     top - icon_h,
                     width=icon_w,
@@ -276,67 +320,83 @@ def _letterhead_decorator(letterhead: Optional[Path], icon: Optional[Path]):
         else:
             icon_w = 0
 
-        # Company name + identifiers, right of the icon
+        # Company name + identifiers, right of the logo
         text_x = margin + (icon_w + 0.5 * cm if icon_w else 0)
         right_x = page_w - margin
-        # Title
-        _draw_spaced(
-            canvas, COMPANY_LEGAL_NAME,
-            text_x, top - 0.6 * cm,
-            font=FONT_BOLD, size=13.5, char_space=1.2,
-            color=_TINTED_BROWN,
-        )
+        name = (lh.get("company_name") or "").strip()
+        if name:
+            # Shrink long names so they stay on one line.
+            from reportlab.pdfbase.pdfmetrics import stringWidth
+
+            size = 13.5
+            avail = right_x - text_x
+            while size > 8 and (
+                stringWidth(name, FONT_BOLD, size) + 1.2 * len(name) > avail
+            ):
+                size -= 0.5
+            _draw_spaced(
+                canvas, name,
+                text_x, top - 0.6 * cm,
+                font=FONT_BOLD, size=size, char_space=1.2,
+                color=_TINTED_BROWN,
+            )
         # CIN + GST right-aligned, letter-spaced
-        _draw_spaced(
-            canvas, f"CIN: {COMPANY_CIN}",
-            right_x, top - 1.1 * cm,
-            font=FONT_BOLD, size=8.5, char_space=1.0,
-            color=_TINTED_BROWN, right=True,
-        )
-        _draw_spaced(
-            canvas, f"GST: {COMPANY_GST}",
-            right_x, top - 1.55 * cm,
-            font=FONT_BOLD, size=8.5, char_space=1.0,
-            color=_TINTED_BROWN, right=True,
-        )
+        ids = [
+            f"{label}: {lh[k]}"
+            for label, k in (("CIN", "cin"), ("GST", "gst"))
+            if (lh.get(k) or "").strip()
+        ]
+        for i, line in enumerate(ids):
+            _draw_spaced(
+                canvas, line,
+                right_x, top - (1.1 + 0.45 * i) * cm,
+                font=FONT_BOLD, size=8.5, char_space=1.0,
+                color=_TINTED_BROWN, right=True,
+            )
 
         # Contact row (phone | email | web) — centred mid-band
-        canvas.setFont(FONT_REGULAR, 9)
-        canvas.setFillColor(_TINTED_BROWN)
-        contact = (
-            f"☎  {COMPANY_PHONE}    |    ✉  {COMPANY_EMAIL}"
-            f"    |    ⧉  {COMPANY_WEBSITE}"
+        contact = "    |    ".join(
+            f"{sym}  {lh[k]}".strip()
+            for sym, k in (("☎", "phone"), ("✉", "email"), ("", "website"))
+            if (lh.get(k) or "").strip()
         )
-        canvas.drawCentredString(page_w / 2, top - 2.15 * cm, contact)
+        if contact:
+            _draw_spaced(
+                canvas, contact, page_w / 2, top - 2.15 * cm,
+                font=FONT_REGULAR, size=9, char_space=0.6,
+                color=_TINTED_BROWN, center=True,
+            )
 
         # Gold rule under the header
         canvas.setStrokeColor(_HEADER_GOLD)
         canvas.setLineWidth(0.8)
         canvas.line(margin, top - 2.5 * cm, page_w - margin, top - 2.5 * cm)
 
-        # Regd. office address — wrap once so the long Maharashtra
-        # address can't bleed past the usable width on any A4 page.
-        canvas.setFillColor(_TINTED_BROWN)
-        canvas.setFont(FONT_BOLD, 7.5)
-        canvas.drawCentredString(
-            page_w / 2,
-            top - 2.95 * cm,
-            (
-                f"{COMPANY_REGD_OFFICE_PREFIX} Sh N B-2, First Floor, "
-                "Mahavir Nagar, Deepak Hospital Road Lane,"
-            ),
-        )
-        canvas.drawCentredString(
-            page_w / 2,
-            top - 3.35 * cm,
-            "Mira Road East, Thane, Maharashtra, India, 401107.",
-        )
+        # Regd. office address — wrapped to at most two centred lines so
+        # it can't bleed past the usable width.
+        regd = (lh.get("regd_office") or "").strip()
+        if regd:
+            for i, line in enumerate(
+                _wrap_spaced(
+                    f"{COMPANY_REGD_OFFICE_PREFIX} {regd}",
+                    FONT_BOLD, 7.5, 0.6, page_w - 2 * margin,
+                )[:2]
+            ):
+                _draw_spaced(
+                    canvas, line, page_w / 2, top - (2.95 + 0.4 * i) * cm,
+                    font=FONT_BOLD, size=7.5, char_space=0.6,
+                    color=_TINTED_BROWN, center=True,
+                )
 
         # ── Footer corporate-office block (bottom-right) ───────────
         foot_x = page_w - margin
         foot_y = 4.6 * cm
-        canvas.setFont(FONT_BOLD, 9)
-        for i, line in enumerate(COMPANY_CORPORATE_OFFICE_LINES):
+        office = [
+            ln.strip()
+            for ln in (lh.get("corporate_office") or "").splitlines()
+            if ln.strip()
+        ][:7]
+        for i, line in enumerate(office):
             _draw_spaced(
                 canvas, line, foot_x, foot_y - i * 0.45 * cm,
                 font=FONT_BOLD if i == 0 else FONT_REGULAR,
@@ -346,7 +406,7 @@ def _letterhead_decorator(letterhead: Optional[Path], icon: Optional[Path]):
                 right=True,
             )
 
-        # ── Bottom rule + confidentiality + page number ──────────
+        # ── Bottom rule + footer note + page number ──────────────
         canvas.setStrokeColor(_HEADER_GOLD)
         canvas.setLineWidth(0.6)
         canvas.line(margin, 1.5 * cm, page_w - margin, 1.5 * cm)
@@ -354,7 +414,8 @@ def _letterhead_decorator(letterhead: Optional[Path], icon: Optional[Path]):
         canvas.setFillColor(colors.dimgray)
         canvas.drawString(
             margin, 1.0 * cm,
-            f"{settings.COMPANY_NAME} · Confidential",
+            (lh.get("footer_note") or "").strip()
+            or f"{settings.COMPANY_NAME} · Confidential",
         )
         canvas.drawRightString(
             page_w - margin, 1.0 * cm,
@@ -381,13 +442,33 @@ def render_letter_pdf(
     employee: Employee,
     *,
     overrides: Optional[dict] = None,
+    letterhead: Optional[dict] = None,
 ) -> bytes:
     ctx = _context_for(employee, overrides)
     body = render_letter_body(template.body, ctx)
     subject = (
         render_letter_body(template.subject, ctx) if template.subject else None
     )
+    return build_letter_pdf(
+        title=f"{template.name} · {employee.employee_code}",
+        subject=subject,
+        body=body,
+        letter_no=ctx.get("letter_no") or "",
+        on_date=ctx["date"],
+        letterhead=letterhead,
+    )
 
+
+def build_letter_pdf(
+    *,
+    title: str,
+    subject: Optional[str],
+    body: str,
+    letter_no: str = "",
+    on_date: str = "",
+    letterhead: Optional[dict] = None,
+) -> bytes:
+    """Lay out an already-filled letter on the letterhead."""
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(
         buffer,
@@ -398,14 +479,14 @@ def render_letter_pdf(
         topMargin=5.6 * cm,
         # Reserved space for the corporate-office footer block + rule.
         bottomMargin=6.0 * cm,
-        title=f"{template.name} · {employee.employee_code}",
-        author=settings.COMPANY_NAME,
+        title=title,
+        author=(letterhead or {}).get("company_name") or settings.COMPANY_NAME,
     )
     s = _styles()
     story: list = []
 
     # Letter number + date row.
-    letter_no = (ctx.get("letter_no") or "").strip()
+    letter_no = (letter_no or "").strip()
     if letter_no:
         head = Table(
             [[
@@ -414,7 +495,7 @@ def render_letter_pdf(
                     s["body"],
                 ),
                 Paragraph(
-                    f"<font name='{FONT_REGULAR}'>Date: {ctx['date']}</font>",
+                    f"<font name='{FONT_REGULAR}'>Date: {on_date}</font>",
                     s["right"],
                 ),
             ]],
@@ -427,11 +508,14 @@ def render_letter_pdf(
         story.append(head)
         story.append(Spacer(1, 10))
     else:
-        story.append(_para(f"Date: {ctx['date']}", s["right"]))
+        story.append(_para(f"Date: {on_date}", s["right"]))
         story.append(Spacer(1, 6))
 
     if subject:
-        story.append(_para(f"<b>{subject}</b>", s["body"]))
+        safe_subject = (
+            subject.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+        )
+        story.append(Paragraph(f"<b>{safe_subject}</b>", s["body"]))
         story.append(Spacer(1, 8))
 
     # Body — split on blank lines into paragraphs so spacing reads well.
@@ -456,9 +540,30 @@ def render_letter_pdf(
     # Templates carry their own sign-off ("For Jaikalki ..." / "Director"
     # / signature lines), so nothing extra is appended here.
 
-    decorator = _letterhead_decorator(_letterhead_path(), _icon_path())
+    watermark, icon = letterhead_images(letterhead)
+    decorator = _letterhead_decorator(watermark, icon, letterhead)
     doc.build(story, onFirstPage=decorator, onLaterPages=decorator)
     return buffer.getvalue()
+
+
+def render_letterhead_preview(letterhead: dict) -> bytes:
+    """A sample letter showing how the letterhead will look."""
+    return build_letter_pdf(
+        title="Letterhead preview",
+        subject="Subject: Letterhead preview",
+        body=(
+            "Dear Employee,\n\n"
+            "This is a sample letter showing the company letterhead — the "
+            "logo, company name, registration numbers and contact line at "
+            "the top, and the office address and footer note at the "
+            "bottom. Every letter generated from a template is printed on "
+            "this letterhead.\n\n"
+            "Regards,\nHR Department"
+        ),
+        letter_no="JKT/HR/2026/0001",
+        on_date=date.today().strftime("%d %b %Y"),
+        letterhead=letterhead,
+    )
 
 
 # ── Seeding ───────────────────────────────────────────────────────────

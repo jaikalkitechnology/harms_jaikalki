@@ -72,6 +72,9 @@ _PENDING_COLUMNS: list[tuple[str, str, str, str | None]] = [
     ("sales_leads", "won_decided_by_user_id", "INT NULL", None),
     ("exam_certificates", "certificate_type", "VARCHAR(32) NULL", None),
     ("exam_certificates", "body_text", "VARCHAR(1000) NULL", None),
+    ("exam_certificates", "file_key", "VARCHAR(500) NULL", None),
+    ("exam_certificates", "file_name", "VARCHAR(255) NULL", None),
+    ("exam_certificates", "mime_type", "VARCHAR(100) NULL", None),
     (
         "job_postings",
         "published_to_app",

@@ -5,10 +5,13 @@ import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
+  Award,
   Briefcase,
   Calendar,
   Camera,
+  FileText,
   KeyRound,
+  Laptop,
   Lock,
   Unlock,
   Mail,
@@ -47,12 +50,16 @@ export function ProfileHeader({
   onCredentials,
   onManageLifecycle,
   onOpenCompleteness,
+  onAssignAsset,
+  onOpenDocuments,
 }: {
   employee: EmployeeDetail;
   onEdit: () => void;
   onCredentials: () => void;
   onManageLifecycle: () => void;
   onOpenCompleteness: () => void;
+  onAssignAsset: () => void;
+  onOpenDocuments: () => void;
 }) {
   const hasPermission = useAuthStore((s) => s.hasPermission);
   const canEdit = useCanEdit();
@@ -66,8 +73,9 @@ export function ProfileHeader({
   const separated = isSeparated(employee);
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-brand-brown-100 bg-card shadow-sm">
-      <div className="h-20 bg-gradient-to-r from-brand-gold/25 via-brand-gold/10 to-transparent sm:h-24" />
+    // No overflow-hidden here: the ⋯ menu has to drop below the card.
+    <div className="rounded-2xl border border-brand-brown-100 bg-card shadow-sm">
+      <div className="h-20 rounded-t-2xl bg-gradient-to-r from-brand-gold/25 via-brand-gold/10 to-transparent sm:h-24" />
       <div className="px-5 pb-5 sm:px-6">
         <div className="-mt-12 flex flex-col gap-4 sm:-mt-14 sm:flex-row sm:items-end">
           <Avatar employee={employee} editable={canUpdate && canEdit} />
@@ -104,6 +112,8 @@ export function ProfileHeader({
               <MoreMenu
                 employee={employee}
                 onManageLifecycle={onManageLifecycle}
+                onAssignAsset={onAssignAsset}
+                onOpenDocuments={onOpenDocuments}
               />
             </div>
           )}
@@ -313,9 +323,13 @@ function StageChip({ employee }: { employee: EmployeeDetail }) {
 function MoreMenu({
   employee,
   onManageLifecycle,
+  onAssignAsset,
+  onOpenDocuments,
 }: {
   employee: EmployeeDetail;
   onManageLifecycle: () => void;
+  onAssignAsset: () => void;
+  onOpenDocuments: () => void;
 }) {
   const qc = useQueryClient();
   const hasPermission = useAuthStore((s) => s.hasPermission);
@@ -376,6 +390,28 @@ function MoreMenu({
           },
     );
   }
+  if (hasPermission("admin.users.manage") && !isSeparated(employee)) {
+    items.push({
+      label: "Assign asset",
+      hint: "Laptop, mobile, charger …",
+      icon: <Laptop className="h-4 w-4" />,
+      onClick: onAssignAsset,
+    });
+  }
+  items.push(
+    {
+      label: "Issue or upload a letter",
+      hint: "Offer, appointment, confirmation …",
+      icon: <FileText className="h-4 w-4" />,
+      onClick: onOpenDocuments,
+    },
+    {
+      label: "Give a certificate",
+      hint: "Appreciation, achievement …",
+      icon: <Award className="h-4 w-4" />,
+      onClick: onOpenDocuments,
+    },
+  );
   if (!items.length) return null;
 
   return (
