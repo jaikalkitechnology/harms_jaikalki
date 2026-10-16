@@ -50,6 +50,7 @@ import {
   PassportCard,
   StatutoryIdsCard,
 } from "./EmployeeProfileExtras";
+import { EmployeeAssetsPanel } from "../polish/assets/EmployeeAssetsPanel";
 import { ProfileHeader } from "./profile/ProfileHeader";
 import {
   ContactSection,
@@ -72,7 +73,14 @@ import {
 } from "./profile/ui";
 import { fmtIstDate } from "@/lib/datetime";
 
-type TabKey = "overview" | "personal" | "pay" | "statutory" | "attendance" | "documents";
+type TabKey =
+  | "overview"
+  | "personal"
+  | "pay"
+  | "statutory"
+  | "attendance"
+  | "assets"
+  | "documents";
 
 /** A tab shows when the user holds any one of its permissions. */
 const TABS: { key: TabKey; label: string; anyOf?: string[] }[] = [
@@ -81,6 +89,7 @@ const TABS: { key: TabKey; label: string; anyOf?: string[] }[] = [
   { key: "pay", label: "Pay", anyOf: ["salary.view.team", "employee.update"] },
   { key: "statutory", label: "Statutory", anyOf: ["salary.view.team", "employee.update"] },
   { key: "attendance", label: "Attendance & leave", anyOf: ["attendance.view.all"] },
+  { key: "assets", label: "Assets", anyOf: ["admin.users.view"] },
   { key: "documents", label: "Documents", anyOf: ["employee.update", "employee.create"] },
 ];
 
@@ -252,6 +261,13 @@ export default function EmployeeDetailPage() {
           )}
 
           {tab === "attendance" && <AttendanceLeaveCard employeeId={employee.id} />}
+
+          {tab === "assets" && (
+            <EmployeeAssetsPanel
+              employeeId={employee.id}
+              leavingOn={isSeparated(employee) ? employee.exit_date : null}
+            />
+          )}
 
           {tab === "documents" && (
             <>

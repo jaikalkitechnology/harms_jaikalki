@@ -1,6 +1,8 @@
 import 'package:dio/dio.dart';
 import 'package:equatable/equatable.dart';
 
+import 'exit_models.dart';
+
 class NotificationItem extends Equatable {
   const NotificationItem({
     required this.id,
@@ -157,6 +159,22 @@ class LaunchApi {
   Future<List<dynamic>> myResignations() async {
     final res = await _dio.get<List<dynamic>>('$_v1/resignations/me');
     return res.data ?? const [];
+  }
+
+  /// Asset NOC for one exit (the employee's own, or a direct report's).
+  Future<AssetClearance> resignationAssets(int resignationId) async {
+    final res = await _dio.get<Map<String, dynamic>>(
+      '$_v1/resignations/$resignationId/assets',
+    );
+    return AssetClearance.fromJson(res.data!);
+  }
+
+  /// A manager's leaving direct reports with their asset return status.
+  Future<List<TeamExit>> teamExits() async {
+    final res = await _dio.get<List<dynamic>>('$_v1/resignations/team');
+    return (res.data ?? const [])
+        .map((e) => TeamExit.fromJson(e as Map<String, dynamic>))
+        .toList();
   }
 
   /// Returns {unlocked: bool, has_open_request: bool}.

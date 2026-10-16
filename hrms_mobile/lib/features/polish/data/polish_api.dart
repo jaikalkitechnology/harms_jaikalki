@@ -15,6 +15,13 @@ class PolishApi {
         .toList();
   }
 
+  Future<List<AssetCategory>> assetCategories() async {
+    final res = await _dio.get<List<dynamic>>('$_v1/polish/asset-categories');
+    return (res.data ?? const [])
+        .map((e) => AssetCategory.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
   Future<List<MeetingRoom>> rooms() async {
     final res = await _dio.get<List<dynamic>>('$_v1/polish/rooms');
     return (res.data ?? const [])

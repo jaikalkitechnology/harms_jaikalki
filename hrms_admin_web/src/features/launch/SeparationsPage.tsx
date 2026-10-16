@@ -78,6 +78,7 @@ export default function SeparationsPage() {
                 <th>Type</th>
                 <th>Last working day</th>
                 <th>Status</th>
+                <th>Assets</th>
                 <th>Requested</th>
                 <th className="text-right pr-4">Actions</th>
               </tr>
@@ -130,6 +131,19 @@ export default function SeparationsPage() {
                       >
                         {r.status.replace("_", " ")}
                       </span>
+                    </td>
+                    <td className="text-xs">
+                      {r.assets_pending_count ? (
+                        <a
+                          href={`/employees/${r.employee_id}?tab=assets`}
+                          className="font-medium text-warning hover:underline"
+                          title="Company assets still with the employee"
+                        >
+                          {r.assets_pending_count} to return
+                        </a>
+                      ) : (
+                        <span className="text-success">Returned</span>
+                      )}
                     </td>
                     <td className="text-xs text-brand-brown-light">
                       {new Date(r.requested_at).toLocaleDateString("en-IN")}

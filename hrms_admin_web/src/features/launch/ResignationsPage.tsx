@@ -29,6 +29,7 @@ import { employeesApi } from "@/lib/api/employees";
 import { fmtIstDate } from "@/lib/datetime";
 import { API_BASE_URL } from "@/lib/constants";
 import { SeparationActions } from "./SeparationActions";
+import { AssetClearancePanel } from "../polish/assets/AssetClearancePanel";
 
 const STATUS_COLOR: Record<string, string> = {
   submitted: "bg-info/15 text-info",
@@ -353,7 +354,15 @@ export default function ResignationsPage() {
                                 checked={ndc[k] ?? false}
                                 disabled={
                                   r.status === "settled" ||
-                                  r.status === "rejected"
+                                  r.status === "rejected" ||
+                                  // Follows the asset register (Asset NOC below).
+                                  (k === "assets_returned" &&
+                                    (r.assets_pending_count ?? 0) > 0)
+                                }
+                                title={
+                                  k === "assets_returned"
+                                    ? "Ticks itself when every company asset is returned"
+                                    : undefined
                                 }
                                 onChange={(e) =>
                                   updateNdc.mutate({
@@ -368,6 +377,10 @@ export default function ResignationsPage() {
                         </div>
                       </div>
                     )}
+
+                  {r.status !== "rejected" && r.status !== "cancelled" && (
+                    <AssetClearancePanel resignationId={r.id} />
+                  )}
 
                   {/* Documents */}
                   <div className="rounded-md border border-brand-brown-50 p-3">

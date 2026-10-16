@@ -116,6 +116,50 @@ class ResignationOut(BaseModel):
     final_settled_at: Optional[datetime]
     exit_interview_notes: Optional[str]
     documents: Optional[list] = None
+    # Company assets still with the employee (filled on list endpoints).
+    assets_pending_count: Optional[int] = None
+
+
+class AssetClearanceItem(BaseModel):
+    id: int
+    asset_tag: str
+    name: str
+    category: str
+    category_name: str
+    brand: Optional[str] = None
+    model: Optional[str] = None
+    serial_number: Optional[str] = None
+    condition: str
+    parent_asset_id: Optional[int] = None
+    assigned_at: Optional[datetime] = None
+    returned_at: Optional[datetime] = None
+    return_condition: Optional[str] = None
+
+
+class AssetClearanceOut(BaseModel):
+    """Asset NOC for an exit: what's still out and what came back."""
+    resignation_id: int
+    employee_id: int
+    last_working_day: Optional[date]
+    cleared: bool
+    pending_count: int
+    returned_count: int
+    pending: list[AssetClearanceItem]
+    returned: list[AssetClearanceItem]
+
+
+class TeamExitEmployee(BaseModel):
+    id: int
+    employee_code: str
+    name: str
+    designation: Optional[str] = None
+    photo_url: Optional[str] = None
+
+
+class TeamExitOut(BaseModel):
+    resignation: ResignationOut
+    employee: TeamExitEmployee
+    assets: AssetClearanceOut
 
 
 class AdminSeparationCreate(BaseModel):

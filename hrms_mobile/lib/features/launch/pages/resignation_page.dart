@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 
 import '../../../core/di/injection.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../polish/widgets/asset_widgets.dart';
+import '../data/exit_models.dart';
 import '../data/launch_api.dart';
 
 class ResignationPage extends StatefulWidget {
@@ -35,10 +37,24 @@ class _ResignationPageState extends State<ResignationPage> {
     final api = sl<LaunchApi>();
     final status = await api.resignationUnlockStatus();
     final mine = await api.myResignations();
+    // Asset NOC for the exit that's under way, if any.
+    AssetClearance? clearance;
+    for (final raw in mine) {
+      final r = raw as Map<String, dynamic>;
+      if (!const {'rejected', 'settled', 'cancelled'}.contains(r['status'])) {
+        try {
+          clearance = await api.resignationAssets(r['id'] as int);
+        } catch (_) {
+          // Shown when available; the rest of the page doesn't depend on it.
+        }
+        break;
+      }
+    }
     return _State(
       unlocked: status['unlocked'] == true,
       hasOpenRequest: status['has_open_request'] == true,
       requests: mine,
+      clearance: clearance,
     );
   }
 
@@ -105,11 +121,14 @@ class _ResignationPageState extends State<ResignationPage> {
               return const Center(child: CircularProgressIndicator());
             }
             final s = snap.data!;
-            if (!s.unlocked) {
-              return _buildLocked(s);
-            }
+            // An exit in progress comes first: submitting re-locks the
+            // form, but the employee still needs to track it (and the
+            // assets to hand back).
             if (s.hasOpenRequest) {
               return _buildAlreadyOpen(s);
+            }
+            if (!s.unlocked) {
+              return _buildLocked(s);
             }
             return _buildForm();
           },
@@ -189,13 +208,13 @@ class _ResignationPageState extends State<ResignationPage> {
       children: [
         const SizedBox(height: 20),
         Card(
-          color: AppColors.brandGoldPale,
+          color: AppColors.brandGold.withOpacity(0.12),
           child: Padding(
             padding: const EdgeInsets.all(16),
             child: Row(
               children: [
-                Icon(Icons.hourglass_top,
-                    color: AppColors.brandGoldDark, size: 32),
+                const Icon(Icons.hourglass_top,
+                    color: AppColors.brandGold, size: 32),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Text(
@@ -209,6 +228,13 @@ class _ResignationPageState extends State<ResignationPage> {
           ),
         ),
         const SizedBox(height: 16),
+        if (s.clearance != null) ...[
+          AssetClearanceCard(
+            clearance: s.clearance!,
+            title: 'Company assets to return',
+          ),
+          const SizedBox(height: 16),
+        ],
         ..._historyTiles(s.requests),
       ],
     );
@@ -303,15 +329,18 @@ class _ResignationPageState extends State<ResignationPage> {
   List<Widget> _historyTiles(List<dynamic> rows) {
     return rows.map((raw) {
       final r = raw as Map<String, dynamic>;
-      final status = (r['status'] as String?) ?? 'unknown';
-      final lwd = (r['proposed_last_working_day'] as String?) ?? '—';
+      final status = ((r['status'] as String?) ?? 'unknown').replaceAll('_', ' ');
+      final lwd = (r['actual_last_working_day'] ?? r['proposed_last_working_day']) as String?;
       final reason = (r['reason'] as String?) ?? '';
       return Card(
         margin: const EdgeInsets.only(bottom: 8),
         child: ListTile(
           leading: const Icon(Icons.assignment_outlined),
-          title: Text('LWD $lwd'),
-          subtitle: Text('${status.replaceAll('_', ' ')}  $reason'),
+          title: Text('Last working day ${fmtDay(lwd)}'),
+          subtitle: Text(
+            [status[0].toUpperCase() + status.substring(1), if (reason.isNotEmpty) reason]
+                .join(' · '),
+          ),
         ),
       );
     }).toList();
@@ -323,8 +352,10 @@ class _State {
     required this.unlocked,
     required this.hasOpenRequest,
     required this.requests,
+    this.clearance,
   });
   final bool unlocked;
   final bool hasOpenRequest;
   final List<dynamic> requests;
+  final AssetClearance? clearance;
 }

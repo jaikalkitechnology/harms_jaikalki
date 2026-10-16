@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/di/injection.dart';
@@ -6,6 +7,7 @@ import '../../core/modules/enabled_modules_service.dart';
 import '../../core/routing/app_router.dart';
 import '../../core/theme/app_colors.dart';
 import '../../l10n/app_l10n.dart';
+import '../auth/presentation/bloc/auth_bloc.dart';
 
 class MoreMenuPage extends StatefulWidget {
   const MoreMenuPage({super.key});
@@ -77,6 +79,7 @@ class _MoreMenuPageState extends State<MoreMenuPage> {
         _MoreItem('employees', l.employees, Icons.groups_outlined, AppRoutes.employees),
         _MoreItem('internal_jobs', 'Internal jobs', Icons.work_outline, AppRoutes.browseJobs),
         _MoreItem('resignation', 'Resignation', Icons.exit_to_app_outlined, AppRoutes.resignation),
+        _MoreItem('team_exits', 'Team exits', Icons.group_remove_outlined, AppRoutes.teamExits),
         _MoreItem('justice', 'Justice Portal', Icons.shield_outlined, AppRoutes.justice),
       ]),
       _MoreSection('Money', [
@@ -93,9 +96,17 @@ class _MoreMenuPageState extends State<MoreMenuPage> {
     // Apply the per-department whitelist. `EnabledModulesService.isEnabled`
     // returns true when no whitelist exists yet (offline / first launch),
     // so we never accidentally hide everything.
+    // Team exits is a reporting-manager tool (not department-gated).
+    final user = context.watch<AuthBloc>().state.user;
+    final managesPeople = user != null &&
+        (user.hasRole('manager') || user.hasPermission('approval.act'));
+    bool shown(_MoreItem i) => i.key == 'team_exits'
+        ? managesPeople
+        : _modules.isEnabled(i.key);
+
     final sections = <_MoreSection>[];
     for (final s in allSections) {
-      final visible = s.items.where((i) => _modules.isEnabled(i.key)).toList();
+      final visible = s.items.where(shown).toList();
       if (visible.isNotEmpty) {
         sections.add(_MoreSection(s.title, visible));
       }

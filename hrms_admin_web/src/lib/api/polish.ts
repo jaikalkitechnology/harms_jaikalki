@@ -2,20 +2,79 @@ import { apiClient } from "./client";
 
 const v1 = "/api/v1";
 
+export type AssetCondition = "working" | "damaged" | "not_working" | "expired";
+export type AssetStatus = "in_stock" | "assigned" | "in_repair" | "lost" | "retired";
+
 export interface Asset {
   id: number;
   asset_tag: string;
   name: string;
   category: string;
+  brand: string | null;
+  model: string | null;
+  specs: Record<string, string> | null;
+  /** Accessory of this asset (e.g. a laptop's charger). */
+  parent_asset_id: number | null;
   serial_number: string | null;
   purchase_date: string | null;
   purchase_cost: string | null;
   warranty_until: string | null;
-  condition: string;
-  status: string;
+  condition: AssetCondition;
+  /** Only working assets can be handed out. */
+  is_usable: boolean;
+  status: AssetStatus;
   assigned_to: number | null;
   assigned_at: string | null;
   notes: string | null;
+}
+
+export interface AssetSpecField {
+  key: string;
+  label: string;
+}
+
+export interface AssetCategory {
+  id: number;
+  code: string;
+  name: string;
+  is_accessory: boolean;
+  spec_fields: AssetSpecField[] | null;
+  sort_order: number;
+  is_active: boolean;
+}
+
+export interface AssetCategoryInput {
+  name: string;
+  is_accessory: boolean;
+  spec_fields: { label: string; key?: string }[];
+  is_active?: boolean;
+}
+
+export interface AssetSummary {
+  total: number;
+  in_stock_usable: number;
+  assigned: number;
+  not_usable: number;
+  in_repair: number;
+  lost: number;
+  retired: number;
+}
+
+export interface AssetAssignment {
+  id: number;
+  asset_id: number;
+  employee_id: number;
+  assigned_at: string;
+  returned_at: string | null;
+  return_condition: string | null;
+  notes: string | null;
+  assigned_by: number | null;
+  received_by: number | null;
+}
+
+export interface EmployeeAssets {
+  current: Asset[];
+  history: (AssetAssignment & { asset: Asset })[];
 }
 
 export interface Visitor {
@@ -89,14 +148,54 @@ export interface JobApplication {
 }
 
 export const polishApi = {
+  assetCategories: async (includeInactive = false) => {
+    const { data } = await apiClient.get<AssetCategory[]>(
+      `${v1}/polish/asset-categories`,
+      { params: { include_inactive: includeInactive } },
+    );
+    return data;
+  },
+  createAssetCategory: async (payload: AssetCategoryInput) => {
+    const { data } = await apiClient.post<AssetCategory>(
+      `${v1}/polish/asset-categories`,
+      payload,
+    );
+    return data;
+  },
+  updateAssetCategory: async (id: number, payload: Partial<AssetCategoryInput>) => {
+    const { data } = await apiClient.put<AssetCategory>(
+      `${v1}/polish/asset-categories/${id}`,
+      payload,
+    );
+    return data;
+  },
+  assetSummary: async () => {
+    const { data } = await apiClient.get<AssetSummary>(`${v1}/polish/assets/summary`);
+    return data;
+  },
   listAssets: async (params?: {
     status?: string;
     category?: string;
+    condition?: string;
+    usable?: boolean;
+    assigned_to?: number;
     search?: string;
   }) => {
     const { data } = await apiClient.get<Asset[]>(`${v1}/polish/assets`, {
       params,
     });
+    return data;
+  },
+  assetHistory: async (id: number) => {
+    const { data } = await apiClient.get<AssetAssignment[]>(
+      `${v1}/polish/assets/${id}/history`,
+    );
+    return data;
+  },
+  employeeAssets: async (employeeId: number) => {
+    const { data } = await apiClient.get<EmployeeAssets>(
+      `${v1}/polish/assets/employee/${employeeId}`,
+    );
     return data;
   },
   createAsset: async (payload: Record<string, unknown>) => {
@@ -113,21 +212,33 @@ export const polishApi = {
     );
     return data;
   },
-  assignAsset: async (id: number, employeeId: number, notes?: string) => {
+  assignAsset: async (
+    id: number,
+    employeeId: number,
+    opts: { notes?: string; includeAccessories?: boolean } = {},
+  ) => {
     const { data } = await apiClient.post<Asset>(
       `${v1}/polish/assets/${id}/assign`,
-      { employee_id: employeeId, notes },
+      {
+        employee_id: employeeId,
+        notes: opts.notes || null,
+        include_accessories: opts.includeAccessories ?? true,
+      },
     );
     return data;
   },
   returnAsset: async (
     id: number,
     returnCondition: string,
-    notes?: string,
+    opts: { notes?: string; includeAccessories?: boolean } = {},
   ) => {
     const { data } = await apiClient.post<Asset>(
       `${v1}/polish/assets/${id}/return`,
-      { return_condition: returnCondition, notes },
+      {
+        return_condition: returnCondition,
+        notes: opts.notes || null,
+        include_accessories: opts.includeAccessories ?? true,
+      },
     );
     return data;
   },

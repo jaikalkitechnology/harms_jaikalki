@@ -8,7 +8,13 @@ class Asset extends Equatable {
     required this.category,
     required this.condition,
     required this.status,
+    this.brand,
+    this.model,
+    this.specs = const {},
+    this.parentAssetId,
+    this.isUsable = true,
     this.serialNumber,
+    this.warrantyUntil,
     this.assignedTo,
     this.assignedAt,
   });
@@ -17,18 +23,38 @@ class Asset extends Equatable {
   final String assetTag;
   final String name;
   final String category;
+  final String? brand;
+  final String? model;
+
+  /// Configuration, keyed by the category's spec fields (e.g. ram).
+  final Map<String, String> specs;
+
+  /// Set when this is an accessory of another asset (e.g. a charger).
+  final int? parentAssetId;
+  final bool isUsable;
   final String? serialNumber;
+  final String? warrantyUntil;
   final String condition;
   final String status;
   final int? assignedTo;
   final String? assignedAt;
+
+  String get makeModel =>
+      [brand, model].where((s) => s != null && s.isNotEmpty).join(' ');
 
   factory Asset.fromJson(Map<String, dynamic> j) => Asset(
         id: j['id'] as int,
         assetTag: j['asset_tag'] as String,
         name: j['name'] as String,
         category: j['category'] as String,
+        brand: j['brand'] as String?,
+        model: j['model'] as String?,
+        specs: ((j['specs'] as Map?) ?? const {})
+            .map((k, v) => MapEntry(k.toString(), v.toString())),
+        parentAssetId: j['parent_asset_id'] as int?,
+        isUsable: (j['is_usable'] as bool?) ?? true,
         serialNumber: j['serial_number'] as String?,
+        warrantyUntil: j['warranty_until'] as String?,
         condition: j['condition'] as String,
         status: j['status'] as String,
         assignedTo: j['assigned_to'] as int?,
@@ -36,7 +62,38 @@ class Asset extends Equatable {
       );
 
   @override
-  List<Object?> get props => [id, status];
+  List<Object?> get props => [id, status, condition];
+}
+
+class AssetCategory extends Equatable {
+  const AssetCategory({
+    required this.code,
+    required this.name,
+    this.isAccessory = false,
+    this.specFields = const [],
+  });
+
+  final String code;
+  final String name;
+  final bool isAccessory;
+
+  /// (key, label) pairs, in display order.
+  final List<(String, String)> specFields;
+
+  factory AssetCategory.fromJson(Map<String, dynamic> j) => AssetCategory(
+        code: j['code'] as String,
+        name: j['name'] as String,
+        isAccessory: (j['is_accessory'] as bool?) ?? false,
+        specFields: ((j['spec_fields'] as List?) ?? const [])
+            .map((f) => (
+                  (f as Map)['key'].toString(),
+                  f['label'].toString(),
+                ))
+            .toList(),
+      );
+
+  @override
+  List<Object?> get props => [code];
 }
 
 class MeetingRoom extends Equatable {

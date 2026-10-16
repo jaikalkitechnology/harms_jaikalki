@@ -17,6 +17,7 @@ from app.core.exceptions import (
 from app.models import (
     Asset,
     AssetAssignment,
+    AssetCategory,
     Employee,
     JobApplication,
     JobPosting,
@@ -32,13 +33,179 @@ def _now() -> datetime:
 
 
 # ─── Assets ──────────────────────────────────────────────────────────
+ASSET_CONDITIONS = ("working", "damaged", "not_working", "expired")
+RETURN_CONDITIONS = ASSET_CONDITIONS + ("lost",)
+
+# Seeded on first use; HR can rename, add and disable them.
+DEFAULT_CATEGORIES: list[dict] = [
+    {"code": "laptop", "name": "Laptop", "spec_fields": [
+        {"key": "processor", "label": "Processor"},
+        {"key": "ram", "label": "RAM"},
+        {"key": "storage", "label": "Storage"},
+        {"key": "os", "label": "Operating system"},
+    ]},
+    {"code": "laptop_charger", "name": "Laptop charger", "is_accessory": True,
+     "spec_fields": [{"key": "wattage", "label": "Wattage"}]},
+    {"code": "mobile", "name": "Mobile phone", "spec_fields": [
+        {"key": "imei", "label": "IMEI"},
+        {"key": "ram", "label": "RAM"},
+        {"key": "storage", "label": "Storage"},
+    ]},
+    {"code": "mobile_charger", "name": "Mobile charger", "is_accessory": True,
+     "spec_fields": [{"key": "wattage", "label": "Wattage"}]},
+    {"code": "sim_card", "name": "SIM card", "spec_fields": [
+        {"key": "phone_number", "label": "Phone number"},
+        {"key": "operator", "label": "Operator"},
+    ]},
+    {"code": "mouse", "name": "Mouse", "is_accessory": True},
+    {"code": "keyboard", "name": "Keyboard", "is_accessory": True},
+    {"code": "headset", "name": "Headset"},
+    {"code": "monitor", "name": "Monitor", "spec_fields": [
+        {"key": "screen_size", "label": "Screen size"},
+        {"key": "resolution", "label": "Resolution"},
+    ]},
+    {"code": "vehicle", "name": "Vehicle", "spec_fields": [
+        {"key": "registration_no", "label": "Registration no."},
+    ]},
+    {"code": "other", "name": "Other"},
+]
+
+
+async def ensure_default_categories(db: AsyncSession) -> None:
+    """Seed the category list the first time it's needed."""
+    if (await db.execute(select(AssetCategory.id).limit(1))).first():
+        return
+    for i, c in enumerate(DEFAULT_CATEGORIES):
+        db.add(
+            AssetCategory(
+                code=c["code"],
+                name=c["name"],
+                is_accessory=c.get("is_accessory", False),
+                spec_fields=c.get("spec_fields") or [],
+                sort_order=(i + 1) * 10,
+            )
+        )
+    await db.commit()
+
+
+async def list_categories(
+    db: AsyncSession, *, include_inactive: bool = False
+) -> Sequence[AssetCategory]:
+    await ensure_default_categories(db)
+    stmt = select(AssetCategory).order_by(
+        AssetCategory.sort_order, AssetCategory.name
+    )
+    if not include_inactive:
+        stmt = stmt.where(AssetCategory.is_active.is_(True))
+    return (await db.execute(stmt)).scalars().all()
+
+
+def _slug(text: str) -> str:
+    import re
+
+    return re.sub(r"[^a-z0-9]+", "_", text.strip().lower()).strip("_")[:48]
+
+
+def _clean_spec_fields(fields: Optional[list]) -> list[dict]:
+    out, seen = [], set()
+    for f in fields or []:
+        label = str((f or {}).get("label") or "").strip()
+        key = _slug(str((f or {}).get("key") or label))
+        if label and key and key not in seen:
+            seen.add(key)
+            out.append({"key": key, "label": label[:60]})
+    return out
+
+
+async def create_category(db: AsyncSession, *, payload: dict) -> AssetCategory:
+    await ensure_default_categories(db)
+    code = _slug(payload.get("code") or payload["name"])
+    if not code:
+        raise ValidationError("Category name is required")
+    if (
+        await db.execute(select(AssetCategory).where(AssetCategory.code == code))
+    ).scalar_one_or_none():
+        raise ConflictError(f"A category with code '{code}' already exists")
+    cat = AssetCategory(
+        code=code,
+        name=payload["name"].strip(),
+        is_accessory=bool(payload.get("is_accessory")),
+        spec_fields=_clean_spec_fields(payload.get("spec_fields")),
+        sort_order=payload.get("sort_order") or 500,
+        is_active=True,
+    )
+    db.add(cat)
+    await db.commit()
+    await db.refresh(cat)
+    return cat
+
+
+async def update_category(
+    db: AsyncSession, category_id: int, *, payload: dict
+) -> AssetCategory:
+    cat = (
+        await db.execute(select(AssetCategory).where(AssetCategory.id == category_id))
+    ).scalar_one_or_none()
+    if not cat:
+        raise NotFoundError("Category not found")
+    if "name" in payload and payload["name"]:
+        cat.name = payload["name"].strip()
+    if "is_accessory" in payload and payload["is_accessory"] is not None:
+        cat.is_accessory = bool(payload["is_accessory"])
+    if "spec_fields" in payload and payload["spec_fields"] is not None:
+        cat.spec_fields = _clean_spec_fields(payload["spec_fields"])
+    if "sort_order" in payload and payload["sort_order"] is not None:
+        cat.sort_order = int(payload["sort_order"])
+    if "is_active" in payload and payload["is_active"] is not None:
+        cat.is_active = bool(payload["is_active"])
+    await db.commit()
+    await db.refresh(cat)
+    return cat
+
+
+async def _require_category(db: AsyncSession, code: str) -> AssetCategory:
+    await ensure_default_categories(db)
+    cat = (
+        await db.execute(select(AssetCategory).where(AssetCategory.code == code))
+    ).scalar_one_or_none()
+    if not cat:
+        raise ValidationError(f"Unknown asset category '{code}'")
+    return cat
+
+
+def _check_condition(value: Optional[str]) -> None:
+    if value is not None and value not in ASSET_CONDITIONS:
+        raise ValidationError(
+            "Condition must be one of: " + ", ".join(ASSET_CONDITIONS)
+        )
+
+
+async def _check_parent(
+    db: AsyncSession, parent_id: Optional[int], asset_id: Optional[int] = None
+) -> None:
+    if parent_id is None:
+        return
+    if asset_id is not None and parent_id == asset_id:
+        raise ValidationError("An asset can't be an accessory of itself")
+    parent = await get_asset(db, parent_id)
+    if parent.parent_asset_id is not None:
+        raise ValidationError(
+            f"{parent.asset_tag} is itself an accessory — link to its main asset"
+        )
+
+
 async def create_asset(db: AsyncSession, *, payload: dict) -> Asset:
+    payload = {k: v for k, v in payload.items() if v is not None or k == "parent_asset_id"}
+    payload["asset_tag"] = payload["asset_tag"].strip()
     if (
         await db.execute(
             select(Asset).where(Asset.asset_tag == payload["asset_tag"])
         )
     ).scalar_one_or_none():
         raise ConflictError(f"Asset tag '{payload['asset_tag']}' exists")
+    await _require_category(db, payload.get("category", "other"))
+    _check_condition(payload.get("condition"))
+    await _check_parent(db, payload.get("parent_asset_id"))
     asset = Asset(**payload, status="in_stock")
     db.add(asset)
     await db.commit()
@@ -52,10 +219,10 @@ async def list_assets(
     status: Optional[str] = None,
     assigned_to: Optional[int] = None,
     category: Optional[str] = None,
+    condition: Optional[str] = None,
+    usable: Optional[bool] = None,
     search: Optional[str] = None,
 ) -> Sequence[Asset]:
-    from sqlalchemy import or_
-
     stmt = select(Asset)
     if status:
         stmt = stmt.where(Asset.status == status)
@@ -63,18 +230,50 @@ async def list_assets(
         stmt = stmt.where(Asset.assigned_to == assigned_to)
     if category:
         stmt = stmt.where(Asset.category == category)
+    if condition:
+        stmt = stmt.where(Asset.condition == condition)
+    if usable is True:
+        stmt = stmt.where(Asset.condition == "working")
+    elif usable is False:
+        stmt = stmt.where(Asset.condition != "working")
     if search:
         like = f"%{search.strip()}%"
         stmt = stmt.where(
             or_(
                 Asset.asset_tag.ilike(like),
                 Asset.name.ilike(like),
+                Asset.brand.ilike(like),
+                Asset.model.ilike(like),
                 Asset.serial_number.ilike(like),
                 Asset.notes.ilike(like),
             )
         )
-    stmt = stmt.order_by(Asset.created_at.desc())
+    stmt = stmt.order_by(Asset.created_at.desc(), Asset.id.desc())
     return (await db.execute(stmt)).scalars().all()
+
+
+async def asset_summary(db: AsyncSession) -> dict:
+    """Counts for the register header."""
+    rows = (await db.execute(select(Asset.status, Asset.condition))).all()
+    out = {
+        "total": len(rows),
+        "in_stock_usable": 0,
+        "assigned": 0,
+        "not_usable": 0,
+        "in_repair": 0,
+        "lost": 0,
+        "retired": 0,
+    }
+    for status, condition in rows:
+        if status == "assigned":
+            out["assigned"] += 1
+        elif status in ("in_repair", "lost", "retired"):
+            out[status] += 1
+        elif status == "in_stock" and condition == "working":
+            out["in_stock_usable"] += 1
+        if condition != "working":
+            out["not_usable"] += 1
+    return out
 
 
 async def get_asset(db: AsyncSession, asset_id: int) -> Asset:
@@ -86,17 +285,46 @@ async def get_asset(db: AsyncSession, asset_id: int) -> Asset:
     return a
 
 
+async def _accessories(db: AsyncSession, asset_id: int) -> Sequence[Asset]:
+    return (
+        await db.execute(select(Asset).where(Asset.parent_asset_id == asset_id))
+    ).scalars().all()
+
+
+_STATUS_EDITS = {"in_stock", "in_repair", "retired", "lost"}
+
+
 async def update_asset(
     db: AsyncSession, asset_id: int, *, payload: dict
 ) -> Asset:
     asset = await get_asset(db, asset_id)
     allowed = {
-        "name", "category", "serial_number", "purchase_date",
-        "purchase_cost", "warranty_until", "condition", "notes",
+        "name", "category", "brand", "model", "specs", "parent_asset_id",
+        "serial_number", "purchase_date", "purchase_cost", "warranty_until",
+        "condition", "status", "notes",
     }
+    # Explicit nulls clear these; elsewhere null means "unchanged".
+    clearable = {
+        "brand", "model", "specs", "parent_asset_id", "serial_number",
+        "purchase_date", "purchase_cost", "warranty_until", "notes",
+    }
+    if payload.get("category"):
+        await _require_category(db, payload["category"])
+    _check_condition(payload.get("condition"))
+    if "parent_asset_id" in payload:
+        await _check_parent(db, payload["parent_asset_id"], asset.id)
+    if payload.get("status") is not None:
+        new_status = payload["status"]
+        if new_status not in _STATUS_EDITS:
+            raise ValidationError("Use Assign / Return to change assignment")
+        if asset.status == "assigned":
+            raise ValidationError("Return the asset before changing its status")
     for k, v in payload.items():
-        if k in allowed and v is not None:
-            setattr(asset, k, v)
+        if k not in allowed:
+            continue
+        if v is None and k not in clearable:
+            continue
+        setattr(asset, k, v)
     await db.commit()
     await db.refresh(asset)
     return asset
@@ -109,44 +337,59 @@ async def assign_asset(
     employee_id: int,
     notes: Optional[str],
     assigned_by_user_id: Optional[int],
+    include_accessories: bool = True,
 ) -> Asset:
     asset = await get_asset(db, asset_id)
     if asset.status != "in_stock":
         raise ValidationError(
             f"Cannot assign an asset with status '{asset.status}'"
         )
+    if not asset.is_usable:
+        raise ValidationError(
+            f"{asset.asset_tag} is marked '{asset.condition.replace('_', ' ')}' "
+            "and can't be handed out"
+        )
     employee = (
         await db.execute(select(Employee).where(Employee.id == employee_id))
     ).scalar_one_or_none()
     if not employee:
         raise NotFoundError("Employee not found")
-    asset.status = "assigned"
-    asset.assigned_to = employee_id
-    asset.assigned_at = _now()
-    db.add(
-        AssetAssignment(
-            asset_id=asset.id,
-            employee_id=employee_id,
-            assigned_at=_now(),
-            notes=notes,
-            assigned_by=assigned_by_user_id,
+    if employee.exit_date and employee.exit_date < _now().date():
+        raise ValidationError("This employee has already left")
+
+    targets = [asset]
+    if include_accessories:
+        targets += [
+            a for a in await _accessories(db, asset.id)
+            if a.status == "in_stock" and a.is_usable
+        ]
+    now = _now()
+    for a in targets:
+        a.status = "assigned"
+        a.assigned_to = employee_id
+        a.assigned_at = now
+        db.add(
+            AssetAssignment(
+                asset_id=a.id,
+                employee_id=employee_id,
+                assigned_at=now,
+                notes=notes if a is asset else f"With {asset.asset_tag}",
+                assigned_by=assigned_by_user_id,
+            )
         )
-    )
     await db.commit()
     await db.refresh(asset)
     return asset
 
 
-async def return_asset(
+async def _return_one(
     db: AsyncSession,
-    asset_id: int,
+    asset: Asset,
     *,
     return_condition: str,
     notes: Optional[str],
-) -> Asset:
-    asset = await get_asset(db, asset_id)
-    if asset.status != "assigned":
-        raise ValidationError("Asset is not currently assigned")
+    received_by: Optional[int],
+) -> None:
     open_assignment = (
         await db.execute(
             select(AssetAssignment)
@@ -159,20 +402,62 @@ async def return_asset(
     if open_assignment:
         open_assignment.returned_at = _now()
         open_assignment.return_condition = return_condition
+        open_assignment.received_by = received_by
         if notes:
-            open_assignment.notes = (open_assignment.notes or "") + f"\nReturn: {notes}"
+            open_assignment.notes = (
+                (open_assignment.notes + "\n") if open_assignment.notes else ""
+            ) + f"Return: {notes}"
     asset.assigned_to = None
     asset.assigned_at = None
     if return_condition == "lost":
         asset.status = "lost"
-    elif return_condition == "damaged":
-        asset.status = "in_repair"
-        asset.condition = "damaged"
     else:
-        asset.status = "in_stock"
         asset.condition = return_condition
+        # Damaged / not-working items go for repair; expired ones are
+        # kept on the shelf but can't be handed out again.
+        asset.status = (
+            "in_repair" if return_condition in ("damaged", "not_working") else "in_stock"
+        )
+
+
+async def return_asset(
+    db: AsyncSession,
+    asset_id: int,
+    *,
+    return_condition: str,
+    notes: Optional[str],
+    received_by: Optional[int] = None,
+    include_accessories: bool = True,
+) -> Asset:
+    if return_condition not in RETURN_CONDITIONS:
+        raise ValidationError(
+            "Return condition must be one of: " + ", ".join(RETURN_CONDITIONS)
+        )
+    asset = await get_asset(db, asset_id)
+    if asset.status != "assigned":
+        raise ValidationError("Asset is not currently assigned")
+    employee_id = asset.assigned_to
+    await _return_one(
+        db, asset, return_condition=return_condition, notes=notes,
+        received_by=received_by,
+    )
+    if include_accessories:
+        for acc in await _accessories(db, asset.id):
+            if acc.status == "assigned" and acc.assigned_to == employee_id:
+                # Accessories come back in working order unless the main
+                # item was lost with them.
+                await _return_one(
+                    db, acc,
+                    return_condition="lost" if return_condition == "lost" else "working",
+                    notes=f"With {asset.asset_tag}",
+                    received_by=received_by,
+                )
     await db.commit()
     await db.refresh(asset)
+    if employee_id is not None:
+        from app.services import asset_clearance
+
+        await asset_clearance.on_assets_changed(db, employee_id, returned=[asset])
     return asset
 
 
@@ -186,6 +471,20 @@ async def list_assignment_history(
             .order_by(AssetAssignment.assigned_at.desc())
         )
     ).scalars().all()
+
+
+async def employee_asset_history(
+    db: AsyncSession, employee_id: int
+) -> Sequence[tuple[AssetAssignment, Asset]]:
+    """Every assignment an employee has had, newest first."""
+    return (
+        await db.execute(
+            select(AssetAssignment, Asset)
+            .join(Asset, Asset.id == AssetAssignment.asset_id)
+            .where(AssetAssignment.employee_id == employee_id)
+            .order_by(AssetAssignment.assigned_at.desc())
+        )
+    ).all()
 
 
 # ─── Visitors ────────────────────────────────────────────────────────
