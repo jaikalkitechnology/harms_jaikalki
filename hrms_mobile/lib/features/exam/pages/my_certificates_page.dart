@@ -45,7 +45,11 @@ class _MyCertificatesPageState extends State<MyCertificatesPage> {
     setState(() => _busy.add(cert.id));
     try {
       final pdf = await sl<ExamApi>().certificatePdf(cert);
-      final problem = await saveAndOpenBytes(pdf.bytes, filename: pdf.filename);
+      final problem = await saveAndOpenBytes(
+        pdf.bytes,
+        filename: pdf.filename,
+        mimeType: pdf.mimeType,
+      );
       _toast(problem ?? 'Downloaded ${pdf.filename}', error: problem != null);
     } catch (e) {
       _toast('Download failed: $e', error: true);
@@ -63,7 +67,7 @@ class _MyCertificatesPageState extends State<MyCertificatesPage> {
           XFile.fromData(
             Uint8List.fromList(pdf.bytes),
             name: pdf.filename,
-            mimeType: 'application/pdf',
+            mimeType: pdf.mimeType,
           ),
         ],
         text: 'Jaikalki Certificate · ${cert.certificateNumber}',
@@ -104,7 +108,7 @@ class _MyCertificatesPageState extends State<MyCertificatesPage> {
                   const SizedBox(height: 16),
                   Center(
                     child: Text(
-                      'No certificates issued yet.\nFinish a course or pass an exam to earn one.',
+                      'No certificates yet.\nCertificates from HR, and for finished courses and exams, show up here.',
                       textAlign: TextAlign.center,
                       style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                             color: AppColors.textMuted,

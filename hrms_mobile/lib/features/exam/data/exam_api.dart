@@ -66,7 +66,9 @@ class ExamApi {
   }
 
   /// Certificate PDF bytes plus a file name — works on web too.
-  Future<({List<int> bytes, String filename})> certificatePdf(
+  /// The certificate file — a generated PDF, or whatever HR uploaded
+  /// (PDF or image).
+  Future<({List<int> bytes, String filename, String mimeType})> certificatePdf(
     CertificateOut cert,
   ) async {
     final res = await _dio.get<List<int>>(
@@ -75,8 +77,21 @@ class ExamApi {
     );
     final bytes = res.data ?? const <int>[];
     if (bytes.isEmpty) throw StateError('Empty PDF response');
+    final mime = (res.headers.value('content-type') ?? 'application/pdf')
+        .split(';')
+        .first
+        .trim();
+    const ext = {
+      'image/png': 'png',
+      'image/jpeg': 'jpg',
+      'image/webp': 'webp',
+    };
     final safe =
         cert.certificateNumber.replaceAll(RegExp(r'[^A-Za-z0-9._-]'), '-');
-    return (bytes: bytes, filename: '$safe.pdf');
+    return (
+      bytes: bytes,
+      filename: '$safe.${ext[mime] ?? 'pdf'}',
+      mimeType: mime,
+    );
   }
 }

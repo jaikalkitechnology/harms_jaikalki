@@ -51,6 +51,10 @@ class _MoreMenuPageState extends State<MoreMenuPage> {
         _MoreItem('field_plan', 'Field plan', Icons.map_outlined, AppRoutes.fieldHome),
         _MoreItem('live_team_map', 'Live team map', Icons.location_on_outlined, AppRoutes.fieldLiveMap),
       ]),
+      _MoreSection('Documents', [
+        _MoreItem('documents', 'Letters & policies', Icons.folder_copy_outlined, AppRoutes.documents),
+        _MoreItem('certificates', 'Certificates', Icons.workspace_premium_outlined, AppRoutes.myCertificates),
+      ]),
       _MoreSection('Sales', [
         _MoreItem('my_leads', 'Leads', Icons.person_add_alt_1_outlined, AppRoutes.myLeads),
         _MoreItem('sales_pipeline', 'Pipeline', Icons.trending_up_outlined, AppRoutes.salesPipeline),
@@ -66,7 +70,6 @@ class _MoreMenuPageState extends State<MoreMenuPage> {
         _MoreItem('lms', 'Courses', Icons.school_outlined, AppRoutes.lmsHome),
         _MoreItem('badges', 'Badges', Icons.emoji_events_outlined, AppRoutes.lmsBadges),
         _MoreItem('exams', 'Exams', Icons.quiz_outlined, AppRoutes.exams),
-        _MoreItem('certificates', 'Certificates', Icons.workspace_premium_outlined, AppRoutes.myCertificates),
         _MoreItem('trainers', 'Trainers', Icons.mic_external_on_outlined, AppRoutes.trainers),
         _MoreItem('sessions', 'Sessions', Icons.calendar_today_outlined, AppRoutes.trainerSessions),
       ]),
@@ -100,9 +103,13 @@ class _MoreMenuPageState extends State<MoreMenuPage> {
     final user = context.watch<AuthBloc>().state.user;
     final managesPeople = user != null &&
         (user.hasRole('manager') || user.hasPermission('approval.act'));
-    bool shown(_MoreItem i) => i.key == 'team_exits'
-        ? managesPeople
-        : _modules.isEnabled(i.key);
+    // Documents is for everyone (also before the cached whitelist
+    // picks up the new key).
+    bool shown(_MoreItem i) => switch (i.key) {
+          'team_exits' => managesPeople,
+          'documents' => true,
+          _ => _modules.isEnabled(i.key),
+        };
 
     final sections = <_MoreSection>[];
     for (final s in allSections) {
