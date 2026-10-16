@@ -80,6 +80,7 @@ from .leave import (
     LeaveType,
 )
 from .letter_template import LetterTemplate
+from .hr_documents import CompanyPolicy, EmployeeLetter
 from .lms import (
     Badge,
     Course,
@@ -278,4 +279,6 @@ __all__ = [
     "DatabaseBackup",
     "ApiKey",
     "EmailTemplate",
+    "EmployeeLetter",
+    "CompanyPolicy",
 ]

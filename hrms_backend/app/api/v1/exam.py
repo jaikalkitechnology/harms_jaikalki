@@ -1,6 +1,16 @@
 from typing import Optional
 
-from fastapi import APIRouter, Depends, Query, Request, Response, status
+from fastapi import (
+    APIRouter,
+    Depends,
+    File,
+    Form,
+    Query,
+    Request,
+    Response,
+    UploadFile,
+    status,
+)
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -9,6 +19,7 @@ from app.core.permissions import require_permission
 from app.dependencies import get_current_user, get_db
 from app.models import Employee, User
 from app.schemas.exam import (
+    CERTIFICATE_TYPES,
     AttemptDetail,
     AttemptResult,
     AttemptSubmitRequest,
@@ -230,6 +241,82 @@ async def issue_certificate_admin(
     return await exam_svc.admin_issue_certificate(
         db, payload=payload.model_dump()
     )
+
+
+@router.post(
+    "/certificates/upload",
+    response_model=CertificateOut,
+    status_code=status.HTTP_201_CREATED,
+)
+async def upload_certificate_admin(
+    employee_id: int = Form(...),
+    title: str = Form(...),
+    certificate_type: str = Form(default="appreciation"),
+    issued_date: Optional[_date] = Form(default=None),
+    body_text: Optional[str] = Form(default=None),
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_permission("employee.update")),
+):
+    """Put a ready-made certificate (scanned / designed elsewhere) on the
+    employee's record. The PDF endpoint serves this file as-is."""
+    import io
+    import mimetypes
+
+    from app.core.exceptions import ValidationError
+    from app.services import storage
+
+    if certificate_type not in CERTIFICATE_TYPES:
+        raise ValidationError(
+            f"certificate_type must be one of: {', '.join(CERTIFICATE_TYPES)}"
+        )
+    title = title.strip()
+    if len(title) < 2:
+        raise ValidationError("Give the certificate a title")
+    allowed = {"application/pdf", "image/jpeg", "image/png", "image/webp"}
+    name = (file.filename or "certificate").strip() or "certificate"
+    mime = (file.content_type or "").lower()
+    if mime not in allowed:
+        mime = (mimetypes.guess_type(name)[0] or "").lower()
+    if mime not in allowed:
+        raise ValidationError("Upload a PDF, JPG, PNG or WEBP file")
+    contents = await file.read()
+    if not contents:
+        raise ValidationError("The file is empty")
+    if len(contents) > 10 * 1024 * 1024:
+        raise ValidationError("File too large (max 10 MB)")
+    emp = await emp_svc.get_employee(db, employee_id)
+    key, _url = storage.upload_fileobj(
+        io.BytesIO(contents),
+        key_prefix=f"employees/{emp.employee_code}/certificates",
+        filename=name,
+        content_type=mime,
+    )
+    cert = await exam_svc.admin_issue_certificate(
+        db,
+        payload={
+            "employee_id": emp.id,
+            "title": title[:200],
+            "certificate_type": certificate_type,
+            "body_text": (body_text or "").strip()[:1000] or None,
+            "issued_date": issued_date,
+            "file_key": key,
+            "file_name": name[:255],
+            "mime_type": mime,
+        },
+    )
+    if emp.user_id:
+        from app.services.notification_service import notify
+
+        await notify(
+            db,
+            user_id=emp.user_id,
+            type="certificate_issued",
+            title=f"New certificate: {cert.title}",
+            body="Download it from More → Certificates in the app.",
+            data={"certificate_id": cert.id},
+        )
+    return cert
 
 
 @router.put("/certificates/{certificate_id}", response_model=CertificateOut)
@@ -528,13 +615,29 @@ async def get_certificate_pdf(
     ).scalar_one_or_none()
     if not employee:
         raise NotFoundError("Employee not found")
+    stem = cert.certificate_number.replace("/", "-")
+    if cert.file_key:
+        # Uploaded certificate — serve the file HR uploaded.
+        from app.services import storage
+
+        try:
+            data = storage.read_bytes(cert.file_key)
+        except FileNotFoundError as exc:
+            raise NotFoundError("The certificate file is missing") from exc
+        ext = (cert.file_name or "").rsplit(".", 1)[-1].lower() if "." in (cert.file_name or "") else "pdf"
+        return Response(
+            content=data,
+            media_type=cert.mime_type or "application/pdf",
+            headers={
+                "Content-Disposition": f'inline; filename="{stem}.{ext}"',
+                "Cache-Control": "no-store",
+            },
+        )
     pdf = render_certificate(certificate=cert, employee=employee)
     return Response(
         content=pdf,
         media_type="application/pdf",
         headers={
-            "Content-Disposition": (
-                f'inline; filename="{cert.certificate_number.replace("/", "-")}.pdf"'
-            )
+            "Content-Disposition": f'inline; filename="{stem}.pdf"'
         },
     )

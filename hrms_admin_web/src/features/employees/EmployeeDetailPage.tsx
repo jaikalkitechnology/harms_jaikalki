@@ -40,7 +40,9 @@ import {
 } from "@/lib/api/payroll";
 import { cn } from "@/lib/utils";
 import { OnboardingDocsCard } from "./OnboardingDocsCard";
-import { LettersDocsCard } from "./LettersDocsCard";
+import { EmployeeLettersCard } from "./EmployeeLettersCard";
+import { EmployeeCertificatesCard } from "./EmployeeCertificatesCard";
+import { AssignAssetModal } from "@/features/polish/assets/AssetDialogs";
 import { AttendanceLeaveCard } from "./AttendanceLeaveCard";
 import { LifecycleDrawer } from "./LifecycleDrawer";
 import {
@@ -112,6 +114,7 @@ export default function EmployeeDetailPage() {
   const [editOpen, setEditOpen] = useState(false);
   const [credentialOpen, setCredentialOpen] = useState(false);
   const [lifecycleOpen, setLifecycleOpen] = useState(false);
+  const [assignOpen, setAssignOpen] = useState(false);
   const [editUnlocked, setEditUnlocked] = useState(false);
 
   const tabs = TABS.filter((t) => !t.anyOf || t.anyOf.some((p) => hasPermission(p)));
@@ -169,6 +172,8 @@ export default function EmployeeDetailPage() {
           onCredentials={() => setCredentialOpen(true)}
           onManageLifecycle={() => setLifecycleOpen(true)}
           onOpenCompleteness={() => go("overview")}
+          onAssignAsset={() => setAssignOpen(true)}
+          onOpenDocuments={() => go("documents")}
         />
 
         <div
@@ -272,11 +277,9 @@ export default function EmployeeDetailPage() {
           {tab === "documents" && (
             <>
               <PermissionGate permission="employee.update">
+                <EmployeeLettersCard employee={employee} />
+                <EmployeeCertificatesCard employee={employee} />
                 <OnboardingDocsCard employeeId={employee.id} />
-                <LettersDocsCard
-                  employeeId={employee.id}
-                  employeeCode={employee.employee_code}
-                />
               </PermissionGate>
               <PermissionGate permission="employee.create">
                 <DocumentsCard employeeId={employee.id} />
@@ -284,6 +287,10 @@ export default function EmployeeDetailPage() {
             </>
           )}
         </div>
+
+        {assignOpen && (
+          <AssignAssetModal employeeId={employee.id} onClose={() => setAssignOpen(false)} />
+        )}
 
         {editOpen && (
           <EditEmployeeModal

@@ -75,6 +75,9 @@ export interface Certificate {
   expiry_date: string | null;
   score_percentage: string | null;
   pdf_url: string | null;
+  /** Set when HR uploaded the certificate instead of generating it. */
+  file_name?: string | null;
+  mime_type?: string | null;
   is_revoked: boolean;
   revoked_reason: string | null;
 }
@@ -198,6 +201,28 @@ export const examApi = {
     const { data } = await apiClient.post<Certificate>(
       `${v1}/exams/certificates`,
       payload,
+    );
+    return data;
+  },
+  uploadCertificate: async (
+    fields: {
+      employee_id: number;
+      title: string;
+      certificate_type: CertificateType;
+      issued_date?: string;
+      body_text?: string;
+    },
+    file: File,
+  ) => {
+    const fd = new FormData();
+    for (const [k, v] of Object.entries(fields)) {
+      if (v !== undefined && v !== "") fd.append(k, String(v));
+    }
+    fd.append("file", file);
+    const { data } = await apiClient.post<Certificate>(
+      `${v1}/exams/certificates/upload`,
+      fd,
+      { headers: { "Content-Type": "multipart/form-data" } },
     );
     return data;
   },

@@ -71,7 +71,9 @@ _DEFAULT_TERMINATION_BODY = (
 
 
 def render_separation_pdf(
-    resignation: Resignation, employee: Employee
+    resignation: Resignation,
+    employee: Employee,
+    letterhead: Optional[dict] = None,
 ) -> bytes:
     """Render the resignation / termination letter over the branded
     Jaikalki letterhead so HR can print or attach it to an email."""
@@ -118,6 +120,7 @@ def render_separation_pdf(
             "last_working_date": lwd.strftime("%d %b %Y") if lwd else "—",
             "reason": (resignation.reason or "—"),
         },
+        letterhead=letterhead,
     )
 
 

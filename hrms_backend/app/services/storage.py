@@ -162,6 +162,40 @@ def signed_url(key: str, *, expires_in: int = 600) -> str:
     return _local_url(key)
 
 
+def read_bytes(key: str) -> bytes:
+    """Read back a previously-uploaded file. Raises FileNotFoundError
+    when the key doesn't exist."""
+    backend = (settings.STORAGE_BACKEND or "local").lower()
+    if backend == "s3":
+        from botocore.exceptions import ClientError
+
+        try:
+            obj = _s3_client().get_object(Bucket=settings.S3_BUCKET, Key=key)
+        except ClientError as exc:
+            raise FileNotFoundError(key) from exc
+        return obj["Body"].read()
+    root = _local_root().resolve()
+    target = (root / key).resolve()
+    # Keys come from our own DB rows, but never read outside the root.
+    if root not in target.parents or not target.is_file():
+        raise FileNotFoundError(key)
+    return target.read_bytes()
+
+
+def key_from_url(url: Optional[str]) -> Optional[str]:
+    """Recover the object key from a URL returned by ``upload_fileobj``
+    (older rows store only the URL). None when it isn't one of ours."""
+    if not url:
+        return None
+    local_prefix = _local_url("")
+    if url.startswith(local_prefix):
+        return url[len(local_prefix):] or None
+    s3_prefix = f"{(settings.S3_ENDPOINT or '').rstrip('/')}/{settings.S3_BUCKET}/"
+    if settings.S3_ENDPOINT and url.startswith(s3_prefix):
+        return url[len(s3_prefix):] or None
+    return None
+
+
 def delete(key: str) -> None:
     """Best-effort delete. Used by retention/cleanup jobs."""
     backend = (settings.STORAGE_BACKEND or "local").lower()
