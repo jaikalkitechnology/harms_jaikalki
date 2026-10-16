@@ -122,7 +122,7 @@ class _DashboardView extends StatelessWidget {
       widgets.add(_DirectorWidgets(summary: s));
     } else if (role == 'hr') {
       widgets.add(_HRWidgets(summary: s));
-    } else if (role == 'manager') {
+    } else if (role == 'manager' || s.teamSize > 0) {
       widgets.add(_ManagerWidgets(summary: s));
     }
     return widgets;
@@ -681,6 +681,7 @@ class _ManagerWidgets extends StatelessWidget {
                 label: l.teamAttendance.toUpperCase(),
                 value: '${summary.teamAttendancePct.toStringAsFixed(0)}%',
                 hint: '${summary.teamPresentToday}/${summary.teamSize}',
+                onTap: () => GoRouter.of(context).push(AppRoutes.myTeam),
               ),
             ),
             const SizedBox(width: 8),

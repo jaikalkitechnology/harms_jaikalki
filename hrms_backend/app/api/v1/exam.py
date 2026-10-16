@@ -47,6 +47,15 @@ from app.services.certificate_pdf import render_certificate
 router = APIRouter(prefix="/exams", tags=["exams"])
 
 
+async def _assert_can_manage_certificates_of(
+    db: AsyncSession, user: User, employee_id: int
+) -> None:
+    """HR / admin manage anyone's certificates; a manager only their team's."""
+    allowed = await emp_svc.visible_employee_ids(db, user)
+    if allowed is not None and employee_id not in allowed:
+        raise NotFoundError("Employee not found")
+
+
 async def _self_employee(db: AsyncSession, user: User):
     emp = await emp_svc.get_self_employee(db, user)
     if not emp:
@@ -213,10 +222,12 @@ async def list_certificates(
     limit: int = Query(default=100, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(get_current_user),
+    user: User = Depends(get_current_user),
 ):
+    # HR / admin see everyone's; managers their team's; others their own.
     return await exam_svc.list_certificates(
         db,
+        employee_ids=await emp_svc.visible_employee_ids(db, user),
         employee_id=employee_id,
         course_id=course_id,
         is_revoked=is_revoked,
@@ -236,8 +247,9 @@ async def list_certificates(
 async def issue_certificate_admin(
     payload: CertificateCreate,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(require_permission("approval.act")),
+    user: User = Depends(require_permission("approval.act")),
 ):
+    await _assert_can_manage_certificates_of(db, user, payload.employee_id)
     return await exam_svc.admin_issue_certificate(
         db, payload=payload.model_dump()
     )
@@ -324,8 +336,10 @@ async def update_certificate(
     certificate_id: int,
     payload: CertificateUpdate,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(require_permission("approval.act")),
+    user: User = Depends(require_permission("approval.act")),
 ):
+    cert = await exam_svc.get_certificate(db, certificate_id)
+    await _assert_can_manage_certificates_of(db, user, cert.employee_id)
     return await exam_svc.update_certificate(
         db, certificate_id, payload=payload.model_dump(exclude_unset=True)
     )
@@ -338,8 +352,10 @@ async def revoke_certificate(
     certificate_id: int,
     payload: CertificateRevoke,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(require_permission("approval.act")),
+    user: User = Depends(require_permission("approval.act")),
 ):
+    cert = await exam_svc.get_certificate(db, certificate_id)
+    await _assert_can_manage_certificates_of(db, user, cert.employee_id)
     return await exam_svc.revoke_certificate(
         db, certificate_id, reason=payload.reason
     )
@@ -351,8 +367,10 @@ async def revoke_certificate(
 async def restore_certificate(
     certificate_id: int,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(require_permission("approval.act")),
+    user: User = Depends(require_permission("approval.act")),
 ):
+    cert = await exam_svc.get_certificate(db, certificate_id)
+    await _assert_can_manage_certificates_of(db, user, cert.employee_id)
     return await exam_svc.restore_certificate(db, certificate_id)
 
 
@@ -605,9 +623,13 @@ async def verify_certificate(
 async def get_certificate_pdf(
     certificate_id: int,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(get_current_user),
+    user: User = Depends(get_current_user),
 ):
     cert = await exam_svc.get_certificate(db, certificate_id)
+    allowed = await emp_svc.visible_employee_ids(db, user)
+    if allowed is not None and cert.employee_id not in allowed:
+        # Same answer as a missing one, so numbers can't be probed.
+        raise NotFoundError("Certificate not found")
     employee = (
         await db.execute(
             select(Employee).where(Employee.id == cert.employee_id)

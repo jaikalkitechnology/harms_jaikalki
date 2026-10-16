@@ -2,6 +2,10 @@ import 'package:flutter/material.dart';
 
 import '../../../core/di/injection.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../incentives/data/incentives_api.dart';
+import '../../incentives/widgets/incentive_widgets.dart';
+import '../../team/data/team_api.dart';
+import '../../team/widgets/team_widgets.dart';
 import '../data/sales_api.dart';
 import '../data/sales_models.dart';
 
@@ -24,9 +28,29 @@ class _SalesTargetsPageState extends State<SalesTargetsPage> {
 
   Future<_ProgressReport> _load() async {
     final api = sl<SalesApi>();
-    final summary = await api.myTarget();
-    final pipeline = await api.myPipeline();
-    return _ProgressReport(summary: summary, pipeline: pipeline);
+    final allF = api.myTargets().catchError((_) => <TargetSummary>[]);
+    final pipelineF = api.myPipeline();
+    Future<TeamOverview?> team() async {
+      try {
+        final info = await sl<TeamApi>().me();
+        return info.hasTeam ? await sl<TeamApi>().overview(everyone: false) : null;
+      } catch (_) {
+        return null;
+      }
+    }
+
+    final teamF = team();
+    final incF = sl<IncentivesApi>().mine().then<
+        ({List<IncentiveProjection> current, List<IncentiveLine> history})?>((v) => v).catchError((_) => null);
+    final all = await allF;
+    final sales = all.where((t) => t.target.isMoney).toList();
+    return _ProgressReport(
+      summary: sales.isEmpty ? null : sales.first,
+      others: all.where((t) => !t.target.isMoney).toList(),
+      pipeline: await pipelineF,
+      team: await teamF,
+      incentives: await incF,
+    );
   }
 
   Future<void> _pullRefresh() async {
@@ -74,10 +98,16 @@ class _SalesTargetsPageState extends State<SalesTargetsPage> {
                 ? null
                 : () async {
                     final r = await _future;
-                    if (r.summary != null) {
-                      await _recompute(r.summary!.target.id);
-                    } else {
+                    final ids = [
+                      if (r.summary != null) r.summary!.target.id,
+                      for (final o in r.others) o.target.id,
+                    ];
+                    if (ids.isEmpty) {
                       await _pullRefresh();
+                    } else {
+                      for (final id in ids) {
+                        await _recompute(id);
+                      }
                     }
                   },
           ),
@@ -120,8 +150,31 @@ class _SalesTargetsPageState extends State<SalesTargetsPage> {
                   const SizedBox(height: 16),
                   _CommissionCard(summary: summary),
                   const SizedBox(height: 16),
-                ] else
+                ] else if (report.others.isEmpty)
                   _NoTargetCard(),
+                for (final o in report.others) ...[
+                  _MetricTargetCard(summary: o),
+                  const SizedBox(height: 12),
+                ],
+                if (report.incentives != null) ...[
+                  for (final p in report.incentives!.current) ...[
+                    IncentiveCard(p: p),
+                    const SizedBox(height: 12),
+                  ],
+                  if (report.incentives!.history.isNotEmpty) ...[
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(4, 4, 4, 8),
+                      child: Text('MY INCENTIVES',
+                          style: theme.textTheme.labelSmall?.copyWith(color: AppColors.brandGoldDark)),
+                    ),
+                    IncentiveHistory(lines: report.incentives!.history),
+                    const SizedBox(height: 16),
+                  ],
+                ],
+                if (report.team != null && report.team!.members.isNotEmpty) ...[
+                  _TeamTargets(team: report.team!),
+                  const SizedBox(height: 16),
+                ],
                 _PipelineBreakdown(pipeline: pipeline),
                 const SizedBox(height: 24),
                 Text(
@@ -141,9 +194,111 @@ class _SalesTargetsPageState extends State<SalesTargetsPage> {
 }
 
 class _ProgressReport {
-  _ProgressReport({required this.summary, required this.pipeline});
+  _ProgressReport({
+    required this.summary,
+    required this.others,
+    required this.pipeline,
+    required this.team,
+    required this.incentives,
+  });
   final TargetSummary? summary;
+  final List<TargetSummary> others;
   final List<PipelineColumn> pipeline;
+  final TeamOverview? team;
+  final ({List<IncentiveProjection> current, List<IncentiveLine> history})? incentives;
+}
+
+/// A non-money target: field visits, verifications, tasks, leads.
+class _MetricTargetCard extends StatelessWidget {
+  const _MetricTargetCard({required this.summary});
+  final TargetSummary summary;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = summary.target;
+    final unit = targetMetricUnits[t.metric] ?? t.metric.replaceAll('_', ' ');
+    return Card(
+      margin: EdgeInsets.zero,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              '${t.periodType.toUpperCase()} · ${unit.toUpperCase()}',
+              style: Theme.of(context).textTheme.labelSmall?.copyWith(color: AppColors.brandGoldDark),
+            ),
+            const SizedBox(height: 8),
+            TargetProgress(
+              pct: summary.achievementPct,
+              caption: '${t.achievedAmount.toStringAsFixed(0)} of '
+                  '${t.targetAmount.toStringAsFixed(0)} $unit · ${t.periodStart} → ${t.periodEnd}',
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// For managers: how the people reporting to them are doing.
+class _TeamTargets extends StatelessWidget {
+  const _TeamTargets({required this.team});
+  final TeamOverview team;
+
+  @override
+  Widget build(BuildContext context) {
+    final s = team.summary;
+    final withTarget = team.members.where((m) => m.target != null || m.team?.targetPct != null).toList();
+    return Card(
+      margin: EdgeInsets.zero,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('MY TEAM',
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(color: AppColors.brandGoldDark)),
+            const SizedBox(height: 8),
+            if (s.withTarget == 0)
+              const Text('No one in your team has a target yet.',
+                  style: TextStyle(color: AppColors.textMuted))
+            else ...[
+              TargetProgress(
+                pct: s.targetPct,
+                caption: s.achievedAmount > 0 || s.targetAmount > 0
+                    ? '${rupees(s.achievedAmount)} of ${rupees(s.targetAmount)} · ${s.withTarget} with targets'
+                    : '${s.withTarget} with targets',
+              ),
+              const SizedBox(height: 12),
+              for (final m in withTarget)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(m.name,
+                          style: TextStyle(color: context.textPrimary, fontWeight: FontWeight.w600)),
+                      const SizedBox(height: 4),
+                      if (m.target != null)
+                        TargetProgress(pct: m.target!.pct, caption: targetCaption(m.target!)),
+                      if (m.team?.targetPct != null)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 4),
+                          child: Text(
+                            'Their team: ${m.team!.targetPct!.toStringAsFixed(0)}% of target',
+                            style: const TextStyle(color: AppColors.textMuted, fontSize: 12),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 class _TargetCard extends StatelessWidget {
@@ -253,7 +408,7 @@ class _CommissionCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Card(
-      color: AppColors.brandGoldPale,
+      color: AppColors.brandGold.withOpacity(0.12),
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Row(
@@ -278,7 +433,7 @@ class _CommissionCard extends StatelessWidget {
                   ),
                   Text(
                     'at ${summary.target.commissionPct}% of achievement',
-                    style: theme.textTheme.bodySmall,
+                    style: theme.textTheme.bodySmall?.copyWith(color: AppColors.textMuted),
                   ),
                 ],
               ),

@@ -45,4 +45,9 @@ celery_app.conf.beat_schedule = {
         "task": "app.workers.jobs.purge_expired_otps",
         "schedule": crontab(hour=3, minute=15),
     },
+    # Team alerts check every 10 minutes; times are set in Settings.
+    "team-alerts": {
+        "task": "app.workers.jobs.run_team_alerts",
+        "schedule": crontab(minute="*/10"),
+    },
 }

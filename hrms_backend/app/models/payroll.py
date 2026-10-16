@@ -157,6 +157,10 @@ class Payslip(Base, TimestampMixin):
     eps_wages: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=Decimal("0"))
     edli_wages: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=Decimal("0"))
 
+    # Approved incentives paid with this slip (part of gross).
+    incentive: Mapped[Decimal] = mapped_column(
+        Numeric(12, 2), default=Decimal("0"), nullable=False
+    )
     pdf_url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
 
     run: Mapped["PayrollRun"] = relationship(back_populates="payslips")

@@ -10,10 +10,19 @@ that HR publishes to everyone.
 """
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime
 from typing import Optional
 
-from sqlalchemy import Boolean, Date, ForeignKey, Integer, String, Text
+from sqlalchemy import (
+    Boolean,
+    Date,
+    DateTime,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 
 from .base import Base, TimestampMixin, mysql_table_args
@@ -101,6 +110,35 @@ class CompanyPolicy(Base, TimestampMixin):
     file_size: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     # Published policies are visible to every employee.
     is_published: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    # Employees confirm "I have read and accept" in the app.
+    requires_acknowledgement: Mapped[bool] = mapped_column(
+        Boolean, default=True, nullable=False
+    )
+    # Bumped when a new version of the document is uploaded, so everyone
+    # accepts the new one.
+    revision: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
     uploaded_by: Mapped[Optional[int]] = mapped_column(
         ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
+
+
+class PolicyAcknowledgement(Base, TimestampMixin):
+    """An employee's "I have read and accept" for one revision of a policy."""
+
+    __tablename__ = "policy_acknowledgements"
+    __table_args__ = (
+        UniqueConstraint(
+            "policy_id", "employee_id", "revision", name="uq_policy_ack"
+        ),
+        mysql_table_args,
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    policy_id: Mapped[int] = mapped_column(
+        ForeignKey("company_policies.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    employee_id: Mapped[int] = mapped_column(
+        ForeignKey("employees.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    revision: Mapped[int] = mapped_column(Integer, nullable=False)
+    acknowledged_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)

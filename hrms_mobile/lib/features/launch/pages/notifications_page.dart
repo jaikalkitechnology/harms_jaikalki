@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../core/di/injection.dart';
+import '../../../core/routing/app_router.dart';
 import '../../../core/theme/app_colors.dart';
 import '../data/launch_api.dart';
 
@@ -48,6 +50,36 @@ class _NotificationsPageState extends State<NotificationsPage> {
     if (n.isRead) return;
     await sl<LaunchApi>().markRead(n.id);
     await _refresh();
+  }
+
+  /// Where tapping a notification of this type takes you, if anywhere.
+  static String? _destination(NotificationItem n) => switch (n.type) {
+        'letter_issued' => AppRoutes.documents,
+        'policy_published' => '${AppRoutes.documents}?tab=policies',
+        'certificate_issued' => AppRoutes.myCertificates,
+        'task_assigned' || 'task_done' || 'task_comment' || 'task_overdue' ||
+        'task_escalated' =>
+          n.data?['task_id'] != null ? '${AppRoutes.tasks}/${n.data!['task_id']}' : AppRoutes.tasks,
+        'team_digest' || 'team_weekly' => AppRoutes.myTeam,
+        'target_behind' || 'incentive_approved' => AppRoutes.salesTargets,
+        'incentive_review' => AppRoutes.incentiveReview,
+        'plan_reminder' => AppRoutes.dwp,
+        _ => null,
+      };
+
+  void _open(NotificationItem n) {
+    final dest = _destination(n);
+    if (dest == null) {
+      _markOne(n);
+      return;
+    }
+    // Mark read in the background; the list refreshes on the way back.
+    if (!n.isRead) {
+      sl<LaunchApi>().markRead(n.id).then((_) {
+        if (mounted) _refresh();
+      }).catchError((_) {});
+    }
+    context.push(dest);
   }
 
   @override
@@ -101,7 +133,9 @@ class _NotificationsPageState extends State<NotificationsPage> {
                 final n = items[i];
                 return Card(
                   margin: const EdgeInsets.only(bottom: 8),
-                  color: n.isRead ? null : AppColors.brandGoldPale,
+                  // Unread: a light gold tint that keeps the text readable
+                  // in both themes.
+                  color: n.isRead ? null : AppColors.brandGold.withOpacity(0.14),
                   child: ListTile(
                     leading: CircleAvatar(
                       backgroundColor: AppColors.brandGoldPale,
@@ -113,12 +147,14 @@ class _NotificationsPageState extends State<NotificationsPage> {
                     title: Text(
                       n.title,
                       style: TextStyle(
+                        color: context.textPrimary,
                         fontWeight: n.isRead ? FontWeight.normal : FontWeight.bold,
                       ),
                     ),
                     subtitle: Text(
                       n.body ?? n.type,
-                      style: theme.textTheme.bodySmall,
+                      style: theme.textTheme.bodySmall
+                          ?.copyWith(color: AppColors.textMuted),
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -128,7 +164,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
                             onPressed: () => _markOne(n),
                           )
                         : null,
-                    onTap: () => _markOne(n),
+                    onTap: () => _open(n),
                   ),
                 );
               },

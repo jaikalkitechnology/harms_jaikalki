@@ -103,9 +103,16 @@ class CompanyPolicyOut(BaseModel):
     mime_type: str
     file_size: Optional[int] = None
     is_published: bool
+    requires_acknowledgement: bool = True
+    revision: int = 1
     uploaded_by: Optional[int] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
+    # For the signed-in employee: when they accepted this revision.
+    my_acknowledged_at: Optional[datetime] = None
+    # For HR: how many current employees have / haven't accepted it.
+    acknowledged_count: Optional[int] = None
+    pending_count: Optional[int] = None
 
 
 class CompanyPolicyUpdate(BaseModel):
@@ -115,3 +122,19 @@ class CompanyPolicyUpdate(BaseModel):
     version: Optional[str] = Field(default=None, max_length=32)
     effective_date: Optional[date] = None
     is_published: Optional[bool] = None
+    requires_acknowledgement: Optional[bool] = None
+
+
+class PolicyAckRow(BaseModel):
+    employee_id: int
+    employee_code: str
+    name: str
+    department: Optional[str] = None
+    acknowledged_at: Optional[datetime] = None
+
+
+class PolicyAckReport(BaseModel):
+    policy_id: int
+    revision: int
+    acknowledged: list[PolicyAckRow]
+    pending: list[PolicyAckRow]

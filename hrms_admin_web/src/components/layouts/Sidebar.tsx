@@ -47,6 +47,10 @@ import {
   ShieldCheck,
   UserCog,
   Users,
+  UsersRound,
+  Network,
+  ListTodo,
+  BadgeIndianRupee,
   Wallet,
   type LucideIcon,
 } from "lucide-react";
@@ -61,6 +65,8 @@ interface NavItem {
   to: string;
   icon: LucideIcon;
   permission?: string;
+  /** Shown when the user has any of these permissions. */
+  anyPermission?: string[];
   roles?: Role[];
 }
 
@@ -79,6 +85,24 @@ const SECTIONS: NavSection[] = [
         to: "/employees",
         icon: Users,
         permission: "employee.view.all",
+      },
+      {
+        label: "My Team",
+        to: "/team",
+        icon: UsersRound,
+        anyPermission: ["employee.view.all", "approval.act"],
+      },
+      {
+        label: "Org Chart",
+        to: "/org-chart",
+        icon: Network,
+        anyPermission: ["employee.view.all", "approval.act"],
+      },
+      {
+        label: "Tasks",
+        to: "/tasks",
+        icon: ListTodo,
+        anyPermission: ["employee.view.all", "approval.act"],
       },
       {
         label: "Departments",
@@ -179,6 +203,12 @@ const SECTIONS: NavSection[] = [
         to: "/payroll",
         icon: Wallet,
         permission: "payroll.run",
+      },
+      {
+        label: "Incentives",
+        to: "/incentives",
+        icon: BadgeIndianRupee,
+        anyPermission: ["payroll.run", "approval.act"],
       },
       {
         label: "Reimbursements",
@@ -395,6 +425,7 @@ export function Sidebar() {
     items: section.items.filter((item) => {
       if (item.roles && !hasAnyRole(item.roles)) return false;
       if (item.permission && !hasPermission(item.permission)) return false;
+      if (item.anyPermission && !item.anyPermission.some((p) => hasPermission(p))) return false;
       return true;
     }),
   })).filter((s) => s.items.length > 0);

@@ -182,6 +182,25 @@ async def my_history(
     return [_serialize_submission(s) for s in rows]
 
 
+@router.get("/employee/{employee_id}/history", response_model=list[DwpSubmissionOut])
+async def employee_history(
+    employee_id: int,
+    from_date: Optional[date] = None,
+    to_date: Optional[date] = None,
+    limit: int = Query(default=30, ge=1, le=200),
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """A team member's daily plans, for anyone above them (and HR / Admin)."""
+    team = await emp_svc.visible_employee_ids(db, user)
+    if team is not None and employee_id not in team:
+        raise NotFoundError("Employee not found")
+    rows = await dwp_service.my_history(
+        db, employee_id, from_date=from_date, to_date=to_date, limit=limit
+    )
+    return [_serialize_submission(s) for s in rows]
+
+
 @router.get("/me/streak", response_model=DwpStreakOut)
 async def my_streak(
     db: AsyncSession = Depends(get_db),
@@ -214,7 +233,7 @@ async def team_today(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    if not _can_act_on_team(user):
+    if not await _can_act_on_team(db, user):
         raise ForbiddenError("Only managers / HR / Admin can view team DWP")
     ids = await _visible_team_ids(db, user)
     if not ids:
@@ -247,7 +266,7 @@ async def team_blockers(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    if not _can_act_on_team(user):
+    if not await _can_act_on_team(db, user):
         raise ForbiddenError("Only managers / HR / Admin can view team blockers")
     ids = await _visible_team_ids(db, user)
     if not ids:
@@ -276,19 +295,20 @@ async def team_blockers(
     return out
 
 
-def _can_act_on_team(user: User) -> bool:
+async def _can_act_on_team(db: AsyncSession, user: User) -> bool:
+    """Managers (by role, or anyone with people reporting to them) and
+    HR / Admin / Director."""
     from app.core.permissions import Role as RoleEnum
 
-    return bool(
-        set(user.role_codes)
-        & {
-            RoleEnum.MANAGER.value,
-            RoleEnum.HR.value,
-            RoleEnum.ADMIN.value,
-            RoleEnum.DIRECTOR.value,
-            RoleEnum.SUPER_ADMIN.value,
-        }
-    )
+    if set(user.role_codes) & {
+        RoleEnum.MANAGER.value,
+        RoleEnum.HR.value,
+        RoleEnum.ADMIN.value,
+        RoleEnum.DIRECTOR.value,
+        RoleEnum.SUPER_ADMIN.value,
+    }:
+        return True
+    return await emp_svc.has_reports(db, user)
 
 
 # ── Comments ──────────────────────────────────────────────────────────

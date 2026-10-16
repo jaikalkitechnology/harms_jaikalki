@@ -413,6 +413,10 @@ async def audit_verification(
         v.submitted_at = None
     await db.commit()
     await db.refresh(v)
+    if v.status == "completed":
+        from app.services.sales_service import refresh_targets_for
+
+        await refresh_targets_for(db, v.assigned_to)
     return v
 
 

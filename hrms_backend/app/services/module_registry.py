@@ -57,6 +57,11 @@ ALWAYS_ON: set[str] = {
     # My letters (offer / appointment / confirmation …) and company
     # policies — every employee has these.
     "documents",
+    # Managers' view of everyone below them; the app shows it only to
+    # people who have a team.
+    "my_team",
+    # Tasks given to me / by me.
+    "tasks",
 }
 
 

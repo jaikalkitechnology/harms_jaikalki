@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import {
+  BellRing,
   Building,
   CalendarDays,
   Clock,
@@ -44,6 +45,7 @@ import { cn } from "@/lib/utils";
 import { fmtIst } from "@/lib/datetime";
 import { PayrollSettingsTab } from "./PayrollSettingsTab";
 import { LetterheadSettingsTab } from "./LetterheadSettingsTab";
+import { TeamAlertsTab } from "./TeamAlertsTab";
 
 type Tab =
   | "account"
@@ -54,7 +56,8 @@ type Tab =
   | "leave"
   | "attendance"
   | "payroll"
-  | "letterhead";
+  | "letterhead"
+  | "alerts";
 
 export default function SettingsPage() {
   const [params, setParams] = useSearchParams();
@@ -78,7 +81,10 @@ export default function SettingsPage() {
       ? ([{ id: "payroll", label: "Payroll", icon: Wallet }] as const)
       : []),
     ...(isSuper || canLetters
-      ? ([{ id: "letterhead", label: "Letterhead", icon: FileText }] as const)
+      ? ([
+          { id: "letterhead", label: "Letterhead", icon: FileText },
+          { id: "alerts", label: "Team alerts", icon: BellRing },
+        ] as const)
       : []),
     { id: "company", label: "Company", icon: Building },
   ];
@@ -128,6 +134,7 @@ export default function SettingsPage() {
       {tab === "attendance" && <AttendanceTab />}
       {tab === "payroll" && <PayrollSettingsTab />}
       {tab === "letterhead" && <LetterheadSettingsTab />}
+      {tab === "alerts" && <TeamAlertsTab />}
       {tab === "company" && <CompanyTab />}
     </div>
   );

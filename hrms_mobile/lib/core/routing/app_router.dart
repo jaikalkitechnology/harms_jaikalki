@@ -15,6 +15,8 @@ import '../../features/dwp/pages/dwp_home_page.dart';
 import '../../features/employees/pages/employee_detail_page.dart';
 import '../../features/employees/pages/employees_list_page.dart';
 import '../../features/exam/pages/exam_list_page.dart' deferred as exam_list;
+import '../../features/incentives/pages/incentive_review_page.dart'
+    deferred as incentive_review;
 import '../../features/exam/pages/exam_taking_page.dart'
     deferred as exam_taking;
 import '../../features/exam/pages/my_certificates_page.dart'
@@ -69,6 +71,13 @@ import '../../features/sales/pages/sales_pipeline_page.dart'
     deferred as sales_pipeline;
 import '../../features/sales/pages/sales_targets_page.dart'
     deferred as sales_targets;
+import '../../features/tasks/pages/give_task_page.dart' deferred as give_task;
+import '../../features/tasks/pages/task_detail_page.dart'
+    deferred as task_detail;
+import '../../features/tasks/pages/tasks_page.dart' deferred as tasks_page;
+import '../../features/team/pages/my_team_page.dart' deferred as my_team;
+import '../../features/team/pages/team_member_page.dart'
+    deferred as team_member;
 import '../../features/trainer/pages/sessions_page.dart' deferred as sessions;
 import '../../features/trainer/pages/trainer_marketplace_page.dart'
     deferred as trainer_marketplace;
@@ -121,6 +130,11 @@ class AppRoutes {
   static const exams = '/exams';
   static const myCertificates = '/exams/me/certificates';
   static const documents = '/documents';
+  static const myTeam = '/team';
+  static const teamMember = '/team/member';
+  static const tasks = '/tasks';
+  static const giveTask = '/tasks/give';
+  static const incentiveReview = '/incentives/review';
   static const visitors = '/visitors';
   static const visitorRegister = '/visitors/new';
   static const visitorScan = '/visitors/scan';
@@ -356,9 +370,63 @@ GoRouter buildRouter(AuthBloc authBloc) {
                 )),
       ),
       GoRoute(
+        path: AppRoutes.incentiveReview,
+        builder: (_, __) => DeferredPage(incentive_review.loadLibrary,
+            (_) => incentive_review.IncentiveReviewPage()),
+      ),
+      GoRoute(
+        path: AppRoutes.tasks,
+        builder: (_, __) =>
+            DeferredPage(tasks_page.loadLibrary, (_) => tasks_page.TasksPage()),
+      ),
+      GoRoute(
+        path: AppRoutes.giveTask,
+        builder: (_, state) {
+          final q = state.uri.queryParameters;
+          return DeferredPage(
+              give_task.loadLibrary,
+              (_) => give_task.GiveTaskPage(
+                    employeeId: int.tryParse(q['employee'] ?? ''),
+                    employeeName: q['name'],
+                  ));
+        },
+      ),
+      GoRoute(
+        path: '${AppRoutes.tasks}/:id',
+        builder: (_, state) => DeferredPage(
+            task_detail.loadLibrary,
+            (_) => task_detail.TaskDetailPage(
+                  taskId: int.parse(state.pathParameters['id']!),
+                )),
+      ),
+      GoRoute(
+        path: AppRoutes.myTeam,
+        builder: (_, state) {
+          final q = state.uri.queryParameters;
+          return DeferredPage(
+              my_team.loadLibrary,
+              (_) => my_team.MyTeamPage(
+                    rootId: int.tryParse(q['root'] ?? ''),
+                    rootName: q['name'],
+                  ));
+        },
+      ),
+      GoRoute(
+        path: '${AppRoutes.teamMember}/:id',
+        builder: (_, state) => DeferredPage(
+            team_member.loadLibrary,
+            (_) => team_member.TeamMemberPage(
+                  employeeId: int.parse(state.pathParameters['id']!),
+                )),
+      ),
+      GoRoute(
         path: AppRoutes.documents,
-        builder: (_, __) => DeferredPage(
-            documents.loadLibrary, (_) => documents.DocumentsPage()),
+        builder: (_, state) => DeferredPage(
+            documents.loadLibrary,
+            (_) => documents.DocumentsPage(
+                  initialTab:
+                      state.uri.queryParameters['tab'] == 'policies' ? 1 : 0,
+                )),
       ),
       GoRoute(
         path: AppRoutes.myCertificates,

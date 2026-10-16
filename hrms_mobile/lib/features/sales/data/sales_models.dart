@@ -132,10 +132,12 @@ class SalesTarget extends Equatable {
     required this.targetAmount,
     required this.achievedAmount,
     required this.commissionPct,
+    this.metric = 'sales_amount',
   });
 
   final int id;
   final int employeeId;
+  final String metric;
   final String periodType;
   final String periodStart;
   final String periodEnd;
@@ -152,7 +154,10 @@ class SalesTarget extends Equatable {
         targetAmount: double.tryParse(j['target_amount'].toString()) ?? 0,
         achievedAmount: double.tryParse(j['achieved_amount'].toString()) ?? 0,
         commissionPct: double.tryParse(j['commission_pct'].toString()) ?? 0,
+        metric: j['metric'] as String? ?? 'sales_amount',
       );
+
+  bool get isMoney => metric == 'sales_amount';
 
   @override
   List<Object?> get props => [id, achievedAmount];

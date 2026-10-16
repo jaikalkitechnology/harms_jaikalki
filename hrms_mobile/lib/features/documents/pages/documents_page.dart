@@ -19,12 +19,16 @@ String _fmtDay(String? iso) {
 /// More → Documents: the employee's letters (offer, appointment,
 /// confirmation …) and the company policies HR has published.
 class DocumentsPage extends StatelessWidget {
-  const DocumentsPage({super.key});
+  const DocumentsPage({super.key, this.initialTab = 0});
+
+  /// 0 = My letters, 1 = Policies.
+  final int initialTab;
 
   @override
   Widget build(BuildContext context) {
     return DefaultTabController(
       length: 2,
+      initialIndex: initialTab,
       child: Scaffold(
         appBar: AppBar(
           title: const Text('Documents'),
@@ -188,6 +192,45 @@ class _PoliciesTabState extends State<_PoliciesTab> with _FileActions {
     await _future;
   }
 
+  Future<void> _accept(CompanyPolicy p) async {
+    final api = sl<DocumentsApi>();
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(p.title),
+        content: const Text(
+          'Please open and read the policy before accepting it.\n\n'
+          'By tapping “I accept” you confirm that you have read and '
+          'understood it and will follow it.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              download(p.id, () => api.policyFile(p.id),
+                  filename: p.fileName, mimeType: p.mimeType);
+            },
+            child: const Text('Open policy'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('I accept'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    setState(() => busy.add(p.id));
+    try {
+      await api.acknowledgePolicy(p.id);
+      toast('Thank you — you have accepted ${p.title}.');
+      await _refresh();
+    } catch (_) {
+      toast('Could not record your acceptance. Please try again.', error: true);
+    } finally {
+      if (mounted) setState(() => busy.remove(p.id));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return RefreshIndicator(
@@ -210,11 +253,13 @@ class _PoliciesTabState extends State<_PoliciesTab> with _FileActions {
             );
           }
           final api = sl<DocumentsApi>();
+          final toAccept = policies.where((p) => p.needsMyAcceptance).length;
           return ListView.builder(
             padding: const EdgeInsets.all(16),
-            itemCount: policies.length,
-            itemBuilder: (_, i) {
-              final p = policies[i];
+            itemCount: policies.length + (toAccept > 0 ? 1 : 0),
+            itemBuilder: (_, index) {
+              if (toAccept > 0 && index == 0) return _AcceptBanner(count: toAccept);
+              final p = policies[index - (toAccept > 0 ? 1 : 0)];
               final effective = _fmtDay(p.effectiveDate);
               return _DocCard(
                 icon: Icons.policy_outlined,
@@ -230,6 +275,26 @@ class _PoliciesTabState extends State<_PoliciesTab> with _FileActions {
                     filename: p.fileName, mimeType: p.mimeType),
                 onShare: () => share(p.id, () => api.policyFile(p.id),
                     filename: p.fileName, mimeType: p.mimeType, title: p.title),
+                footer: !p.requiresAcknowledgement
+                    ? null
+                    : p.myAcknowledgedAt != null
+                        ? Row(
+                            children: [
+                              const Icon(Icons.verified_outlined,
+                                  size: 16, color: AppColors.successText),
+                              const SizedBox(width: 6),
+                              Text(
+                                'Accepted on ${_fmtDay(p.myAcknowledgedAt)}',
+                                style: const TextStyle(
+                                    color: AppColors.successText, fontSize: 12),
+                              ),
+                            ],
+                          )
+                        : FilledButton.tonalIcon(
+                            onPressed: busy.contains(p.id) ? null : () => _accept(p),
+                            icon: const Icon(Icons.task_alt, size: 18),
+                            label: const Text('Read & accept'),
+                          ),
               );
             },
           );
@@ -250,6 +315,7 @@ class _DocCard extends StatelessWidget {
     required this.onShare,
     this.tag,
     this.description,
+    this.footer,
   });
 
   final IconData icon;
@@ -257,6 +323,7 @@ class _DocCard extends StatelessWidget {
   final String? tag;
   final String meta;
   final String? description;
+  final Widget? footer;
   final bool busy;
   final VoidCallback onDownload;
   final VoidCallback onShare;
@@ -322,6 +389,10 @@ class _DocCard extends StatelessWidget {
                         style: const TextStyle(color: AppColors.textMuted, fontSize: 13, height: 1.35),
                       ),
                     ],
+                    if (footer != null) ...[
+                      const SizedBox(height: 10),
+                      footer!,
+                    ],
                   ],
                 ),
               ),
@@ -351,6 +422,38 @@ class _DocCard extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _AcceptBanner extends StatelessWidget {
+  const _AcceptBanner({required this.count});
+  final int count;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.warning.withOpacity(0.12),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.warning.withOpacity(0.4)),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.pending_actions_outlined, color: AppColors.warning),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              count == 1
+                  ? '1 policy needs your acceptance. Read it, then tap “Read & accept”.'
+                  : '$count policies need your acceptance. Read each one, then tap “Read & accept”.',
+              style: TextStyle(color: context.textPrimary, height: 1.4),
+            ),
+          ),
+        ],
       ),
     );
   }

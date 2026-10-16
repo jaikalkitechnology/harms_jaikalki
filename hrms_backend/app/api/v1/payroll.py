@@ -244,7 +244,7 @@ async def download_payslip(
 ):
     payslip = await payroll_service.get_payslip(db, payslip_id)
     target = await emp_svc.get_employee(db, payslip.employee_id)
-    allowed = await emp_svc.visible_employee_ids(db, user)
+    allowed = await emp_svc.visible_employee_ids(db, user, scope="direct")
     emp_svc.assert_can_view(user, target, allowed)
     # The employee may only pull their own slip once salary is paid.
     # Admin / manager (visible_employee_ids returns None or includes
@@ -374,7 +374,7 @@ async def list_employee_documents(
     user: User = Depends(get_current_user),
 ):
     target = await emp_svc.get_employee(db, employee_id)
-    allowed = await emp_svc.visible_employee_ids(db, user)
+    allowed = await emp_svc.visible_employee_ids(db, user, scope="direct")
     emp_svc.assert_can_view(user, target, allowed)
     rows = (
         await db.execute(
@@ -440,7 +440,7 @@ async def pending_reimbursements(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(require_permission("approval.act")),
 ):
-    visible = await emp_svc.visible_employee_ids(db, user)
+    visible = await emp_svc.visible_employee_ids(db, user, scope="direct")
     stmt = select(Reimbursement).where(Reimbursement.status == "pending")
     if visible is not None:
         if not visible:
@@ -469,7 +469,7 @@ async def list_reimbursements(
     `paid` and the row links to that run via paid_in_run_id."""
     from sqlalchemy import or_
 
-    visible = await emp_svc.visible_employee_ids(db, user)
+    visible = await emp_svc.visible_employee_ids(db, user, scope="direct")
     stmt = select(Reimbursement)
     if visible is not None:
         if not visible:

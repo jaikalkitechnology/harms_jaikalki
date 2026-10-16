@@ -73,7 +73,7 @@ async def list_documents(
     user: User = Depends(get_current_user),
 ):
     emp = await svc.get_employee(db, employee_id)
-    allowed = await svc.visible_employee_ids(db, user)
+    allowed = await svc.visible_employee_ids(db, user, scope="direct")
     svc.assert_can_view(user, emp, allowed)
     return (
         await db.execute(
@@ -196,7 +196,7 @@ async def get_signed_url(
     if not doc:
         raise NotFoundError("Document not found")
     emp = await svc.get_employee(db, doc.employee_id)
-    allowed = await svc.visible_employee_ids(db, user)
+    allowed = await svc.visible_employee_ids(db, user, scope="direct")
     svc.assert_can_view(user, emp, allowed)
     # Extract object key from URL.
     from app.config import settings

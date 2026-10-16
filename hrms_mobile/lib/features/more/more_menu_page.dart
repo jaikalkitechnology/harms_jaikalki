@@ -8,6 +8,7 @@ import '../../core/routing/app_router.dart';
 import '../../core/theme/app_colors.dart';
 import '../../l10n/app_l10n.dart';
 import '../auth/presentation/bloc/auth_bloc.dart';
+import '../team/data/team_api.dart';
 
 class MoreMenuPage extends StatefulWidget {
   const MoreMenuPage({super.key});
@@ -18,6 +19,7 @@ class MoreMenuPage extends StatefulWidget {
 
 class _MoreMenuPageState extends State<MoreMenuPage> {
   late final EnabledModulesService _modules;
+  bool _hasTeam = false;
 
   @override
   void initState() {
@@ -26,6 +28,9 @@ class _MoreMenuPageState extends State<MoreMenuPage> {
     _modules.addListener(_onModulesChanged);
     // Background refresh in case admin updated the mapping recently.
     _modules.refresh();
+    sl<TeamApi>().me().then((t) {
+      if (mounted && t.hasTeam) setState(() => _hasTeam = true);
+    }).catchError((_) {});
   }
 
   @override
@@ -44,6 +49,8 @@ class _MoreMenuPageState extends State<MoreMenuPage> {
 
     final allSections = <_MoreSection>[
       _MoreSection('Work', [
+        _MoreItem('my_team', 'My team', Icons.groups_2_outlined, AppRoutes.myTeam),
+        _MoreItem('tasks', 'Tasks', Icons.task_alt_outlined, AppRoutes.tasks),
         _MoreItem('leaves', l.leaves, Icons.beach_access_outlined, AppRoutes.leaves),
         _MoreItem('dwp', 'Daily plan', Icons.checklist_outlined, AppRoutes.dwp),
         _MoreItem('approvals', l.approvals, Icons.inbox_outlined, AppRoutes.approvalsInbox),
@@ -101,13 +108,16 @@ class _MoreMenuPageState extends State<MoreMenuPage> {
     // so we never accidentally hide everything.
     // Team exits is a reporting-manager tool (not department-gated).
     final user = context.watch<AuthBloc>().state.user;
-    final managesPeople = user != null &&
-        (user.hasRole('manager') || user.hasPermission('approval.act'));
+    // Anyone with people reporting to them counts, not just the manager
+    // role (asked from the server once per screen).
+    final managesPeople = _hasTeam ||
+        (user != null &&
+            (user.hasRole('manager') || user.hasPermission('approval.act')));
     // Documents is for everyone (also before the cached whitelist
     // picks up the new key).
     bool shown(_MoreItem i) => switch (i.key) {
-          'team_exits' => managesPeople,
-          'documents' => true,
+          'team_exits' || 'my_team' => managesPeople,
+          'documents' || 'tasks' => true,
           _ => _modules.isEnabled(i.key),
         };
 

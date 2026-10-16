@@ -125,27 +125,13 @@ def _logo_path() -> Optional[Path]:
 async def _next_letter_number(
     db: AsyncSession, *, doc_type: str, year: int
 ) -> str:
-    """Generate JKT/HR/AL/{seq}/{year} for offer letters or
-    JKT/HR/CL/{seq}/{year} for confirmation letters."""
-    code = "AL" if doc_type == "offer_letter" else "CL"
-    rows = (
-        await db.execute(
-            select(GeneratedDocument)
-            .where(GeneratedDocument.doc_type == doc_type)
-            .where(GeneratedDocument.letter_number.is_not(None))
-        )
-    ).scalars().all()
-    max_seq = 0
-    for d in rows:
-        if not d.letter_number:
-            continue
-        parts = d.letter_number.split("/")
-        if len(parts) >= 5 and parts[-1] == str(year):
-            try:
-                max_seq = max(max_seq, int(parts[-2]))
-            except ValueError:
-                pass
-    return f"JKT/HR/{code}/{(max_seq + 1):03d}/{year}"
+    """JKT/HR/AL/{seq}/{year} for offer letters, JKT/HR/CL/{seq}/{year} for
+    confirmation letters — same sequence as letters issued from templates."""
+    from app.services.letter_numbers import next_letter_number
+
+    return await next_letter_number(
+        db, "offer" if doc_type == "offer_letter" else "confirmation", year
+    )
 
 
 def _now() -> datetime:
@@ -216,8 +202,14 @@ async def generate_offer_letter(
         pf_cap=pf_cap,
     ).as_dict()
 
+    from app.services.letterhead import get_letterhead
+
     pdf_bytes = _render_offer_letter(
-        employee, letter_no=letter_no, on_date=letter_date, breakup=breakup
+        employee,
+        letter_no=letter_no,
+        on_date=letter_date,
+        breakup=breakup,
+        letterhead=await get_letterhead(db),
     )
 
     file_url = ""
@@ -258,6 +250,7 @@ def _render_offer_letter(
     letter_no: str,
     on_date: date,
     breakup: dict,
+    letterhead: Optional[dict] = None,
 ) -> bytes:
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(
@@ -265,20 +258,16 @@ def _render_offer_letter(
         pagesize=A4,
         leftMargin=1.8 * cm,
         rightMargin=1.8 * cm,
-        topMargin=1.6 * cm,
-        bottomMargin=1.6 * cm,
+        # Room for the letterhead header band and footer office block.
+        topMargin=5.6 * cm,
+        bottomMargin=6.0 * cm,
         title=f"Offer Letter · {employee.employee_code}",
         author=settings.COMPANY_NAME,
     )
     s = _styles()
     story: list = []
 
-    # ── Header ───────────────────────────────────────────────────────
-    story.append(Paragraph(settings.COMPANY_NAME, s["company"]))
-    story.append(
-        Paragraph(settings.COMPANY_ADDRESS, s["small"])
-    )
-    story.append(Spacer(1, 14))
+    # Company name and address come from the letterhead.
 
     # Letter number + date row
     meta = Table(
@@ -416,7 +405,8 @@ def _render_offer_letter(
     ins.setStyle(_table_style(highlight_last=True))
     story.append(ins)
 
-    doc.build(story, onFirstPage=_footer, onLaterPages=_footer)
+    page = _letterhead_page(letterhead)
+    doc.build(story, onFirstPage=page, onLaterPages=page)
     return buffer.getvalue()
 
 
@@ -549,19 +539,17 @@ def _table_style(highlight_last: bool = False) -> TableStyle:
     return TableStyle(cmds)
 
 
-def _footer(canvas, doc):
-    canvas.saveState()
-    canvas.setFont(FONT_REGULAR, 8)
-    canvas.setFillColor(colors.dimgray)
-    canvas.drawString(
-        1.8 * cm, 1 * cm,
-        f"{settings.COMPANY_NAME} · Confidential",
+def _letterhead_page(letterhead: Optional[dict]):
+    """Page callback drawing the company letterhead from Settings →
+    Letterhead — the same one template letters use."""
+    # Imported here: letter_template_service imports from this module.
+    from app.services.letter_template_service import (
+        _letterhead_decorator,
+        letterhead_images,
     )
-    canvas.drawRightString(
-        A4[0] - 1.8 * cm, 1 * cm,
-        f"Page {canvas.getPageNumber()}",
-    )
-    canvas.restoreState()
+
+    watermark, icon = letterhead_images(letterhead)
+    return _letterhead_decorator(watermark, icon, letterhead)
 
 
 def _salutation(employee: Employee) -> str:
@@ -754,8 +742,13 @@ async def generate_confirmation_letter(
         db, doc_type="confirmation_letter", year=letter_date.year
     )
 
+    from app.services.letterhead import get_letterhead
+
     pdf_bytes = _render_confirmation_letter(
-        employee, letter_no=letter_no, on_date=letter_date
+        employee,
+        letter_no=letter_no,
+        on_date=letter_date,
+        letterhead=await get_letterhead(db),
     )
 
     file_url = ""
@@ -825,6 +818,7 @@ def _render_confirmation_letter(
     *,
     letter_no: str,
     on_date: date,
+    letterhead: Optional[dict] = None,
 ) -> bytes:
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(
@@ -832,17 +826,16 @@ def _render_confirmation_letter(
         pagesize=A4,
         leftMargin=1.8 * cm,
         rightMargin=1.8 * cm,
-        topMargin=1.6 * cm,
-        bottomMargin=1.6 * cm,
+        # Room for the letterhead header band and footer office block.
+        topMargin=5.6 * cm,
+        bottomMargin=6.0 * cm,
         title=f"Confirmation Letter · {employee.employee_code}",
         author=settings.COMPANY_NAME,
     )
     s = _styles()
     story: list = []
 
-    story.append(Paragraph(settings.COMPANY_NAME, s["company"]))
-    story.append(Paragraph(settings.COMPANY_ADDRESS, s["small"]))
-    story.append(Spacer(1, 14))
+    # Company name and address come from the letterhead.
 
     meta = Table(
         [[Paragraph(letter_no, s["body"]),
@@ -915,7 +908,8 @@ def _render_confirmation_letter(
     ]))
     story.append(sig)
 
-    doc.build(story, onFirstPage=_footer, onLaterPages=_footer)
+    page = _letterhead_page(letterhead)
+    doc.build(story, onFirstPage=page, onLaterPages=page)
     return buffer.getvalue()
 
 
@@ -1187,6 +1181,35 @@ def render_payslip_pdf(
     breakup_table = _salary_table(payslip.breakup or {}, show_annual=False)
     story.append(breakup_table)
     story.append(Spacer(1, 12))
+
+    # ── Variable pay this month (approved incentives) ─────────────────
+    incentive = Decimal(str(getattr(payslip, "incentive", 0) or 0))
+    if incentive > 0:
+        inc = Table(
+            [[
+                Paragraph(
+                    f"<font name='{FONT_BOLD}'>Incentive (this month)</font><br/>"
+                    "<font size=8>Included in gross pay; ESIC and professional tax apply.</font>",
+                    s["body"],
+                ),
+                Paragraph(
+                    f"<font name='{FONT_BOLD}'>{RUPEE} {int(incentive):,}</font>",
+                    s["right"],
+                ),
+            ]],
+            colWidths=[11.5 * cm, 5.5 * cm],
+        )
+        inc.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#FBF6E9")),
+            ("BOX", (0, 0), (-1, -1), 0.5, GRID),
+            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+            ("LEFTPADDING", (0, 0), (-1, -1), 10),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 10),
+            ("TOPPADDING", (0, 0), (-1, -1), 6),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+        ]))
+        story.append(inc)
+        story.append(Spacer(1, 12))
 
     # ── Net pay banner ─────────────────────────────────────────────────
     net_row = Table(

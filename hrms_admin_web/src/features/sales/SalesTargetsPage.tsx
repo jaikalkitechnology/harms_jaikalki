@@ -14,7 +14,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { LoadingScreen } from "@/components/shared/LoadingScreen";
-import { salesApi, type SalesTarget } from "@/lib/api/sales";
+import {
+  TARGET_METRICS,
+  fmtTargetValue,
+  salesApi,
+  type SalesTarget,
+  type TargetMetric,
+} from "@/lib/api/sales";
 import { employeesApi } from "@/lib/api/employees";
 
 type EditState = {
@@ -25,6 +31,7 @@ type EditState = {
   target_amount: string;
   commission_pct: string;
   notes: string;
+  metric: TargetMetric;
 };
 
 export default function SalesTargetsPage() {
@@ -45,6 +52,8 @@ export default function SalesTargetsPage() {
   const [periodEnd, setPeriodEnd] = useState(monthEnd);
   const [targetAmount, setTargetAmount] = useState("");
   const [commissionPct, setCommissionPct] = useState("3");
+  const [metric, setMetric] = useState<TargetMetric>("sales_amount");
+  const isMoney = metric === "sales_amount";
 
   // Filters
   const [searchTerm, setSearchTerm] = useState("");
@@ -82,7 +91,8 @@ export default function SalesTargetsPage() {
         period_start: periodStart,
         period_end: periodEnd,
         target_amount: Number(targetAmount),
-        commission_pct: Number(commissionPct),
+        commission_pct: isMoney ? Number(commissionPct) : 0,
+        metric,
       }),
     onSuccess: () => {
       toast.success("Target created");
@@ -101,8 +111,9 @@ export default function SalesTargetsPage() {
         period_start: e.period_start,
         period_end: e.period_end,
         target_amount: Number(e.target_amount),
-        commission_pct: Number(e.commission_pct),
+        commission_pct: e.metric === "sales_amount" ? Number(e.commission_pct) : 0,
         notes: e.notes || null,
+        metric: e.metric,
       }),
     onSuccess: () => {
       toast.success("Target updated");
@@ -288,22 +299,43 @@ export default function SalesTargetsPage() {
               />
             </div>
             <div>
-              <Label>Target amount (₹)</Label>
+              <Label>What is counted</Label>
+              <select
+                value={metric}
+                onChange={(e) => setMetric(e.target.value as TargetMetric)}
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+              >
+                {TARGET_METRICS.map((m) => (
+                  <option key={m.value} value={m.value}>
+                    {m.label}
+                  </option>
+                ))}
+              </select>
+              <p className="mt-1 text-[11px] text-brand-brown-light">
+                Progress updates on its own as the work is logged.
+              </p>
+            </div>
+            <div>
+              <Label>
+                {isMoney ? "Target amount (₹)" : `Target (number of ${TARGET_METRICS.find((m) => m.value === metric)?.unit})`}
+              </Label>
               <Input
                 type="number"
                 value={targetAmount}
                 onChange={(e) => setTargetAmount(e.target.value)}
               />
             </div>
-            <div>
-              <Label>Commission %</Label>
-              <Input
-                type="number"
-                step="0.5"
-                value={commissionPct}
-                onChange={(e) => setCommissionPct(e.target.value)}
-              />
-            </div>
+            {isMoney && (
+              <div>
+                <Label>Commission %</Label>
+                <Input
+                  type="number"
+                  step="0.5"
+                  value={commissionPct}
+                  onChange={(e) => setCommissionPct(e.target.value)}
+                />
+              </div>
+            )}
             <div className="md:col-span-2 flex justify-end">
               <Button
                 disabled={!employeeId || !targetAmount || create.isPending}
@@ -359,6 +391,7 @@ export default function SalesTargetsPage() {
                         period_end: t.period_end,
                         target_amount: t.target_amount,
                         commission_pct: t.commission_pct,
+                        metric: t.metric ?? "sales_amount",
                         notes: t.notes ?? "",
                       })
                     }
@@ -413,7 +446,8 @@ function TargetRow({
       : targetAmt > 0
         ? (achieved / targetAmt) * 100
         : 0;
-  const commission = (achieved * Number(target.commission_pct)) / 100;
+  const isMoney = (target.metric ?? "sales_amount") === "sales_amount";
+  const commission = isMoney ? (achieved * Number(target.commission_pct)) / 100 : 0;
   const barColor =
     pct >= 100 ? "bg-success" : pct >= 70 ? "bg-brand-gold" : "bg-info";
   return (
@@ -421,12 +455,15 @@ function TargetRow({
       <td className="px-4 py-3 font-medium">{empLabel}</td>
       <td className="px-4 py-3 capitalize">
         {target.period_type} · {target.period_start} → {target.period_end}
+        <div className="text-xs normal-case text-brand-brown-light">
+          {TARGET_METRICS.find((m) => m.value === (target.metric ?? "sales_amount"))?.label}
+        </div>
       </td>
       <td className="px-4 py-3 text-right">
-        ₹{targetAmt.toLocaleString("en-IN")}
+        {fmtTargetValue(target.metric, targetAmt)}
       </td>
       <td className="px-4 py-3 text-right">
-        ₹{achieved.toLocaleString("en-IN")}
+        {fmtTargetValue(target.metric, achieved)}
       </td>
       <td className="px-4 py-3">
         <div className="h-2 rounded-full bg-brand-brown-50">
@@ -440,10 +477,16 @@ function TargetRow({
         </div>
       </td>
       <td className="px-4 py-3 text-right">
-        ₹{commission.toLocaleString("en-IN")}{" "}
-        <span className="text-xs text-brand-brown-light">
-          ({target.commission_pct}%)
-        </span>
+        {isMoney ? (
+          <>
+            ₹{commission.toLocaleString("en-IN")}{" "}
+            <span className="text-xs text-brand-brown-light">
+              ({target.commission_pct}%)
+            </span>
+          </>
+        ) : (
+          <span className="text-brand-brown-light">—</span>
+        )}
       </td>
       <td className="px-4 py-3 text-right">
         <div className="inline-flex items-center gap-1">
@@ -545,7 +588,21 @@ function EditTargetModal({
             />
           </div>
           <div>
-            <Label>Target amount (₹)</Label>
+            <Label>What is counted</Label>
+            <select
+              value={edit.metric}
+              onChange={(e) => onChange({ ...edit, metric: e.target.value as TargetMetric })}
+              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+            >
+              {TARGET_METRICS.map((m) => (
+                <option key={m.value} value={m.value}>
+                  {m.label}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <Label>{edit.metric === "sales_amount" ? "Target amount (₹)" : "Target (number)"}</Label>
             <Input
               type="number"
               value={edit.target_amount}
@@ -554,17 +611,19 @@ function EditTargetModal({
               }
             />
           </div>
-          <div>
-            <Label>Commission %</Label>
-            <Input
-              type="number"
-              step="0.5"
-              value={edit.commission_pct}
-              onChange={(e) =>
-                onChange({ ...edit, commission_pct: e.target.value })
-              }
-            />
-          </div>
+          {edit.metric === "sales_amount" && (
+            <div>
+              <Label>Commission %</Label>
+              <Input
+                type="number"
+                step="0.5"
+                value={edit.commission_pct}
+                onChange={(e) =>
+                  onChange({ ...edit, commission_pct: e.target.value })
+                }
+              />
+            </div>
+          )}
           <div className="md:col-span-2">
             <Label>Notes</Label>
             <Input

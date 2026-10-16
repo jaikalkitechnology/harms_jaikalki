@@ -47,6 +47,46 @@ async def _self_employee(db: AsyncSession, user: User):
     return emp
 
 
+async def _team(db: AsyncSession, user: User) -> Optional[set[int]]:
+    """Whose sales the caller sees: everyone (Director / HR / Admin), or
+    themselves and everyone below them."""
+    return await emp_svc.visible_employee_ids(db, user)
+
+
+async def _lead_for(db: AsyncSession, user: User, lead_id: int):
+    """The lead, if it belongs to the caller's team (unassigned leads are
+    open to managers so they can hand them out)."""
+    lead = await sales_svc.get_lead(db, lead_id)
+    team = await _team(db, user)
+    if team is None or lead.assigned_to in team:
+        return lead
+    if lead.assigned_to is None and await emp_svc.has_reports(db, user):
+        return lead
+    raise NotFoundError("Lead not found")
+
+
+async def _check_target_owner(db: AsyncSession, user: User, employee_id: int, *, write: bool) -> None:
+    """Targets: you see your team's; you set them for the people below
+    you (not yourself) unless you're Director / HR / Admin."""
+    team = await _team(db, user)
+    if team is None:
+        return
+    me = await emp_svc.get_self_employee(db, user)
+    if employee_id not in team or (write and me and employee_id == me.id):
+        raise NotFoundError("Employee not found")
+
+
+async def _target_owner(db: AsyncSession, target_id: int) -> int:
+    from app.models import SalesTarget
+
+    owner = (
+        await db.execute(select(SalesTarget.employee_id).where(SalesTarget.id == target_id))
+    ).scalar_one_or_none()
+    if owner is None:
+        raise NotFoundError("Target not found")
+    return owner
+
+
 # ─── Leads ────────────────────────────────────────────────────────────
 @router.get("/leads", response_model=list[LeadOut])
 async def list_leads(
@@ -63,8 +103,11 @@ async def list_leads(
     if mine:
         emp = await _self_employee(db, user)
         assigned_to = emp.id
+    team = await _team(db, user)
     return await sales_svc.list_leads(
         db,
+        assigned_in=team,
+        include_unassigned=team is not None and await emp_svc.has_reports(db, user),
         assigned_to=assigned_to,
         stage=stage,
         source=source,
@@ -77,9 +120,14 @@ async def list_leads(
 @router.get("/leads/won-approvals", response_model=list[LeadOut])
 async def list_pending_won_approvals(
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(require_permission("approval.act")),
+    user: User = Depends(require_permission("approval.act")),
 ):
-    return await sales_svc.list_pending_won_leads(db)
+    team = await _team(db, user)
+    return [
+        ld
+        for ld in await sales_svc.list_pending_won_leads(db)
+        if team is None or ld.assigned_to in team
+    ]
 
 
 @router.post(
@@ -92,6 +140,7 @@ async def decide_won(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(require_permission("approval.act")),
 ):
+    await _lead_for(db, user, lead_id)
     return await sales_svc.decide_won(
         db, lead_id,
         decision=payload.decision,
@@ -122,9 +171,9 @@ async def create_lead(
 async def get_lead(
     lead_id: int,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(get_current_user),
+    user: User = Depends(get_current_user),
 ):
-    return await sales_svc.get_lead(db, lead_id)
+    return await _lead_for(db, user, lead_id)
 
 
 @router.patch("/leads/{lead_id}/stage", response_model=LeadOut)
@@ -134,6 +183,7 @@ async def update_lead_stage(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
+    await _lead_for(db, user, lead_id)
     return await sales_svc.update_lead_stage(
         db, lead_id,
         stage=payload.stage,
@@ -149,6 +199,7 @@ async def update_lead(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
+    await _lead_for(db, user, lead_id)
     return await sales_svc.update_lead(
         db, lead_id,
         payload=payload.model_dump(exclude_unset=True),
@@ -160,8 +211,9 @@ async def update_lead(
 async def delete_lead(
     lead_id: int,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(require_permission("approval.act")),
+    user: User = Depends(require_permission("approval.act")),
 ):
+    await _lead_for(db, user, lead_id)
     await sales_svc.delete_lead(db, lead_id)
 
 
@@ -170,8 +222,9 @@ async def delete_lead(
 async def list_lead_activities(
     lead_id: int,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(get_current_user),
+    user: User = Depends(get_current_user),
 ):
+    await _lead_for(db, user, lead_id)
     return await sales_svc.list_lead_activities(db, lead_id)
 
 
@@ -186,6 +239,7 @@ async def add_lead_comment(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
+    await _lead_for(db, user, lead_id)
     return await sales_svc.add_lead_comment(
         db, lead_id, body=payload.body, actor=user
     )
@@ -201,7 +255,13 @@ async def pipeline(
     if mine:
         emp = await _self_employee(db, user)
         assigned_to = emp.id
-    return await sales_svc.pipeline_kanban(db, assigned_to=assigned_to)
+    team = await _team(db, user)
+    return await sales_svc.pipeline_kanban(
+        db,
+        assigned_to=assigned_to,
+        assigned_in=team,
+        include_unassigned=team is not None and await emp_svc.has_reports(db, user),
+    )
 
 
 # ─── Products ─────────────────────────────────────────────────────────
@@ -333,6 +393,7 @@ async def list_orders(
         employee_id = emp.id
     return await sales_svc.list_orders(
         db,
+        employee_ids=await _team(db, user),
         employee_id=employee_id,
         customer_id=customer_id,
         status=order_status,
@@ -383,6 +444,19 @@ async def my_target(
     return sales_svc.target_summary(target)
 
 
+@router.get("/targets/me/all", response_model=list[SalesTargetSummary])
+async def my_targets(
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """All my running targets (₹ sales, visits, verifications …)."""
+    emp = await _self_employee(db, user)
+    return [
+        sales_svc.target_summary(t)
+        for t in await sales_svc.current_targets_for(db, emp.id)
+    ]
+
+
 @router.get("/targets", response_model=list[SalesTargetOut])
 async def list_targets(
     employee_id: Optional[int] = None,
@@ -390,10 +464,11 @@ async def list_targets(
     from_date: Optional[date] = None,
     to_date: Optional[date] = None,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(get_current_user),
+    user: User = Depends(get_current_user),
 ):
     return await sales_svc.list_targets(
         db,
+        employee_ids=await _team(db, user),
         employee_id=employee_id,
         period_type=period_type,
         from_date=from_date,
@@ -409,8 +484,9 @@ async def list_targets(
 async def create_target(
     payload: SalesTargetCreate,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(require_permission("approval.act")),
+    user: User = Depends(require_permission("approval.act")),
 ):
+    await _check_target_owner(db, user, payload.employee_id, write=True)
     return await sales_svc.create_target(db, payload=payload.model_dump())
 
 
@@ -419,8 +495,9 @@ async def update_target(
     target_id: int,
     payload: SalesTargetUpdate,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(require_permission("approval.act")),
+    user: User = Depends(require_permission("approval.act")),
 ):
+    await _check_target_owner(db, user, await _target_owner(db, target_id), write=True)
     return await sales_svc.update_target(
         db, target_id, payload=payload.model_dump(exclude_unset=True)
     )
@@ -430,8 +507,9 @@ async def update_target(
 async def delete_target(
     target_id: int,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(require_permission("approval.act")),
+    user: User = Depends(require_permission("approval.act")),
 ):
+    await _check_target_owner(db, user, await _target_owner(db, target_id), write=True)
     await sales_svc.delete_target(db, target_id)
 
 
@@ -439,8 +517,9 @@ async def delete_target(
 async def recompute_target(
     target_id: int,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(get_current_user),
+    user: User = Depends(get_current_user),
 ):
+    await _check_target_owner(db, user, await _target_owner(db, target_id), write=False)
     return await sales_svc.recompute_target_achievement(db, target_id)
 
 

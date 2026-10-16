@@ -68,6 +68,7 @@ async def create_lead(
     db.add(lead)
     await db.commit()
     await db.refresh(lead)
+    await refresh_targets_for(db, lead.assigned_to)
     return lead
 
 
@@ -80,11 +81,20 @@ async def list_leads(
     customer_id: Optional[int] = None,
     search: Optional[str] = None,
     won_status: Optional[str] = None,
+    assigned_in: Optional[set[int]] = None,
+    include_unassigned: bool = False,
     limit: int = 500,
 ) -> Sequence[Lead]:
+    """``assigned_in`` limits to leads owned by those employees (the
+    caller's team); None = no limit."""
     from sqlalchemy import or_
 
     stmt = select(Lead)
+    if assigned_in is not None:
+        owned = Lead.assigned_to.in_(assigned_in or {-1})
+        stmt = stmt.where(
+            or_(owned, Lead.assigned_to.is_(None)) if include_unassigned else owned
+        )
     if assigned_to is not None:
         stmt = stmt.where(Lead.assigned_to == assigned_to)
     if stage:
@@ -139,6 +149,7 @@ async def update_lead(
         )
     await db.commit()
     await db.refresh(lead)
+    await refresh_targets_for(db, lead.assigned_to)
     return lead
 
 
@@ -258,6 +269,7 @@ async def update_lead_stage(
     )
     await db.commit()
     await db.refresh(lead)
+    await refresh_targets_for(db, lead.assigned_to)
     return lead
 
 
@@ -319,6 +331,7 @@ async def decide_won(
         )
     await db.commit()
     await db.refresh(lead)
+    await refresh_targets_for(db, lead.assigned_to)
     return lead
 
 
@@ -334,10 +347,20 @@ async def list_pending_won_leads(db: AsyncSession) -> Sequence[Lead]:
 
 
 async def pipeline_kanban(
-    db: AsyncSession, *, assigned_to: Optional[int] = None
+    db: AsyncSession,
+    *,
+    assigned_to: Optional[int] = None,
+    assigned_in: Optional[set[int]] = None,
+    include_unassigned: bool = False,
 ) -> list[dict]:
     stages = ["new", "contacted", "qualified", "proposal", "negotiation", "won", "lost"]
-    leads = await list_leads(db, assigned_to=assigned_to, limit=500)
+    leads = await list_leads(
+        db,
+        assigned_to=assigned_to,
+        assigned_in=assigned_in,
+        include_unassigned=include_unassigned,
+        limit=500,
+    )
     by_stage: dict[str, list[Lead]] = {s: [] for s in stages}
     for ld in leads:
         by_stage.setdefault(ld.stage, []).append(ld)
@@ -595,6 +618,7 @@ async def create_order(
 
     await db.commit()
     await db.refresh(order)
+    await refresh_targets_for(db, order.employee_id)
     return order
 
 
@@ -604,8 +628,11 @@ async def list_orders(
     employee_id: Optional[int] = None,
     customer_id: Optional[int] = None,
     status: Optional[str] = None,
+    employee_ids: Optional[set[int]] = None,
 ) -> Sequence[SalesOrder]:
     stmt = select(SalesOrder)
+    if employee_ids is not None:
+        stmt = stmt.where(SalesOrder.employee_id.in_(employee_ids or {-1}))
     if employee_id is not None:
         stmt = stmt.where(SalesOrder.employee_id == employee_id)
     if customer_id is not None:
@@ -633,27 +660,11 @@ async def update_order_status(
         order.tracking_number = tracking_number
     if status == "delivered":
         order.delivered_at = _now()
-        # Roll up to active sales target.
-        await _apply_order_to_target(db, order)
     await db.commit()
     await db.refresh(order)
+    # Keep the employee's targets in step with their orders.
+    await refresh_targets_for(db, order.employee_id, on=order.placed_at.date() if order.placed_at else None)
     return order
-
-
-async def _apply_order_to_target(db: AsyncSession, order: SalesOrder) -> None:
-    today = _now().date()
-    target = (
-        await db.execute(
-            select(SalesTarget)
-            .where(SalesTarget.employee_id == order.employee_id)
-            .where(SalesTarget.period_start <= today)
-            .where(SalesTarget.period_end >= today)
-        )
-    ).scalar_one_or_none()
-    if target:
-        target.achieved_amount = _money(
-            target.achieved_amount + order.total_amount
-        )
 
 
 # ── Targets ──────────────────────────────────────────────────────────
@@ -674,8 +685,11 @@ async def list_targets(
     period_type: Optional[str] = None,
     from_date=None,
     to_date=None,
+    employee_ids: Optional[set[int]] = None,
 ) -> Sequence[SalesTarget]:
     stmt = select(SalesTarget)
+    if employee_ids is not None:
+        stmt = stmt.where(SalesTarget.employee_id.in_(employee_ids or {-1}))
     if employee_id is not None:
         stmt = stmt.where(SalesTarget.employee_id == employee_id)
     if period_type:
@@ -730,45 +744,23 @@ async def delete_target(db: AsyncSession, target_id: int) -> None:
     await db.commit()
 
 
-async def recompute_target_achievement(
-    db: AsyncSession, target_id: int
-) -> SalesTarget:
-    """Recompute achieved_amount from actual records.
-
-    Source of truth: SalesOrders for the assigned employee inside the
-    target's period (most accurate). Falls back to summing won leads'
-    expected_value when no orders exist, so a quick lead-driven
-    pipeline still shows progress."""
-    from datetime import datetime as _dt, time as _time
-    from sqlalchemy import func as _f
+async def _sales_amount(db: AsyncSession, t: SalesTarget, start, end) -> Decimal:
+    """Orders placed in the period (not cancelled); when there are none,
+    the expected value of approved won leads closing in the period."""
+    from sqlalchemy import func as _f, or_ as _or
     from app.models import Lead as _Lead, SalesOrder as _Order
 
-    t = (
-        await db.execute(select(SalesTarget).where(SalesTarget.id == target_id))
-    ).scalar_one_or_none()
-    if not t:
-        raise NotFoundError("Target not found")
-
-    period_start_dt = _dt.combine(t.period_start, _time.min)
-    period_end_dt = _dt.combine(t.period_end, _time.max)
-
-    # Primary: confirmed/delivered orders inside the period.
     orders_total = (
         await db.execute(
             select(_f.coalesce(_f.sum(_Order.total_amount), 0))
             .where(_Order.employee_id == t.employee_id)
-            .where(_Order.placed_at >= period_start_dt)
-            .where(_Order.placed_at <= period_end_dt)
+            .where(_Order.placed_at >= start)
+            .where(_Order.placed_at <= end)
             .where(_Order.status != "cancelled")
         )
     ).scalar() or 0
-
     achieved = Decimal(str(orders_total))
-
-    # Secondary: won leads inside the period (only if no orders).
-    # Pending / rejected wins do NOT count.
     if achieved == 0:
-        from sqlalchemy import or_ as _or
         won_total = (
             await db.execute(
                 select(_f.coalesce(_f.sum(_Lead.expected_value), 0))
@@ -785,6 +777,120 @@ async def recompute_target_achievement(
             )
         ).scalar() or 0
         achieved = Decimal(str(won_total))
+    return achieved
+
+
+async def _metric_count(db: AsyncSession, t: SalesTarget, metric: str, start, end) -> int:
+    """Counts for the non-money targets, inside the target's period."""
+    from sqlalchemy import func as _f, or_ as _or
+    from app.models import Lead as _Lead, Verification, Visit, WorkTask
+
+    if metric == "leads_won":
+        stmt = (
+            select(_f.count(_Lead.id))
+            .where(_Lead.assigned_to == t.employee_id, _Lead.stage == "won")
+            .where(_or(_Lead.won_approval_status.is_(None), _Lead.won_approval_status == "approved"))
+            .where(_Lead.expected_close_date >= t.period_start, _Lead.expected_close_date <= t.period_end)
+        )
+    elif metric == "new_leads":
+        stmt = select(_f.count(_Lead.id)).where(
+            _Lead.assigned_to == t.employee_id, _Lead.created_at >= start, _Lead.created_at <= end
+        )
+    elif metric == "field_visits":
+        stmt = select(_f.count(Visit.id)).where(
+            Visit.employee_id == t.employee_id,
+            Visit.check_out_time >= start,
+            Visit.check_out_time <= end,
+        )
+    elif metric == "verifications":
+        stmt = select(_f.count(Verification.id)).where(
+            Verification.assigned_to == t.employee_id,
+            Verification.status == "completed",
+            Verification.audited_at >= start,
+            Verification.audited_at <= end,
+        )
+    elif metric == "tasks_done":
+        stmt = select(_f.count(WorkTask.id)).where(
+            WorkTask.assigned_to == t.employee_id,
+            WorkTask.status == "done",
+            WorkTask.completed_at >= start,
+            WorkTask.completed_at <= end,
+        )
+    else:
+        return 0
+    return int((await db.execute(stmt)).scalar() or 0)
+
+
+async def refresh_targets_for(
+    db: AsyncSession, employee_id: Optional[int], *, on: Optional[date] = None
+) -> None:
+    """Recompute the employee's targets covering today (and ``on``, the
+    day the activity happened). Never raises — it runs after the real
+    action has been saved."""
+    if not employee_id:
+        return
+    days = {_now().date()} | ({on} if on else set())
+    try:
+        ids = set()
+        for d in days:
+            ids.update(
+                (
+                    await db.execute(
+                        select(SalesTarget.id).where(
+                            SalesTarget.employee_id == employee_id,
+                            SalesTarget.period_start <= d,
+                            SalesTarget.period_end >= d,
+                        )
+                    )
+                ).scalars()
+            )
+        for tid in ids:
+            await recompute_target_achievement(db, tid)
+    except Exception:  # pragma: no cover
+        import logging
+
+        logging.getLogger(__name__).exception("target refresh failed for %s", employee_id)
+        await db.rollback()
+
+
+async def refresh_all_current_targets(db: AsyncSession) -> int:
+    """Nightly: bring every running target up to date."""
+    today = _now().date()
+    ids = (
+        await db.execute(
+            select(SalesTarget.id).where(
+                SalesTarget.period_start <= today, SalesTarget.period_end >= today
+            )
+        )
+    ).scalars().all()
+    for tid in ids:
+        await recompute_target_achievement(db, tid)
+    return len(ids)
+
+
+async def recompute_target_achievement(
+    db: AsyncSession, target_id: int
+) -> SalesTarget:
+    """Recompute achieved_amount from actual records, by the target's
+    metric: ₹ of orders (won leads as a fallback) for sales targets, or
+    a count of won leads, new leads, field visits, completed
+    verifications or finished tasks."""
+    from datetime import datetime as _dt, time as _time
+
+    t = (
+        await db.execute(select(SalesTarget).where(SalesTarget.id == target_id))
+    ).scalar_one_or_none()
+    if not t:
+        raise NotFoundError("Target not found")
+
+    period_start_dt = _dt.combine(t.period_start, _time.min)
+    period_end_dt = _dt.combine(t.period_end, _time.max)
+    metric = t.metric or "sales_amount"
+
+    if metric == "sales_amount":
+        achieved = await _sales_amount(db, t, period_start_dt, period_end_dt)
+    else:
+        achieved = Decimal(await _metric_count(db, t, metric, period_start_dt, period_end_dt))
 
     t.achieved_amount = _money(achieved)
     await db.commit()
@@ -804,16 +910,25 @@ async def recompute_target_achievement(
 async def current_target_for(
     db: AsyncSession, employee_id: int
 ) -> Optional[SalesTarget]:
+    """The running sales (₹) target — or, without one, any running
+    target. ``current_targets_for`` lists them all."""
+    rows = await current_targets_for(db, employee_id)
+    sales = [t for t in rows if (t.metric or "sales_amount") == "sales_amount"]
+    return (sales or rows or [None])[0]
+
+
+async def current_targets_for(db: AsyncSession, employee_id: int) -> list[SalesTarget]:
+    """Every target running today, shortest period first."""
     today = _now().date()
-    return (
+    rows = (
         await db.execute(
             select(SalesTarget)
             .where(SalesTarget.employee_id == employee_id)
             .where(SalesTarget.period_start <= today)
             .where(SalesTarget.period_end >= today)
-            .order_by(SalesTarget.period_start.desc())
         )
-    ).scalar_one_or_none()
+    ).scalars().all()
+    return sorted(rows, key=lambda t: ((t.period_end - t.period_start).days, -t.id))
 
 
 def target_summary(target: SalesTarget) -> dict:
@@ -822,7 +937,11 @@ def target_summary(target: SalesTarget) -> dict:
         if target.target_amount > 0
         else 0.0
     )
-    commission = _money(target.achieved_amount * target.commission_pct / Decimal("100"))
+    commission = (
+        _money(target.achieved_amount * target.commission_pct / Decimal("100"))
+        if (target.metric or "sales_amount") == "sales_amount"
+        else Decimal("0")
+    )
     return {
         "target": target,
         "achievement_pct": round(pct, 2),
