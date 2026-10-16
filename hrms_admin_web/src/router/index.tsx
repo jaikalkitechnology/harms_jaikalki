@@ -9,6 +9,7 @@ import EmployeesListPage from "@/features/employees/EmployeesListPage";
 import EmployeeDetailPage from "@/features/employees/EmployeeDetailPage";
 import MyTeamPage from "@/features/team/MyTeamPage";
 import OrgChartPage from "@/features/team/OrgChartPage";
+import TasksPage from "@/features/tasks/TasksPage";
 import EmployeeCreatePage from "@/features/employees/EmployeeCreatePage";
 import SalaryTemplatesPage from "@/features/salary-templates/SalaryTemplatesPage";
 import InternExpensesPage from "@/features/intern-expenses/InternExpensesPage";
@@ -96,6 +97,7 @@ export const router = createBrowserRouter([
       { path: "employees/:id", element: <EmployeeDetailPage /> },
       { path: "team", element: <MyTeamPage /> },
       { path: "org-chart", element: <OrgChartPage /> },
+      { path: "tasks", element: <TasksPage /> },
       { path: "salary-templates", element: <SalaryTemplatesPage /> },
       { path: "intern-expenses", element: <InternExpensesPage /> },
       { path: "departments", element: <DepartmentsPage /> },

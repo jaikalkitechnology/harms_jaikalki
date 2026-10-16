@@ -50,6 +50,7 @@ class _MoreMenuPageState extends State<MoreMenuPage> {
     final allSections = <_MoreSection>[
       _MoreSection('Work', [
         _MoreItem('my_team', 'My team', Icons.groups_2_outlined, AppRoutes.myTeam),
+        _MoreItem('tasks', 'Tasks', Icons.task_alt_outlined, AppRoutes.tasks),
         _MoreItem('leaves', l.leaves, Icons.beach_access_outlined, AppRoutes.leaves),
         _MoreItem('dwp', 'Daily plan', Icons.checklist_outlined, AppRoutes.dwp),
         _MoreItem('approvals', l.approvals, Icons.inbox_outlined, AppRoutes.approvalsInbox),
@@ -116,7 +117,7 @@ class _MoreMenuPageState extends State<MoreMenuPage> {
     // picks up the new key).
     bool shown(_MoreItem i) => switch (i.key) {
           'team_exits' || 'my_team' => managesPeople,
-          'documents' => true,
+          'documents' || 'tasks' => true,
           _ => _modules.isEnabled(i.key),
         };
 

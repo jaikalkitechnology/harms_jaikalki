@@ -83,6 +83,12 @@ _PENDING_COLUMNS: list[tuple[str, str, str, str | None]] = [
     ),
     ("company_policies", "revision", "INT NOT NULL DEFAULT 1", None),
     (
+        "sales_targets",
+        "metric",
+        "VARCHAR(24) NOT NULL DEFAULT 'sales_amount'",
+        None,
+    ),
+    (
         "job_postings",
         "published_to_app",
         "BOOLEAN NOT NULL DEFAULT FALSE",

@@ -69,6 +69,10 @@ import '../../features/sales/pages/sales_pipeline_page.dart'
     deferred as sales_pipeline;
 import '../../features/sales/pages/sales_targets_page.dart'
     deferred as sales_targets;
+import '../../features/tasks/pages/give_task_page.dart' deferred as give_task;
+import '../../features/tasks/pages/task_detail_page.dart'
+    deferred as task_detail;
+import '../../features/tasks/pages/tasks_page.dart' deferred as tasks_page;
 import '../../features/team/pages/my_team_page.dart' deferred as my_team;
 import '../../features/team/pages/team_member_page.dart'
     deferred as team_member;
@@ -126,6 +130,8 @@ class AppRoutes {
   static const documents = '/documents';
   static const myTeam = '/team';
   static const teamMember = '/team/member';
+  static const tasks = '/tasks';
+  static const giveTask = '/tasks/give';
   static const visitors = '/visitors';
   static const visitorRegister = '/visitors/new';
   static const visitorScan = '/visitors/scan';
@@ -358,6 +364,31 @@ GoRouter buildRouter(AuthBloc authBloc) {
             exam_taking.loadLibrary,
             (_) => exam_taking.ExamTakingPage(
                   examId: int.parse(state.pathParameters['id']!),
+                )),
+      ),
+      GoRoute(
+        path: AppRoutes.tasks,
+        builder: (_, __) =>
+            DeferredPage(tasks_page.loadLibrary, (_) => tasks_page.TasksPage()),
+      ),
+      GoRoute(
+        path: AppRoutes.giveTask,
+        builder: (_, state) {
+          final q = state.uri.queryParameters;
+          return DeferredPage(
+              give_task.loadLibrary,
+              (_) => give_task.GiveTaskPage(
+                    employeeId: int.tryParse(q['employee'] ?? ''),
+                    employeeName: q['name'],
+                  ));
+        },
+      ),
+      GoRoute(
+        path: '${AppRoutes.tasks}/:id',
+        builder: (_, state) => DeferredPage(
+            task_detail.loadLibrary,
+            (_) => task_detail.TaskDetailPage(
+                  taskId: int.parse(state.pathParameters['id']!),
                 )),
       ),
       GoRoute(

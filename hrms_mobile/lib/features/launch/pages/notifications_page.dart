@@ -53,15 +53,21 @@ class _NotificationsPageState extends State<NotificationsPage> {
   }
 
   /// Where tapping a notification of this type takes you, if anywhere.
-  static String? _destination(String type) => switch (type) {
+  static String? _destination(NotificationItem n) => switch (n.type) {
         'letter_issued' => AppRoutes.documents,
         'policy_published' => '${AppRoutes.documents}?tab=policies',
         'certificate_issued' => AppRoutes.myCertificates,
+        'task_assigned' || 'task_done' || 'task_comment' || 'task_overdue' ||
+        'task_escalated' =>
+          n.data?['task_id'] != null ? '${AppRoutes.tasks}/${n.data!['task_id']}' : AppRoutes.tasks,
+        'team_digest' || 'team_weekly' => AppRoutes.myTeam,
+        'target_behind' => AppRoutes.salesTargets,
+        'plan_reminder' => AppRoutes.dwp,
         _ => null,
       };
 
   void _open(NotificationItem n) {
-    final dest = _destination(n.type);
+    final dest = _destination(n);
     if (dest == null) {
       _markOne(n);
       return;

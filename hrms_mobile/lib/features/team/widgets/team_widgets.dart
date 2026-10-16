@@ -29,6 +29,12 @@ String hhmm(String? iso) {
   return d == null ? '' : DateFormat('h:mm a').format(d);
 }
 
+/// "₹4.1L of ₹5.0L" or "41 of 60 visits".
+String targetCaption(TeamTarget t) => t.isMoney
+    ? '${rupees(t.achievedAmount)} of ${rupees(t.targetAmount)}'
+    : '${t.achievedAmount.toStringAsFixed(0)} of ${t.targetAmount.toStringAsFixed(0)} '
+        '${targetMetricUnits[t.metric] ?? ''}';
+
 String rupees(double v) {
   if (v >= 10000000) return '₹${(v / 10000000).toStringAsFixed(1)}Cr';
   if (v >= 100000) return '₹${(v / 100000).toStringAsFixed(1)}L';
@@ -152,6 +158,7 @@ String rollupLine(TeamRollup t) => [
       '${t.size} ${t.size == 1 ? 'person' : 'people'}',
       if (t.attendancePct != null) '${t.attendancePct!.toStringAsFixed(0)}% present',
       if (t.targetPct != null) '${t.targetPct!.toStringAsFixed(0)}% of target',
+      if (t.tasksOverdue > 0) '${t.tasksOverdue} overdue tasks',
       if (t.absent > 0) '${t.absent} absent',
       if (t.late > 0) '${t.late} late',
     ].join(' · ');

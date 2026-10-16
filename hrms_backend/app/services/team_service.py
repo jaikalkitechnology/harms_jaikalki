@@ -117,11 +117,13 @@ async def dwp_status(
 async def current_targets(
     db: AsyncSession, employee_ids: Iterable[int], on: date
 ) -> dict[int, dict]:
-    """employee id → the shortest sales target period covering ``on``."""
+    """employee id → their main running target on ``on``: the sales (₹)
+    target if they have one, otherwise their other target; shortest
+    period first. ``others`` counts any further targets."""
     ids = list(employee_ids)
     if not ids:
         return {}
-    best: dict[int, SalesTarget] = {}
+    by_emp: dict[int, list[SalesTarget]] = {}
     for t in (
         await db.execute(
             select(SalesTarget).where(
@@ -131,21 +133,27 @@ async def current_targets(
             )
         )
     ).scalars():
-        cur = best.get(t.employee_id)
-        span = (t.period_end - t.period_start).days
-        if cur is None or span < (cur.period_end - cur.period_start).days:
-            best[t.employee_id] = t
-    return {
-        i: {
+        by_emp.setdefault(t.employee_id, []).append(t)
+    out = {}
+    for i, ts in by_emp.items():
+        ts.sort(
+            key=lambda t: (
+                (t.metric or "sales_amount") != "sales_amount",
+                (t.period_end - t.period_start).days,
+            )
+        )
+        t = ts[0]
+        out[i] = {
+            "metric": t.metric or "sales_amount",
             "period_type": t.period_type,
             "period_start": t.period_start,
             "period_end": t.period_end,
             "target_amount": t.target_amount,
             "achieved_amount": t.achieved_amount or Decimal(0),
             "achievement_pct": _pct(t.achieved_amount or 0, t.target_amount),
+            "others": len(ts) - 1,
         }
-        for i, t in best.items()
-    }
+    return out
 
 
 def _pct(part, whole) -> Optional[float]:
@@ -158,15 +166,18 @@ def rollup(
     status: dict[int, dict],
     dwp: dict[int, set[str]],
     targets: dict[int, dict],
+    tasks: Optional[dict[int, dict]] = None,
 ) -> dict:
     """Summary figures for a group of people."""
     ids = list(ids)
+    tasks = tasks or {}
     counts = {k: 0 for k in ("present", "late", "wfh", "half_day", "on_leave", "absent", "not_in", "off")}
     for i in ids:
         counts[status.get(i, {}).get("status", "not_in")] += 1
     working = len(ids) - counts["off"] - counts["on_leave"]
     in_office = sum(counts[k] for k in PRESENT_LIKE)
     with_target = [targets[i] for i in ids if i in targets]
+    money = [t for t in with_target if t.get("metric", "sales_amount") == "sales_amount"]
     return {
         "size": len(ids),
         **counts,
@@ -175,12 +186,23 @@ def rollup(
         "dwp_morning": sum(1 for i in ids if "morning" in dwp.get(i, ())),
         "dwp_eod": sum(1 for i in ids if "eod" in dwp.get(i, ())),
         "with_target": len(with_target),
-        "target_amount": sum((t["target_amount"] for t in with_target), Decimal(0)),
-        "achieved_amount": sum((t["achieved_amount"] for t in with_target), Decimal(0)),
-        "target_pct": _pct(
-            sum(t["achieved_amount"] for t in with_target),
-            sum(t["target_amount"] for t in with_target),
+        # ₹ figures cover sales targets only; the % is overall when
+        # everyone's target is in ₹, else the average of each person's %.
+        "target_amount": sum((t["target_amount"] for t in money), Decimal(0)),
+        "achieved_amount": sum((t["achieved_amount"] for t in money), Decimal(0)),
+        "target_pct": (
+            _pct(
+                sum(t["achieved_amount"] for t in money),
+                sum(t["target_amount"] for t in money),
+            )
+            if len(money) == len(with_target)
+            else round(
+                sum(min(t["achievement_pct"] or 0, 200) for t in with_target) / len(with_target), 1
+            )
         ),
+        "tasks_open": sum(tasks.get(i, {}).get("open", 0) for i in ids),
+        "tasks_overdue": sum(tasks.get(i, {}).get("overdue", 0) for i in ids),
+        "tasks_done_7d": sum(tasks.get(i, {}).get("done_7d", 0) for i in ids),
     }
 
 
@@ -229,9 +251,12 @@ async def overview(
         top = children.get(None, [])
         everyone = list(staff)
 
+    from app.services.task_service import task_counts
+
     status = await day_status(db, everyone, on)
     dwp = await dwp_status(db, everyone, on)
     targets = await current_targets(db, everyone, on)
+    tasks = await task_counts(db, everyone)
 
     level = {}
     frontier, depth = list(top), 1
@@ -267,7 +292,8 @@ async def overview(
                 "dwp_morning": "morning" in dwp[i],
                 "dwp_eod": "eod" in dwp[i],
                 "target": targets.get(i),
-                "team": rollup(sub, status, dwp, targets) if sub else None,
+                "tasks": tasks[i],
+                "team": rollup(sub, status, dwp, targets, tasks) if sub else None,
             }
         )
     return {
@@ -283,7 +309,7 @@ async def overview(
         ),
         "scope": scope,
         "on_date": on,
-        "summary": rollup(everyone, status, dwp, targets),
+        "summary": rollup(everyone, status, dwp, targets, tasks),
         "direct_count": len(top),
         "members": members,
     }

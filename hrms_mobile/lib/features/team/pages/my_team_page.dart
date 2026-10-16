@@ -142,11 +142,12 @@ class _Summary extends StatelessWidget {
   Widget build(BuildContext context) {
     final tiles = [
       ('Present', '${s.presentTotal}',
-          s.attendancePct == null ? '' : '${s.attendancePct!.toStringAsFixed(0)}% of working', AppColors.successText),
-      ('Late', '${s.late}', 'checked in late', s.late > 0 ? AppColors.warning : null),
+          '${s.attendancePct == null ? '' : '${s.attendancePct!.toStringAsFixed(0)}%'}'
+          '${s.late > 0 ? ' · ${s.late} late' : ''}', AppColors.successText),
       ('On leave', '${s.onLeave}', '${s.off} off today', null),
       ('Absent / not in', '${s.absent + s.notIn}', '${s.absent} absent', s.absent > 0 ? AppColors.errorText : null),
       ('Daily plans', '${s.dwpMorning}/${s.size}', '${s.dwpEod} end-of-day', null),
+      ('Tasks', '${s.tasksOpen}', '${s.tasksOverdue} overdue', s.tasksOverdue > 0 ? AppColors.errorText : null),
       ('Target', s.targetPct == null ? '—' : '${s.targetPct!.toStringAsFixed(0)}%',
           s.withTarget == 0 ? 'no targets' : '${rupees(s.achievedAmount)} of ${rupees(s.targetAmount)}', null),
     ];
@@ -241,6 +242,18 @@ class _MemberCard extends StatelessWidget {
                             style: const TextStyle(color: AppColors.textMuted, fontSize: 12)),
                         const SizedBox(height: 6),
                         PlanMarks(morning: m.dwpMorning, eod: m.dwpEod),
+                        if (m.tasksOpen > 0)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 4),
+                            child: Text(
+                              '${m.tasksOpen} open task${m.tasksOpen == 1 ? '' : 's'}'
+                              '${m.tasksOverdue > 0 ? ' · ${m.tasksOverdue} overdue' : ''}',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: m.tasksOverdue > 0 ? AppColors.errorText : AppColors.textMuted,
+                              ),
+                            ),
+                          ),
                       ],
                     ),
                   ),
@@ -251,8 +264,7 @@ class _MemberCard extends StatelessWidget {
                 const SizedBox(height: 10),
                 TargetProgress(
                   pct: m.target!.pct,
-                  caption:
-                      'Target · ${rupees(m.target!.achievedAmount)} of ${rupees(m.target!.targetAmount)}',
+                  caption: 'Target · ${targetCaption(m.target!)}',
                 ),
               ],
               if (onOpenTeam != null) ...[

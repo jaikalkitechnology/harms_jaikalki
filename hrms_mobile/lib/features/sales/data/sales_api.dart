@@ -101,6 +101,14 @@ class SalesApi {
     return TargetSummary.fromJson(res.data as Map<String, dynamic>);
   }
 
+  /// Every target running for me now (₹ sales, visits, tasks …).
+  Future<List<TargetSummary>> myTargets() async {
+    final res = await _dio.get<List<dynamic>>('$_v1/sales/targets/me/all');
+    return (res.data ?? const [])
+        .map((e) => TargetSummary.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
   Future<SalesTarget> refreshTarget(int targetId) async {
     final res = await _dio.post<Map<String, dynamic>>(
       '$_v1/sales/targets/$targetId/recompute',

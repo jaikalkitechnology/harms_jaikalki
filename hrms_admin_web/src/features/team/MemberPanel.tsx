@@ -7,10 +7,13 @@ import { ChevronLeft, ChevronRight, Mail, Phone, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { teamApi } from "@/lib/api/team";
+import { tasksApi } from "@/lib/api/tasks";
+import { fmtTargetValue } from "@/lib/api/sales";
+import { AssignTaskModal, TaskPanel, TaskStatusChip } from "@/features/tasks/TaskDialogs";
 import { useAuthStore } from "@/store/auth";
 import { cn } from "@/lib/utils";
 import { Chip, fmtDate } from "@/features/employees/profile/ui";
-import { Avatar, StatusChip, TargetBar, TeamLine, hhmm, inr } from "./shared";
+import { Avatar, StatusChip, TargetBar, TeamLine, hhmm } from "./shared";
 
 const DAY_TONE: Record<string, string> = {
   present: "bg-success/70",
@@ -52,6 +55,12 @@ export function MemberPanel({
   const { data: cal } = useQuery({
     queryKey: ["team-calendar", employeeId, ym.y, ym.m],
     queryFn: () => teamApi.calendar(employeeId, ym.y, ym.m),
+  });
+  const [assigning, setAssigning] = useState(false);
+  const [openTask, setOpenTask] = useState<number | null>(null);
+  const { data: tasks = [] } = useQuery({
+    queryKey: ["tasks", "team", "open", employeeId],
+    queryFn: () => tasksApi.list({ view: "team", status: "open", employee_id: employeeId }),
   });
   const { data: plans = [] } = useQuery({
     queryKey: ["team-plans", employeeId],
@@ -121,7 +130,7 @@ export function MemberPanel({
                 {m.target ? (
                   <TargetBar
                     pct={m.target.achievement_pct}
-                    sub={`${inr(m.target.achieved_amount)} of ${inr(m.target.target_amount)}`}
+                    sub={`${fmtTargetValue(m.target.metric, m.target.achieved_amount)} of ${fmtTargetValue(m.target.metric, m.target.target_amount)}${m.target.others ? ` · +${m.target.others} more` : ""}`}
                   />
                 ) : (
                   <span className="text-xs text-brand-brown-light">No target set</span>
@@ -141,6 +150,43 @@ export function MemberPanel({
                 </button>
               </Section>
             )}
+
+            <Section title="Tasks">
+              <div className="mb-2 flex items-center justify-between gap-2 text-xs text-brand-brown-light">
+                <span>
+                  {m.tasks.open} open
+                  {m.tasks.overdue > 0 && <span className="text-error"> · {m.tasks.overdue} overdue</span>}
+                  {" "}· {m.tasks.done_7d} done this week
+                </span>
+                <Button size="sm" variant="outline" onClick={() => setAssigning(true)}>
+                  Give a task
+                </Button>
+              </div>
+              {tasks.length === 0 ? (
+                <p className="text-sm text-brand-brown-light">No open tasks.</p>
+              ) : (
+                <ul className="space-y-1.5">
+                  {tasks.slice(0, 6).map((t) => (
+                    <li key={t.id}>
+                      <button
+                        type="button"
+                        onClick={() => setOpenTask(t.id)}
+                        className="flex w-full items-center justify-between gap-2 rounded-lg border border-brand-brown-50 px-3 py-2 text-left text-sm hover:bg-brand-brown-50/50"
+                      >
+                        <span className="min-w-0">
+                          <span className="block truncate">{t.title}</span>
+                          <span className={cn("text-xs", t.is_overdue ? "text-error" : "text-brand-brown-light")}>
+                            {t.due_date ? `Due ${fmtDate(t.due_date)}` : "No due date"}
+                            {t.assigner_name ? ` · from ${t.assigner_name}` : ""}
+                          </span>
+                        </span>
+                        <TaskStatusChip t={t} />
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </Section>
 
             <Section title="Attendance">
               <div className="mb-2 flex items-center justify-between">
@@ -260,6 +306,10 @@ export function MemberPanel({
           </div>
         )}
       </aside>
+      {assigning && m && (
+        <AssignTaskModal employeeId={m.employee_id} employeeName={m.name} onClose={() => setAssigning(false)} />
+      )}
+      {openTask && <TaskPanel taskId={openTask} onClose={() => setOpenTask(null)} />}
     </div>
   );
 }

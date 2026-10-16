@@ -111,12 +111,14 @@ async def team_member(
             )
         ).scalars()
     )
+    from app.services.task_service import task_counts
+
     rollup = None
     if below_active:
         s = await team.day_status(db, below_active, on)
         d = await team.dwp_status(db, below_active, on)
         t = await team.current_targets(db, below_active, on)
-        rollup = team.rollup(below_active, s, d, t)
+        rollup = team.rollup(below_active, s, d, t, await task_counts(db, below_active))
 
     leaves = (
         await db.execute(
@@ -147,6 +149,7 @@ async def team_member(
         "dwp_morning": "morning" in dwp[e.id],
         "dwp_eod": "eod" in dwp[e.id],
         "target": targets.get(e.id),
+        "tasks": (await task_counts(db, [e.id]))[e.id],
         "direct_reports": len(await emp_svc.subordinate_ids(db, e.id, depth=1)),
         "team": rollup,
         "recent_leaves": [
@@ -210,3 +213,76 @@ async def org_chart(
         finish(r)
     roots.sort(key=lambda r: (-r["team_size"], r["name"].lower()))
     return roots
+
+
+# ── Team alerts (Settings → Team alerts) ─────────────────────────────
+from pydantic import BaseModel  # noqa: E402
+
+from app.core.exceptions import ValidationError  # noqa: E402
+from app.core.permissions import require_permission  # noqa: E402
+from app.services import team_alerts  # noqa: E402
+
+
+class AlertSettings(BaseModel):
+    morning_digest: Optional[bool] = None
+    digest_time: Optional[str] = None
+    plan_reminder: Optional[bool] = None
+    plan_reminder_time: Optional[str] = None
+    task_escalation: Optional[bool] = None
+    escalate_after_days: Optional[int] = None
+    weekly_summary: Optional[bool] = None
+    weekly_day: Optional[int] = None
+    weekly_time: Optional[str] = None
+    target_alerts: Optional[bool] = None
+    target_behind_by: Optional[int] = None
+
+
+@router.get("/alerts/settings")
+async def get_alert_settings(
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_permission("employee.update")),
+):
+    return await team_alerts.get_settings(db)
+
+
+@router.put("/alerts/settings")
+async def update_alert_settings(
+    payload: AlertSettings,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_permission("employee.update")),
+):
+    try:
+        return await team_alerts.set_settings(db, payload.model_dump(exclude_unset=True), user)
+    except ValueError as exc:
+        raise ValidationError(str(exc)) from exc
+
+
+@router.post("/alerts/run/{job}")
+async def run_alert_now(
+    job: str,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_permission("employee.update")),
+):
+    """Send an alert now (outside its schedule)."""
+    if job not in team_alerts.JOBS:
+        raise NotFoundError("Unknown alert")
+    result = await team_alerts.run_job(db, job)
+    return {k: v for k, v in result.items() if k != "messages"}
+
+
+@router.get("/alerts/preview")
+async def preview_my_alerts(
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """What my morning digest and weekly summary would say right now
+    (nothing is sent)."""
+    me = await emp_svc.get_self_employee(db, user)
+    if not me:
+        return {"morning_digest": None, "weekly_summary": None}
+    morning = await team_alerts.morning_digest(db, only=me.id, send=False)
+    weekly = await team_alerts.weekly_summary(db, only=me.id, send=False, nudge=False)
+    return {
+        "morning_digest": (morning["messages"] or [None])[0],
+        "weekly_summary": (weekly["messages"] or [None])[0],
+    }

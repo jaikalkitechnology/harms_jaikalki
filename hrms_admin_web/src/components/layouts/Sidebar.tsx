@@ -49,6 +49,7 @@ import {
   Users,
   UsersRound,
   Network,
+  ListTodo,
   Wallet,
   type LucideIcon,
 } from "lucide-react";
@@ -94,6 +95,12 @@ const SECTIONS: NavSection[] = [
         label: "Org Chart",
         to: "/org-chart",
         icon: Network,
+        anyPermission: ["employee.view.all", "approval.act"],
+      },
+      {
+        label: "Tasks",
+        to: "/tasks",
+        icon: ListTodo,
         anyPermission: ["employee.view.all", "approval.act"],
       },
       {

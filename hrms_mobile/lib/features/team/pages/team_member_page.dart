@@ -7,6 +7,8 @@ import '../../../core/di/injection.dart';
 import '../../../core/routing/app_router.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../attendance/data/attendance_models.dart';
+import '../../tasks/data/tasks_api.dart';
+import '../../tasks/widgets/task_widgets.dart';
 import '../data/team_api.dart';
 import '../widgets/team_widgets.dart';
 
@@ -85,6 +87,10 @@ class _TeamMemberPageState extends State<TeamMemberPage> {
                   ),
                 ],
                 const SizedBox(height: 16),
+                _Heading('TASKS · ${m.tasksOpen} OPEN'
+                    '${m.tasksOverdue > 0 ? ' · ${m.tasksOverdue} OVERDUE' : ''}'),
+                _MemberTasks(employeeId: m.employeeId, name: m.name),
+                const SizedBox(height: 16),
                 const _Heading('ATTENDANCE'),
                 _MonthCalendar(employeeId: m.employeeId),
                 const SizedBox(height: 16),
@@ -142,6 +148,69 @@ class _TeamMemberPageState extends State<TeamMemberPage> {
           },
         ),
       ),
+    );
+  }
+}
+
+class _MemberTasks extends StatefulWidget {
+  const _MemberTasks({required this.employeeId, required this.name});
+  final int employeeId;
+  final String name;
+
+  @override
+  State<_MemberTasks> createState() => _MemberTasksState();
+}
+
+class _MemberTasksState extends State<_MemberTasks> {
+  late Future<List<WorkTask>> _future = _load();
+
+  Future<List<WorkTask>> _load() => sl<TasksApi>()
+      .list(view: 'team', employeeId: widget.employeeId)
+      .catchError((_) => <WorkTask>[]);
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<List<WorkTask>>(
+      future: _future,
+      builder: (context, snap) {
+        final tasks = snap.data ?? const <WorkTask>[];
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            if (!snap.hasData)
+              const LinearProgressIndicator()
+            else if (tasks.isEmpty)
+              const Padding(
+                padding: EdgeInsets.only(bottom: 6),
+                child: Text('No open tasks.', style: TextStyle(color: AppColors.textMuted)),
+              )
+            else
+              for (final t in tasks.take(5))
+                TaskCard(
+                  t: t,
+                  showAssignee: false,
+                  onTap: () async {
+                    await context.push('${AppRoutes.tasks}/${t.id}');
+                    setState(() => _future = _load());
+                  },
+                ),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                icon: const Icon(Icons.add_task),
+                label: const Text('Give a task'),
+                onPressed: () async {
+                  await context.push(
+                    '${AppRoutes.giveTask}?employee=${widget.employeeId}'
+                    '&name=${Uri.encodeComponent(widget.name)}',
+                  );
+                  setState(() => _future = _load());
+                },
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 }
@@ -257,7 +326,7 @@ class _TodayCard extends StatelessWidget {
               TargetProgress(
                 pct: t.pct,
                 caption: '${t.periodType[0].toUpperCase()}${t.periodType.substring(1)} target · '
-                    '${rupees(t.achievedAmount)} of ${rupees(t.targetAmount)}',
+                    '${targetCaption(t)}',
               ),
           ],
         ),

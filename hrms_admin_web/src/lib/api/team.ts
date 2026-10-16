@@ -3,6 +3,7 @@
 import { apiClient } from "./client";
 import type { AttendanceCalendar } from "./attendance";
 import type { DwpSubmission } from "./dwp";
+import type { TargetMetric } from "./sales";
 
 const V1 = "/api/v1";
 
@@ -17,6 +18,8 @@ export type DayStatus =
   | "off";
 
 export interface TeamTarget {
+  metric?: TargetMetric;
+  others?: number;
   period_type: string;
   period_start: string;
   period_end: string;
@@ -43,6 +46,15 @@ export interface TeamRollup {
   target_amount: string;
   achieved_amount: string;
   target_pct: number | null;
+  tasks_open: number;
+  tasks_overdue: number;
+  tasks_done_7d: number;
+}
+
+export interface TaskCounts {
+  open: number;
+  overdue: number;
+  done_7d: number;
 }
 
 export interface TeamToday {
@@ -66,6 +78,7 @@ export interface TeamMemberRow {
   dwp_morning: boolean;
   dwp_eod: boolean;
   target: TeamTarget | null;
+  tasks: TaskCounts;
   team: TeamRollup | null;
 }
 
@@ -98,6 +111,7 @@ export interface TeamMemberDetail {
   dwp_morning: boolean;
   dwp_eod: boolean;
   target: TeamTarget | null;
+  tasks: TaskCounts;
   direct_reports: number;
   team: TeamRollup | null;
   recent_leaves: {

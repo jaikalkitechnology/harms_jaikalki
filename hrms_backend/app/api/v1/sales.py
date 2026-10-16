@@ -444,6 +444,19 @@ async def my_target(
     return sales_svc.target_summary(target)
 
 
+@router.get("/targets/me/all", response_model=list[SalesTargetSummary])
+async def my_targets(
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """All my running targets (₹ sales, visits, verifications …)."""
+    emp = await _self_employee(db, user)
+    return [
+        sales_svc.target_summary(t)
+        for t in await sales_svc.current_targets_for(db, emp.id)
+    ]
+
+
 @router.get("/targets", response_model=list[SalesTargetOut])
 async def list_targets(
     employee_id: Optional[int] = None,

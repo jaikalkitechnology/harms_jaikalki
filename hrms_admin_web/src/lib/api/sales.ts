@@ -75,7 +75,33 @@ export interface SalesTarget {
   achieved_amount: string;
   commission_pct: string;
   notes: string | null;
+  metric: TargetMetric;
   achievement_pct: number;
+}
+
+export type TargetMetric =
+  | "sales_amount"
+  | "leads_won"
+  | "new_leads"
+  | "field_visits"
+  | "verifications"
+  | "tasks_done";
+
+export const TARGET_METRICS: { value: TargetMetric; label: string; unit: string }[] = [
+  { value: "sales_amount", label: "Sales (₹)", unit: "₹" },
+  { value: "leads_won", label: "Leads won", unit: "leads" },
+  { value: "new_leads", label: "New leads", unit: "leads" },
+  { value: "field_visits", label: "Field visits", unit: "visits" },
+  { value: "verifications", label: "Verifications done", unit: "verifications" },
+  { value: "tasks_done", label: "Tasks done", unit: "tasks" },
+];
+
+/** "₹4,10,000" for sales targets, "12 visits" for the rest. */
+export function fmtTargetValue(metric: TargetMetric | undefined, v: string | number) {
+  const n = Number(v);
+  if (!metric || metric === "sales_amount") return `₹${n.toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
+  const unit = TARGET_METRICS.find((m) => m.value === metric)?.unit ?? "";
+  return `${n.toLocaleString("en-IN", { maximumFractionDigits: 0 })} ${unit}`;
 }
 
 export interface SalesTargetSummary {

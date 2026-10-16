@@ -39,19 +39,32 @@ class TeamToday {
       );
 }
 
+const targetMetricUnits = {
+  'leads_won': 'leads won',
+  'new_leads': 'new leads',
+  'field_visits': 'visits',
+  'verifications': 'verifications',
+  'tasks_done': 'tasks done',
+};
+
 class TeamTarget {
   const TeamTarget({
+    this.metric = 'sales_amount',
     required this.periodType,
     required this.targetAmount,
     required this.achievedAmount,
     required this.pct,
   });
+  final String metric;
   final String periodType;
   final double targetAmount;
   final double achievedAmount;
   final double? pct;
 
+  bool get isMoney => metric == 'sales_amount';
+
   factory TeamTarget.fromJson(Map<String, dynamic> j) => TeamTarget(
+        metric: j['metric'] as String? ?? 'sales_amount',
         periodType: j['period_type'] as String? ?? 'monthly',
         targetAmount: _d(j['target_amount']) ?? 0,
         achievedAmount: _d(j['achieved_amount']) ?? 0,
@@ -79,6 +92,9 @@ class TeamRollup {
   double? get targetPct => _d(j['target_pct']);
   double get targetAmount => _d(j['target_amount']) ?? 0;
   double get achievedAmount => _d(j['achieved_amount']) ?? 0;
+  int get tasksOpen => _i(j['tasks_open']);
+  int get tasksOverdue => _i(j['tasks_overdue']);
+  int get tasksDone7d => _i(j['tasks_done_7d']);
 }
 
 class TeamMemberRow {
@@ -97,6 +113,8 @@ class TeamMemberRow {
     required this.dwpEod,
     required this.target,
     required this.team,
+    this.tasksOpen = 0,
+    this.tasksOverdue = 0,
   });
 
   final int employeeId;
@@ -113,6 +131,8 @@ class TeamMemberRow {
   final bool dwpEod;
   final TeamTarget? target;
   final TeamRollup? team;
+  final int tasksOpen;
+  final int tasksOverdue;
 
   factory TeamMemberRow.fromJson(Map<String, dynamic> j) => TeamMemberRow(
         employeeId: j['employee_id'] as int,
@@ -131,11 +151,15 @@ class TeamMemberRow {
             ? null
             : TeamTarget.fromJson(j['target'] as Map<String, dynamic>),
         team: j['team'] == null ? null : TeamRollup(j['team'] as Map<String, dynamic>),
+        tasksOpen: _i((j['tasks'] as Map?)?['open']),
+        tasksOverdue: _i((j['tasks'] as Map?)?['overdue']),
       );
 
-  /// Absent, late, not in yet, or no morning plan on a working day.
+  /// Absent, late, not in yet, overdue tasks, or no morning plan on a
+  /// working day.
   bool get needsAttention =>
       const {'absent', 'late', 'not_in'}.contains(today.status) ||
+      tasksOverdue > 0 ||
       (!dwpMorning && !const {'on_leave', 'off'}.contains(today.status));
 }
 
@@ -176,6 +200,9 @@ class TeamMemberDetail {
       ? null
       : TeamTarget.fromJson(j['target'] as Map<String, dynamic>);
   int get directReports => _i(j['direct_reports']);
+  int get tasksOpen => _i((j['tasks'] as Map?)?['open']);
+  int get tasksOverdue => _i((j['tasks'] as Map?)?['overdue']);
+  int get tasksDone7d => _i((j['tasks'] as Map?)?['done_7d']);
   TeamRollup? get team =>
       j['team'] == null ? null : TeamRollup(j['team'] as Map<String, dynamic>);
   List<Map<String, dynamic>> get recentLeaves =>

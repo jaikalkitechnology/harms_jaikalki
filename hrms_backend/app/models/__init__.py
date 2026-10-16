@@ -81,6 +81,7 @@ from .leave import (
 )
 from .letter_template import LetterTemplate
 from .hr_documents import CompanyPolicy, EmployeeLetter, PolicyAcknowledgement
+from .work_tasks import WorkTask, WorkTaskComment
 from .lms import (
     Badge,
     Course,
@@ -282,4 +283,6 @@ __all__ = [
     "EmployeeLetter",
     "CompanyPolicy",
     "PolicyAcknowledgement",
+    "WorkTask",
+    "WorkTaskComment",
 ]

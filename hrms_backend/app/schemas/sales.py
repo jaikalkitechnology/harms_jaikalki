@@ -211,6 +211,7 @@ class SalesTargetCreate(BaseModel):
     target_amount: Decimal = Field(gt=0)
     commission_pct: Decimal = Field(default=Decimal("2"), ge=0, le=100)
     notes: Optional[str] = None
+    metric: str = Field(default="sales_amount", pattern="^(sales_amount|leads_won|new_leads|field_visits|verifications|tasks_done)$")
 
 
 class SalesTargetOut(BaseModel):
@@ -224,6 +225,7 @@ class SalesTargetOut(BaseModel):
     achieved_amount: Decimal
     commission_pct: Decimal
     notes: Optional[str]
+    metric: str = "sales_amount"
     achievement_pct: float = 0.0
 
 
@@ -236,6 +238,7 @@ class SalesTargetUpdate(BaseModel):
     target_amount: Optional[Decimal] = Field(default=None, gt=0)
     commission_pct: Optional[Decimal] = Field(default=None, ge=0, le=100)
     notes: Optional[str] = None
+    metric: Optional[str] = Field(default=None, pattern="^(sales_amount|leads_won|new_leads|field_visits|verifications|tasks_done)$")
 
 
 class SalesTargetSummary(BaseModel):

@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { LoadingScreen } from "@/components/shared/LoadingScreen";
 import { teamApi, type TeamMemberRow, type TeamRollup } from "@/lib/api/team";
+import { fmtTargetValue } from "@/lib/api/sales";
 import { cn } from "@/lib/utils";
 import { todayIso } from "@/features/employees/profile/ui";
 import { MemberPanel } from "./MemberPanel";
@@ -54,6 +55,7 @@ export default function MyTeamPage() {
   const s = data.summary;
   const needsAttention = (m: TeamMemberRow) =>
     ["absent", "late", "not_in"].includes(m.today.status) ||
+    m.tasks.overdue > 0 ||
     (!m.dwp_morning && !["on_leave", "off"].includes(m.today.status));
   const rows = filter === "attention" ? data.members.filter(needsAttention) : data.members;
   const title = rootId
@@ -157,7 +159,7 @@ export default function MyTeamPage() {
               ))}
             </div>
             <span className="text-xs text-brand-brown-light">
-              Needs attention: absent, late, not in yet, or no morning plan.
+              Needs attention: absent, late, not in yet, no morning plan, or overdue tasks.
             </span>
           </div>
           {rows.length === 0 ? (
@@ -169,12 +171,13 @@ export default function MyTeamPage() {
             </div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[920px] text-sm">
+              <table className="w-full min-w-[1000px] text-sm">
                 <thead className="text-left text-xs uppercase tracking-wide text-brand-brown-light">
                   <tr className="border-b border-brand-brown-50">
                     <th className="px-5 py-2 font-medium">Person</th>
                     <th className="px-3 py-2 font-medium">Today</th>
                     <th className="px-3 py-2 font-medium">Daily plan</th>
+                    <th className="px-3 py-2 font-medium">Tasks</th>
                     <th className="px-3 py-2 font-medium">Target</th>
                     <th className="px-3 py-2 font-medium">Their team</th>
                   </tr>
@@ -204,9 +207,22 @@ export default function MyTeamPage() {
                       <td className="px-3 py-3 text-xs">
                         <PlanDots morning={m.dwp_morning} eod={m.dwp_eod} />
                       </td>
+                      <td className="px-3 py-3 text-xs">
+                        {m.tasks.open || m.tasks.done_7d ? (
+                          <span>
+                            {m.tasks.open} open
+                            {m.tasks.overdue > 0 && <span className="text-error"> · {m.tasks.overdue} overdue</span>}
+                          </span>
+                        ) : (
+                          <span className="text-brand-brown-light">—</span>
+                        )}
+                      </td>
                       <td className="px-3 py-3">
                         {m.target ? (
-                          <TargetBar pct={m.target.achievement_pct} sub={`${inr(m.target.achieved_amount)} of ${inr(m.target.target_amount)}`} />
+                          <TargetBar
+                            pct={m.target.achievement_pct}
+                            sub={`${fmtTargetValue(m.target.metric, m.target.achieved_amount)} of ${fmtTargetValue(m.target.metric, m.target.target_amount)}`}
+                          />
                         ) : (
                           <span className="text-xs text-brand-brown-light">—</span>
                         )}
@@ -254,10 +270,9 @@ function SummaryTiles({ s }: { s: TeamRollup }) {
     {
       label: "Present",
       value: `${s.present_total}`,
-      sub: s.attendance_pct != null ? `${s.attendance_pct}% of those working` : "—",
+      sub: `${s.attendance_pct != null ? `${s.attendance_pct}%` : "—"}${s.late ? ` · ${s.late} late` : ""}`,
       tone: "text-success",
     },
-    { label: "Late", value: `${s.late}`, sub: "checked in late", tone: s.late ? "text-warning" : "" },
     { label: "On leave", value: `${s.on_leave}`, sub: `${s.off} off today`, tone: "" },
     {
       label: "Absent / not in",
@@ -270,6 +285,12 @@ function SummaryTiles({ s }: { s: TeamRollup }) {
       value: `${s.dwp_morning}/${s.size}`,
       sub: `${s.dwp_eod} end-of-day reports`,
       tone: "",
+    },
+    {
+      label: "Tasks",
+      value: `${s.tasks_open}`,
+      sub: `${s.tasks_overdue} overdue · ${s.tasks_done_7d} done this week`,
+      tone: s.tasks_overdue ? "text-error" : "",
     },
     {
       label: "Target",
@@ -293,7 +314,7 @@ function SummaryTiles({ s }: { s: TeamRollup }) {
 
 function PlanDots({ morning, eod }: { morning: boolean; eod: boolean }) {
   return (
-    <span className="flex items-center gap-3">
+    <span className="flex items-center gap-3 whitespace-nowrap">
       <span className={morning ? "text-success" : "text-brand-brown-light"}>{morning ? "✓" : "○"} Morning</span>
       <span className={eod ? "text-success" : "text-brand-brown-light"}>{eod ? "✓" : "○"} EOD</span>
     </span>

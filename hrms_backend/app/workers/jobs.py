@@ -176,3 +176,24 @@ async def _run_purge_expired_otps() -> dict:
             await db.delete(r)
         await db.commit()
     return {"purged": len(rows)}
+
+
+@celery_app.task(name="app.workers.jobs.run_team_alerts")
+def run_team_alerts() -> dict:
+    """Every 10 minutes: run whichever team alerts are due (morning
+    digest, plan reminder, overdue-task escalation, weekly summary,
+    nightly target refresh). Each runs once at its configured time."""
+    return asyncio.run(_run_team_alerts())
+
+
+async def _run_team_alerts() -> dict:
+    from app.database import AsyncSessionLocal, engine
+    from app.services.team_alerts import run_due
+
+    try:
+        async with AsyncSessionLocal() as db:
+            return await run_due(db)
+    finally:
+        # asyncio.run gives every call a new loop; pooled connections
+        # from the old one can't be reused.
+        await engine.dispose()

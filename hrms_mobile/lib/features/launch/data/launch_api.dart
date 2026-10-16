@@ -12,6 +12,7 @@ class NotificationItem extends Equatable {
     required this.createdAt,
     this.body,
     this.readAt,
+    this.data,
   });
 
   final int id;
@@ -21,6 +22,9 @@ class NotificationItem extends Equatable {
   final String status;
   final String? readAt;
   final String createdAt;
+
+  /// Extra details the server attached (e.g. task_id).
+  final Map<String, dynamic>? data;
 
   bool get isRead => readAt != null;
 
@@ -33,6 +37,7 @@ class NotificationItem extends Equatable {
         status: j['status'] as String,
         readAt: j['read_at'] as String?,
         createdAt: j['created_at'] as String,
+        data: j['data'] is Map ? Map<String, dynamic>.from(j['data'] as Map) : null,
       );
 
   @override

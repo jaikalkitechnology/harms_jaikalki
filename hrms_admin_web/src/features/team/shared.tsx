@@ -35,7 +35,7 @@ export function Avatar({ name, photo, size = 36 }: { name: string; photo: string
 export function StatusChip({ today }: { today: TeamToday }) {
   const s = DAY_STATUS[today.status];
   return (
-    <span className="flex flex-col items-start gap-0.5">
+    <span className="flex flex-col items-start gap-0.5 whitespace-nowrap">
       <Chip tone={s.tone}>{s.label}</Chip>
       {today.check_in && (
         <span className="text-[11px] text-brand-brown-light">
@@ -69,6 +69,7 @@ export function TeamLine({ t }: { t: TeamRollup }) {
       <span className="font-medium">{t.size} {t.size === 1 ? "person" : "people"}</span>
       {t.attendance_pct != null && <span> · {t.attendance_pct}% present</span>}
       {t.target_pct != null && <span> · {t.target_pct}% of target</span>}
+      {t.tasks_overdue > 0 && <span className="text-error"> · {t.tasks_overdue} overdue tasks</span>}
       {t.absent + t.late > 0 && (
         <span className="text-warning"> · {t.absent ? `${t.absent} absent` : ""}{t.absent && t.late ? ", " : ""}{t.late ? `${t.late} late` : ""}</span>
       )}

@@ -241,6 +241,21 @@ class SalesTarget(Base, TimestampMixin):
         Numeric(5, 2), default=Decimal("2.00"), nullable=False
     )
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    # What is counted: sales_amount (₹, the default) or a count of
+    # leads_won / new_leads / field_visits / verifications / tasks_done.
+    metric: Mapped[str] = mapped_column(
+        String(24), default="sales_amount", nullable=False
+    )
+
+
+TARGET_METRICS = (
+    "sales_amount",
+    "leads_won",
+    "new_leads",
+    "field_visits",
+    "verifications",
+    "tasks_done",
+)
 
 
 class PromotionActivity(Base, TimestampMixin):

@@ -331,6 +331,9 @@ async def visit_check_out(
 
     await db.commit()
     await db.refresh(visit)
+    from app.services.sales_service import refresh_targets_for
+
+    await refresh_targets_for(db, employee.id)
     return visit
 
 

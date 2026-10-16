@@ -25,6 +25,7 @@ from app.api.v1.payroll import router as v1_payroll_router
 from app.api.v1.salary_templates import router as v1_salary_templates_router
 from app.api.v1.sales import router as v1_sales_router
 from app.api.v1.verification import router as v1_verification_router
+from app.api.v1.work_tasks import router as v1_work_tasks_router
 from app.api.v1.lms import router as v1_lms_router
 from app.api.v1.exam import router as v1_exam_router
 from app.api.v1.performance import router as v1_performance_router
@@ -64,6 +65,7 @@ v1_router.include_router(v1_polish_router)
 v1_router.include_router(v1_launch_router)
 v1_router.include_router(v1_compensation_router)
 v1_router.include_router(v1_team_router)
+v1_router.include_router(v1_work_tasks_router)
 
 # Mounted at /api/admin
 admin_router = APIRouter()
