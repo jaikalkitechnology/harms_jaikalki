@@ -106,6 +106,11 @@ class AssetSummaryOut(BaseModel):
     retired: int
 
 
+class AssetRetireRequest(BaseModel):
+    reason: str = Field(pattern="^(expired|damaged|sold|disposed|donated|other)$")
+    notes: Optional[str] = Field(default=None, max_length=500)
+
+
 class AssetAssignRequest(BaseModel):
     employee_id: int
     notes: Optional[str] = None

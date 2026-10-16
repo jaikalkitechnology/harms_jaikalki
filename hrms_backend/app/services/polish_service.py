@@ -461,6 +461,79 @@ async def return_asset(
     return asset
 
 
+RETIRE_REASONS = {
+    "expired": "End of life",
+    "damaged": "Damaged beyond repair",
+    "sold": "Sold",
+    "disposed": "Disposed / scrapped",
+    "donated": "Donated",
+    "other": "Other",
+}
+
+
+def _append_note(asset: Asset, line: str) -> None:
+    asset.notes = f"{asset.notes}\n{line}" if asset.notes else line
+
+
+async def retire_asset(
+    db: AsyncSession, asset_id: int, *, reason: str, notes: Optional[str] = None
+) -> Asset:
+    """Mark an asset as no longer available. It stays on the register
+    (with its history) but can't be assigned until restored."""
+    if reason not in RETIRE_REASONS:
+        raise ValidationError("Unknown reason")
+    asset = await get_asset(db, asset_id)
+    if asset.status == "assigned":
+        raise ValidationError("Take the asset back before retiring it")
+    if asset.status == "retired":
+        return asset
+    asset.status = "retired"
+    if reason in ("expired", "damaged"):
+        asset.condition = reason
+    stamp = _now().strftime("%d %b %Y")
+    _append_note(
+        asset,
+        f"Retired {stamp}: {RETIRE_REASONS[reason]}" + (f" — {notes.strip()}" if notes and notes.strip() else ""),
+    )
+    await db.commit()
+    await db.refresh(asset)
+    return asset
+
+
+async def restore_asset(db: AsyncSession, asset_id: int) -> Asset:
+    """Bring a retired / lost asset back into stock."""
+    asset = await get_asset(db, asset_id)
+    if asset.status not in ("retired", "lost"):
+        raise ValidationError("Only retired or lost assets can be restored")
+    asset.status = "in_stock"
+    _append_note(asset, f"Restored to stock {_now().strftime('%d %b %Y')}")
+    await db.commit()
+    await db.refresh(asset)
+    return asset
+
+
+async def delete_asset(db: AsyncSession, asset_id: int) -> None:
+    """Remove an asset entered by mistake. Anything that was ever handed
+    to someone keeps its record (exit clearance, audits) — retire it."""
+    asset = await get_asset(db, asset_id)
+    if asset.status == "assigned":
+        raise ValidationError("Take the asset back first — then retire it")
+    used = (
+        await db.execute(
+            select(AssetAssignment.id).where(AssetAssignment.asset_id == asset_id).limit(1)
+        )
+    ).first()
+    if used:
+        raise ConflictError(
+            "This asset has assignment history, so it can't be deleted. "
+            "Retire it instead to mark it as no longer available."
+        )
+    for acc in await _accessories(db, asset_id):
+        acc.parent_asset_id = None
+    await db.delete(asset)
+    await db.commit()
+
+
 async def list_assignment_history(
     db: AsyncSession, asset_id: int
 ) -> Sequence[AssetAssignment]:

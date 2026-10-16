@@ -339,3 +339,94 @@ export function ReturnAssetModal({
     </Modal>
   );
 }
+
+const RETIRE_REASONS = [
+  { value: "expired", label: "End of life", hint: "Old / outdated, no longer used" },
+  { value: "damaged", label: "Damaged beyond repair", hint: "Not worth fixing" },
+  { value: "sold", label: "Sold", hint: "Sold to an employee or vendor" },
+  { value: "disposed", label: "Disposed / scrapped", hint: "E-waste, scrapped" },
+  { value: "donated", label: "Donated", hint: "Given away" },
+  { value: "other", label: "Other", hint: "Explain in the notes" },
+];
+
+/** Mark an asset as no longer available. It stays on the register with
+ *  its history and can be restored later. */
+export function RetireAssetModal({
+  asset,
+  onClose,
+}: {
+  asset: Pick<Asset, "id" | "asset_tag" | "name">;
+  onClose: () => void;
+}) {
+  const qc = useQueryClient();
+  const [reason, setReason] = useState("expired");
+  const [notes, setNotes] = useState("");
+  const retire = useMutation({
+    mutationFn: () => polishApi.retireAsset(asset.id, reason, notes),
+    onSuccess: () => {
+      toast.success(`${asset.asset_tag} retired — no longer available`);
+      invalidateAssets(qc);
+      onClose();
+    },
+    onError: (e) => toast.error(errDetail(e, "Could not retire")),
+  });
+
+  return (
+    <Modal
+      title={`Retire ${asset.asset_tag}`}
+      description={`${asset.name} will be marked no longer available. Its history is kept and you can restore it later.`}
+      onClose={onClose}
+    >
+      <div className="space-y-4">
+        <div className="space-y-1.5">
+          <Label>Reason</Label>
+          <div className="grid gap-2 sm:grid-cols-2">
+            {RETIRE_REASONS.map((r) => (
+              <label
+                key={r.value}
+                className={cn(
+                  "flex cursor-pointer items-start gap-2 rounded-lg border px-3 py-2 text-sm",
+                  reason === r.value
+                    ? "border-brand-gold-dark bg-brand-gold/10"
+                    : "border-brand-brown-100",
+                )}
+              >
+                <input
+                  type="radio"
+                  className="mt-1"
+                  name="retire-reason"
+                  checked={reason === r.value}
+                  onChange={() => setReason(r.value)}
+                />
+                <span>
+                  <span className="block font-medium">{r.label}</span>
+                  <span className="block text-xs text-brand-brown-light">{r.hint}</span>
+                </span>
+              </label>
+            ))}
+          </div>
+        </div>
+        <div className="space-y-1.5">
+          <Label>Notes</Label>
+          <Input
+            value={notes}
+            placeholder="e.g. Sold to Rohit for ₹8,000"
+            onChange={(e) => setNotes(e.target.value)}
+          />
+        </div>
+        <div className="flex justify-end gap-2 border-t border-brand-brown-50 pt-4">
+          <Button variant="outline" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button
+            variant="destructive"
+            disabled={retire.isPending || (reason === "other" && !notes.trim())}
+            onClick={() => retire.mutate()}
+          >
+            {retire.isPending ? "Saving…" : "Retire asset"}
+          </Button>
+        </div>
+      </div>
+    </Modal>
+  );
+}

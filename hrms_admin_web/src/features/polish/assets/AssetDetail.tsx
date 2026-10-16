@@ -1,17 +1,29 @@
 // Side panel: everything about one asset — configuration, accessories,
 // warranty, and who has had it.
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import { Link } from "react-router-dom";
-import { ArrowDownLeft, ArrowUpRight, Pencil, X } from "lucide-react";
+import {
+  Archive,
+  ArchiveRestore,
+  ArrowDownLeft,
+  ArrowUpRight,
+  Pencil,
+  Trash2,
+  X,
+} from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { polishApi, type Asset } from "@/lib/api/polish";
+import { PermissionGate } from "@/components/shared/PermissionGate";
 import { useAllAssets } from "./AssetDialogs";
 import {
   ConditionChip,
   StatusChip,
   categoryIcon,
   conditionLabel,
+  errDetail,
+  invalidateAssets,
   fmtDay,
   makeModel,
   useAssetCategories,
@@ -33,6 +45,7 @@ export function AssetDetailPanel({
   onEdit,
   onAssign,
   onReturn,
+  onRetire,
   onOpen,
 }: {
   asset: Asset;
@@ -40,8 +53,27 @@ export function AssetDetailPanel({
   onEdit: () => void;
   onAssign: () => void;
   onReturn: () => void;
+  onRetire: () => void;
   onOpen: (a: Asset) => void;
 }) {
+  const qc = useQueryClient();
+  const restore = useMutation({
+    mutationFn: () => polishApi.restoreAsset(asset.id),
+    onSuccess: () => {
+      toast.success(`${asset.asset_tag} is back in stock`);
+      invalidateAssets(qc);
+    },
+    onError: (e) => toast.error(errDetail(e, "Could not restore")),
+  });
+  const remove = useMutation({
+    mutationFn: () => polishApi.deleteAsset(asset.id),
+    onSuccess: () => {
+      toast.success(`${asset.asset_tag} deleted`);
+      invalidateAssets(qc);
+      onClose();
+    },
+    onError: (e) => toast.error(errDetail(e, "Could not delete")),
+  });
   const { byCode, name: categoryName } = useAssetCategories(true);
   const { name: employeeName } = useEmployeesById();
   const { data: all = [] } = useAllAssets();
@@ -108,7 +140,49 @@ export function AssetDetailPanel({
                 Take back
               </Button>
             )}
+            <PermissionGate permission="admin.users.manage">
+              {(asset.status === "in_stock" || asset.status === "in_repair") && (
+                <Button variant="outline" size="sm" className="gap-1" onClick={onRetire}>
+                  <Archive className="size-3.5" /> Retire
+                </Button>
+              )}
+              {(asset.status === "retired" || asset.status === "lost") && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-1"
+                  disabled={restore.isPending}
+                  onClick={() => restore.mutate()}
+                >
+                  <ArchiveRestore className="size-3.5" /> Restore to stock
+                </Button>
+              )}
+              {/* Delete only what was never handed out — e.g. a wrong entry. */}
+              {asset.status !== "assigned" && history.length === 0 && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="gap-1 text-error"
+                  disabled={remove.isPending}
+                  onClick={() => {
+                    if (
+                      window.confirm(
+                        `Delete ${asset.asset_tag} permanently? Use this only for an asset added by mistake.`,
+                      )
+                    )
+                      remove.mutate();
+                  }}
+                >
+                  <Trash2 className="size-3.5" /> Delete
+                </Button>
+              )}
+            </PermissionGate>
           </div>
+          {asset.status === "retired" && (
+            <p className="text-xs text-brand-brown-light">
+              No longer available — kept on the register for its history.
+            </p>
+          )}
 
           {asset.status === "assigned" && asset.assigned_to && (
             <div className="rounded-xl bg-brand-gold/10 px-4 py-3 text-sm">
