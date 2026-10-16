@@ -514,7 +514,14 @@ export default function PayrollRunsPage() {
                         </span>
                       )}
                     </td>
-                    <td>{inr(p.gross)}</td>
+                    <td>
+                      {inr(p.gross)}
+                      {Number(p.incentive ?? 0) > 0 && (
+                        <div className="text-[11px] text-brand-gold-dark">
+                          incl. incentive {inr(p.incentive!)}
+                        </div>
+                      )}
+                    </td>
                     <td className="text-error">
                       - {inr(p.total_deductions)}
                     </td>

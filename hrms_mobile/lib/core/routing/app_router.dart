@@ -15,6 +15,8 @@ import '../../features/dwp/pages/dwp_home_page.dart';
 import '../../features/employees/pages/employee_detail_page.dart';
 import '../../features/employees/pages/employees_list_page.dart';
 import '../../features/exam/pages/exam_list_page.dart' deferred as exam_list;
+import '../../features/incentives/pages/incentive_review_page.dart'
+    deferred as incentive_review;
 import '../../features/exam/pages/exam_taking_page.dart'
     deferred as exam_taking;
 import '../../features/exam/pages/my_certificates_page.dart'
@@ -132,6 +134,7 @@ class AppRoutes {
   static const teamMember = '/team/member';
   static const tasks = '/tasks';
   static const giveTask = '/tasks/give';
+  static const incentiveReview = '/incentives/review';
   static const visitors = '/visitors';
   static const visitorRegister = '/visitors/new';
   static const visitorScan = '/visitors/scan';
@@ -365,6 +368,11 @@ GoRouter buildRouter(AuthBloc authBloc) {
             (_) => exam_taking.ExamTakingPage(
                   examId: int.parse(state.pathParameters['id']!),
                 )),
+      ),
+      GoRoute(
+        path: AppRoutes.incentiveReview,
+        builder: (_, __) => DeferredPage(incentive_review.loadLibrary,
+            (_) => incentive_review.IncentiveReviewPage()),
       ),
       GoRoute(
         path: AppRoutes.tasks,

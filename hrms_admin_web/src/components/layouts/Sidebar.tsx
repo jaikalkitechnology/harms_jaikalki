@@ -50,6 +50,7 @@ import {
   UsersRound,
   Network,
   ListTodo,
+  BadgeIndianRupee,
   Wallet,
   type LucideIcon,
 } from "lucide-react";
@@ -202,6 +203,12 @@ const SECTIONS: NavSection[] = [
         to: "/payroll",
         icon: Wallet,
         permission: "payroll.run",
+      },
+      {
+        label: "Incentives",
+        to: "/incentives",
+        icon: BadgeIndianRupee,
+        anyPermission: ["payroll.run", "approval.act"],
       },
       {
         label: "Reimbursements",

@@ -82,6 +82,7 @@ _PENDING_COLUMNS: list[tuple[str, str, str, str | None]] = [
         None,
     ),
     ("company_policies", "revision", "INT NOT NULL DEFAULT 1", None),
+    ("payslips", "incentive", "DECIMAL(12,2) NOT NULL DEFAULT 0", None),
     (
         "sales_targets",
         "metric",

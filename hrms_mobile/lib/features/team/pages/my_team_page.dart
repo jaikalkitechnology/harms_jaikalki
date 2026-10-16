@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/di/injection.dart';
 import '../../../core/routing/app_router.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../incentives/data/incentives_api.dart';
 import '../data/team_api.dart';
 import '../widgets/team_widgets.dart';
 
@@ -89,6 +90,7 @@ class _MyTeamPageState extends State<MyTeamPage> {
                 ),
                 const SizedBox(height: 14),
                 _Summary(s: d.summary),
+                if (widget.rootId == null) const _IncentiveReviewBanner(),
                 const SizedBox(height: 16),
                 Row(
                   children: [
@@ -130,6 +132,43 @@ class _MyTeamPageState extends State<MyTeamPage> {
           },
         ),
       ),
+    );
+  }
+}
+
+/// "3 incentives waiting for your review" — only when there are some.
+class _IncentiveReviewBanner extends StatefulWidget {
+  const _IncentiveReviewBanner();
+
+  @override
+  State<_IncentiveReviewBanner> createState() => _IncentiveReviewBannerState();
+}
+
+class _IncentiveReviewBannerState extends State<_IncentiveReviewBanner> {
+  late final Future<int> _count = sl<IncentivesApi>().pendingReviews().catchError((_) => 0);
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<int>(
+      future: _count,
+      builder: (context, snap) {
+        final n = snap.data ?? 0;
+        if (n == 0) return const SizedBox.shrink();
+        return Padding(
+          padding: const EdgeInsets.only(top: 12),
+          child: Material(
+            color: AppColors.brandGold.withOpacity(0.14),
+            borderRadius: BorderRadius.circular(12),
+            child: ListTile(
+              leading: const Icon(Icons.emoji_events_outlined, color: AppColors.brandGold),
+              title: Text('$n incentive${n == 1 ? '' : 's'} waiting for your review',
+                  style: TextStyle(color: context.textPrimary, fontWeight: FontWeight.w600)),
+              trailing: const Icon(Icons.chevron_right, color: AppColors.brandGold),
+              onTap: () => context.push(AppRoutes.incentiveReview),
+            ),
+          ),
+        );
+      },
     );
   }
 }

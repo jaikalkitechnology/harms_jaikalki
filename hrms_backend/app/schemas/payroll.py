@@ -42,6 +42,7 @@ class PayslipOut(BaseModel):
     hra: Decimal
     other_allowance: Decimal
     gross: Decimal
+    incentive: Decimal = Decimal("0")
     pf_employee: Decimal
     esic_employee: Decimal
     professional_tax: Decimal

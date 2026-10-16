@@ -235,6 +235,7 @@ class AlertSettings(BaseModel):
     weekly_time: Optional[str] = None
     target_alerts: Optional[bool] = None
     target_behind_by: Optional[int] = None
+    incentive_auto_calc: Optional[bool] = None
 
 
 @router.get("/alerts/settings")

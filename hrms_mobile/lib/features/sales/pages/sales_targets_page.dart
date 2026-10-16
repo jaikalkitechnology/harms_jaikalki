@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../../../core/di/injection.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../incentives/data/incentives_api.dart';
+import '../../incentives/widgets/incentive_widgets.dart';
 import '../../team/data/team_api.dart';
 import '../../team/widgets/team_widgets.dart';
 import '../data/sales_api.dart';
@@ -38,6 +40,8 @@ class _SalesTargetsPageState extends State<SalesTargetsPage> {
     }
 
     final teamF = team();
+    final incF = sl<IncentivesApi>().mine().then<
+        ({List<IncentiveProjection> current, List<IncentiveLine> history})?>((v) => v).catchError((_) => null);
     final all = await allF;
     final sales = all.where((t) => t.target.isMoney).toList();
     return _ProgressReport(
@@ -45,6 +49,7 @@ class _SalesTargetsPageState extends State<SalesTargetsPage> {
       others: all.where((t) => !t.target.isMoney).toList(),
       pipeline: await pipelineF,
       team: await teamF,
+      incentives: await incF,
     );
   }
 
@@ -151,6 +156,21 @@ class _SalesTargetsPageState extends State<SalesTargetsPage> {
                   _MetricTargetCard(summary: o),
                   const SizedBox(height: 12),
                 ],
+                if (report.incentives != null) ...[
+                  for (final p in report.incentives!.current) ...[
+                    IncentiveCard(p: p),
+                    const SizedBox(height: 12),
+                  ],
+                  if (report.incentives!.history.isNotEmpty) ...[
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(4, 4, 4, 8),
+                      child: Text('MY INCENTIVES',
+                          style: theme.textTheme.labelSmall?.copyWith(color: AppColors.brandGoldDark)),
+                    ),
+                    IncentiveHistory(lines: report.incentives!.history),
+                    const SizedBox(height: 16),
+                  ],
+                ],
                 if (report.team != null && report.team!.members.isNotEmpty) ...[
                   _TeamTargets(team: report.team!),
                   const SizedBox(height: 16),
@@ -179,11 +199,13 @@ class _ProgressReport {
     required this.others,
     required this.pipeline,
     required this.team,
+    required this.incentives,
   });
   final TargetSummary? summary;
   final List<TargetSummary> others;
   final List<PipelineColumn> pipeline;
   final TeamOverview? team;
+  final ({List<IncentiveProjection> current, List<IncentiveLine> history})? incentives;
 }
 
 /// A non-money target: field visits, verifications, tasks, leads.

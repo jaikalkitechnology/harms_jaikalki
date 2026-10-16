@@ -1182,6 +1182,35 @@ def render_payslip_pdf(
     story.append(breakup_table)
     story.append(Spacer(1, 12))
 
+    # ── Variable pay this month (approved incentives) ─────────────────
+    incentive = Decimal(str(getattr(payslip, "incentive", 0) or 0))
+    if incentive > 0:
+        inc = Table(
+            [[
+                Paragraph(
+                    f"<font name='{FONT_BOLD}'>Incentive (this month)</font><br/>"
+                    "<font size=8>Included in gross pay; ESIC and professional tax apply.</font>",
+                    s["body"],
+                ),
+                Paragraph(
+                    f"<font name='{FONT_BOLD}'>{RUPEE} {int(incentive):,}</font>",
+                    s["right"],
+                ),
+            ]],
+            colWidths=[11.5 * cm, 5.5 * cm],
+        )
+        inc.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#FBF6E9")),
+            ("BOX", (0, 0), (-1, -1), 0.5, GRID),
+            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+            ("LEFTPADDING", (0, 0), (-1, -1), 10),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 10),
+            ("TOPPADDING", (0, 0), (-1, -1), 6),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+        ]))
+        story.append(inc)
+        story.append(Spacer(1, 12))
+
     # ── Net pay banner ─────────────────────────────────────────────────
     net_row = Table(
         [[

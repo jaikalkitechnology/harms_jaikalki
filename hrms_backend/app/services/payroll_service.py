@@ -80,6 +80,20 @@ def _earned_statutory(
     return pf_emp, pf_er, esic_emp, esic_er, Decimal(pt), pf_wages
 
 
+async def _release_incentives(db: AsyncSession, run_id: int) -> None:
+    """Incentives attached to a payroll run go back to "approved, not
+    yet paid" when the run is rebuilt, reverted or deleted."""
+    from sqlalchemy import update
+
+    from app.models import IncentiveLine
+
+    await db.execute(
+        update(IncentiveLine)
+        .where(IncentiveLine.paid_in_run_id == run_id)
+        .values(paid_in_run_id=None)
+    )
+
+
 async def _resignation_settled(db: AsyncSession, employee_id: int) -> bool:
     from app.models import Resignation
 
@@ -161,6 +175,10 @@ async def process_payroll(
         # Re-process: clear payslips and reuse run record.
         for p in list(existing.payslips):
             await db.delete(p)
+        # Write the deletes now: the new payslips reuse the same
+        # (run, employee) keys, and one flush would insert them first.
+        await db.flush()
+        await _release_incentives(db, existing.id)
         run = existing
         run.status = "draft"
         run.cycle_start_day = cycle_start_day or 1
@@ -284,6 +302,13 @@ async def process_payroll(
         paid = paid_days_num
 
         gross = (Decimal(breakup["gross"]) * scaling).quantize(Decimal("1"))
+        # Approved incentives due this month are part of gross pay, so
+        # ESIC and professional tax see them; PF stays on basic.
+        from app.services.incentive_service import payable_lines
+
+        inc_lines = await payable_lines(db, emp.id, run)
+        incentive = sum((ln.amount for ln in inc_lines), Decimal("0"))
+        gross += incentive
         pf_emp, pf_er, esic_emp, esic_er, pt, pf_wages = _earned_statutory(
             breakup, scaling, gross, emp, _pf_cap
         )
@@ -359,9 +384,12 @@ async def process_payroll(
             pf_wages=pf_wages,
             eps_wages=eps_wages,
             edli_wages=edli_wages,
+            incentive=incentive,
         )
         db.add(ps)
         await db.flush()
+        for ln in inc_lines:
+            ln.paid_in_run_id = run.id
 
         # Attach reimbursements to this run.
         for r in rb_rows:
@@ -418,6 +446,7 @@ async def revert_run(db: AsyncSession, run_id: int) -> PayrollRun:
     for r in rb:
         r.status = "approved"
         r.paid_in_run_id = None
+    await _release_incentives(db, run_id)
     for p in list(run.payslips):
         await db.delete(p)
     await db.commit()
@@ -443,6 +472,7 @@ async def delete_run(db: AsyncSession, run_id: int) -> None:
     for r in rb:
         r.status = "approved"
         r.paid_in_run_id = None
+    await _release_incentives(db, run_id)
     await db.delete(run)  # payslips cascade
     await db.commit()
 

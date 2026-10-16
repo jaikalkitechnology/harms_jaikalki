@@ -61,7 +61,8 @@ class _NotificationsPageState extends State<NotificationsPage> {
         'task_escalated' =>
           n.data?['task_id'] != null ? '${AppRoutes.tasks}/${n.data!['task_id']}' : AppRoutes.tasks,
         'team_digest' || 'team_weekly' => AppRoutes.myTeam,
-        'target_behind' => AppRoutes.salesTargets,
+        'target_behind' || 'incentive_approved' => AppRoutes.salesTargets,
+        'incentive_review' => AppRoutes.incentiveReview,
         'plan_reminder' => AppRoutes.dwp,
         _ => null,
       };

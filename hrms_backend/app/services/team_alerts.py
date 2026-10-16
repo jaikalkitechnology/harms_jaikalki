@@ -54,8 +54,13 @@ DEFAULTS: dict = {
     "target_alerts": True,
     # Behind = progress more than this many points under time elapsed.
     "target_behind_by": 20,
+    # Calculate last period's incentives at the start of a new one.
+    "incentive_auto_calc": True,
 }
-BOOLS = ("morning_digest", "plan_reminder", "task_escalation", "weekly_summary", "target_alerts")
+BOOLS = (
+    "morning_digest", "plan_reminder", "task_escalation", "weekly_summary",
+    "target_alerts", "incentive_auto_calc",
+)
 TIMES = ("digest_time", "plan_reminder_time", "weekly_time")
 
 
@@ -401,7 +406,10 @@ async def weekly_summary(db: AsyncSession, on: Optional[date] = None, *, only: O
 
 
 # ── Dispatcher ───────────────────────────────────────────────────────
-JOBS = ("plan_reminder", "morning_digest", "task_escalation", "weekly_summary", "target_refresh")
+JOBS = (
+    "plan_reminder", "morning_digest", "task_escalation", "weekly_summary",
+    "target_refresh", "incentive_calc",
+)
 
 
 async def run_job(db: AsyncSession, job: str) -> dict:
@@ -418,6 +426,10 @@ async def run_job(db: AsyncSession, job: str) -> dict:
         from app.services.sales_service import refresh_all_current_targets
 
         return {"refreshed": await refresh_all_current_targets(db)}
+    if job == "incentive_calc":
+        from app.services.incentive_service import auto_calculate
+
+        return await auto_calculate(db)
     raise ValueError(f"Unknown job {job}")
 
 
@@ -441,6 +453,8 @@ async def run_due(db: AsyncSession, now: Optional[datetime] = None) -> dict:
         "morning_digest": cfg["morning_digest"] and _due_today(now, cfg["digest_time"]),
         "task_escalation": cfg["task_escalation"] and _due_today(now, cfg["digest_time"]),
         "target_refresh": now.hour >= 2,
+        # After the nightly target refresh, so last period is final.
+        "incentive_calc": cfg["incentive_auto_calc"] and now.hour >= 6,
         "weekly_summary": cfg["weekly_summary"]
         and now.weekday() == int(cfg["weekly_day"])
         and _due_today(now, cfg["weekly_time"]),

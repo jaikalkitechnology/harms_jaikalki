@@ -29,6 +29,8 @@ export interface Payslip {
   hra: string;
   other_allowance: string;
   gross: string;
+  /** Approved incentives paid with this slip (part of gross). */
+  incentive?: string;
   pf_employee: string;
   esic_employee: string;
   professional_tax: string;
